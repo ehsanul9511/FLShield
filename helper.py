@@ -263,17 +263,6 @@ class Helper:
         return torch.dot(l1, l2)/(torch.linalg.norm(l1)+1e-9)/(torch.linalg.norm(l2)+1e-9)
 
     def convert_model_to_param_list(self, model):
-        '''
-        num_of_param=0
-        for param in model.state_dict().values():
-            num_of_param += torch.numel(param)
-        
-
-        params=torch.ones([num_of_param])
-        '''
-        # if torch.typename(model)!='OrderedDict':
-        #     model = model.state_dict()
-
         idx=0
         params_to_copy_group=[]
         for name, param in model.items():
@@ -299,8 +288,7 @@ class Helper:
         return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
 
     def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
-        nets = grads
-        nets= np.array(nets)
+        nets = [grad.numpy() for grad in grads]
         if clustering_params=='lsrs':
             X = self.lsrs
         elif clustering_params=='grads':
@@ -318,25 +306,25 @@ class Helper:
             cluster.sort()
         clusters.sort(key = lambda cluster: len(cluster), reverse = True)
 
-        grads_for_clusters = []
-        for cluster in clusters:
-            grads = [X[i] for i in cluster]
-            grads_for_clusters.append(grads)
+        # grads_for_clusters = []
+        # for cluster in clusters:
+        #     grads = [X[i] for i in cluster]
+        #     grads_for_clusters.append(grads)
             
-        for i, cluster in enumerate(clusters):
-            cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
+        # for i, cluster in enumerate(clusters):
+        #     cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
 
 
         if clustering_params=='lsrs': 
             grads_for_clusters = []       
             for cluster in clusters:
-                grads = [nets[i] for i in cluster]
+                grads = [X[i] for i in cluster]
                 grads_for_clusters.append(grads)
 
             print('clusters ', clusters)
 
             for i, cluster in enumerate(clusters):
-                cluster.sort(key = lambda x: self.get_average_distance(nets[x], grads_for_clusters[i]))
+                cluster.sort(key = lambda x: self.get_average_distance(X[x], grads_for_clusters[i]))
                 # clusters[i] = cluster[:5]
                 for idx, cluster_elem in enumerate(clusters[i]):
                     if idx>=5:
@@ -345,28 +333,29 @@ class Helper:
 
         return clustering.labels_, clusters
     
-    # def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
-    #     client_grads = []
-    #     alphas = []
-    #     names = []
-    #     for name, data in updates.items():
-    #         client_grads.append(data[1])  # gradient
-    #         alphas.append(data[0])  # num_samples
-    #         names.append(name)
+    def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
+        client_grads = []
+        alphas = []
+        names = []
+        for name, data in updates.items():
+            client_grads.append(data[1])  # gradient
+            alphas.append(data[0])  # num_samples
+            names.append(name)
 
-    #     grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
-        
-    #     if epoch==0:
-    #         _, clusters = self.cluster_grads(epoch, clustering_params='lsrs')
-    #         self.clusters = clusters
-    #         all_group_nos = []
-    #         for i, cluster in enumerate(self.clusters):
-    #             if len(clusters) > 2:
-    #                 all_group_nos.append(i)
-    #         self.all_group_nos = all_group_nos
+        grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        print(names)
+        if epoch==1:
+            self.validator_trust_scores = {}
+            _, clusters = self.cluster_grads(grads, clustering_params='lsrs')
+            self.clusters = clusters
+            all_group_nos = []
+            for i, cluster in enumerate(self.clusters):
+                if len(clusters) > 2:
+                    all_group_nos.append(i)
+            self.all_group_nos = all_group_nos
 
-    #         print('Spectral clustering output')
-    #         self.print_clusters(clusters)
+            print('Spectral clustering output')
+            print(clusters)
     #     if epoch<0:
     #         # def check_in_val_combinations(val_tuples, client_id):
     #         #     for (_, val_id) in val_tuples:
@@ -408,18 +397,26 @@ class Helper:
     #         # self.debug_log['val_logs'][epoch]['val_client_indice_tuples_list'] = self.val_client_indice_tuples_list
     #         # self.debug_log['val_logs'][epoch]['cluster_dict'] = self.cluster_dict
     #         self.debug_log['val_logs'][epoch]['all_val_acc_list'] = all_val_acc_list
-
+        if epoch <0:
+            assert epoch == 0, 'fix epoch {}'.format(len(epoch))
 
               
-    #     else:
-    #         # agglomerative clustering based validation
+        else:
+            # agglomerative clustering based validation
 
-    #         #get agglomerative clusters
-    #         if epoch<2 or np.random.random_sample() < np.min([0.1, np.exp(-epoch*0.1)/(1. + np.exp(-epoch*0.1))]):
-    #             _, self.clusters_agg = self.cluster_grads(epoch, clustering_method='Agglomerative')
-    #         clusters_agg = self.clusters_agg
-    #         self.print_clusters(clusters_agg)
-    #         nets = self.benign_nets + self.mal_nets
+            #get agglomerative clusters
+            # if epoch<2 or np.random.random_sample() < np.min([0.1, np.exp(-epoch*0.1)/(1. + np.exp(-epoch*0.1))]):
+            if epoch<5:
+                k = 5
+            else:
+                k = 2
+            _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=k)
+            clusters_agg = []
+            for clstr in self.clusters_agg:
+                clstr = [names[c] for c in clstr]
+                clusters_agg.append(clstr)
+            print(clusters_agg)
+            nets = self.local_models
     #         all_val_acc_list_dict = {}
     #         print(f'Validating all clients at epoch {epoch}')
     #         val_client_indice_tuples=[]

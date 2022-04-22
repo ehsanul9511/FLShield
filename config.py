@@ -5,6 +5,7 @@ AGGR_MEAN = 'mean'
 AGGR_GEO_MED = 'geom_median'
 AGGR_FOOLSGOLD='foolsgold'
 AGGR_FLTRUST = 'fltrust'
+AGGR_OURS = 'our_aggr'
 MAX_UPDATE_NORM = 1000  # reject all updates larger than this amount
 patience_iter=20
 

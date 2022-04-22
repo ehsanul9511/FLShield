@@ -200,7 +200,7 @@ class ImageHelper(Helper):
             y_labels = np.array(y_labels)
             y_labels = y_labels[indices]
         dataset_dict = OrderedDict(Counter(y_labels))
-        # dataset_classes = []
+        dataset_dict = OrderedDict(sorted(dataset_dict.items()))
         # for c in range(num_of_classes):
         #     dataset_classes.append(dataset_dict[c])
         # dataset_classes = np.array(dataset_classes)
@@ -331,7 +331,7 @@ class ImageHelper(Helper):
         self.classes_dict = self.build_classes_dict()
         logger.info('build_classes_dict done')
         if self.params['noniid']:
-            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.1, p=0.1, flt_aggr=1)
+            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.5, p=0.1, flt_aggr=1)
             ewd.append(sd)
             ewl.append(sl)
 
@@ -367,7 +367,8 @@ class ImageHelper(Helper):
             for id in tqdm(range(len(train_loaders))):
                 (_, train_loader) = train_loaders[id]
                 lsr = self.get_label_skew_ratios(train_loader.dataset, id)
-                self.lsrs.append((lsr)
+                self.lsrs.append(lsr)
+
             logger.info(f'lsrs ready: {self.lsrs}')
 
         self.test_data = self.get_test()

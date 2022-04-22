@@ -18,6 +18,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
         if temp_name in helper.params['adversary_list']:
             current_number_of_adversaries+=1
 
+    helper.local_models = {}
+
     for model_id in range(helper.params['no_models']):
         epochs_local_update_list = []
         last_local_model = dict()
@@ -309,7 +311,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 epochs_local_update_list.append(client_grad)
             else:
                 epochs_local_update_list.append(local_model_update_dict)
-
+        
+        helper.local_models[agent_name_key] = model
         epochs_submit_update_dict[agent_name_key] = epochs_local_update_list
 
     return epochs_submit_update_dict, num_samples_dict
