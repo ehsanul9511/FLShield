@@ -288,6 +288,336 @@ class Helper:
                 idx += 1
 
         return params
+
+    # def cluster_grads(self, updates, clustering_method='Spectral', clustering_params='grads'):
+    #     nets = updates
+    #     nets= np.array(nets)
+    #     if save_local_models_opt:
+    #         self.save_local_models(iter, nets)
+    #     if clustering_params=='lsrs':
+    #         X = self.get_label_skew_ratios()
+    #     elif clustering_params=='grads':
+    #         X = nets
+
+    #     if clustering_method == 'Spectral':
+    #         clustering = SpectralClustering(n_clusters=iterative_k, affinity='cosine').fit(X)
+    #     elif clustering_method == 'Agglomerative':
+    #         clustering = AgglomerativeClustering(n_clusters=iterative_k, affinity='cosine', linkage='complete').fit(X)
+
+    #     clusters = [[] for _ in range(iterative_k)]
+    #     for i, label in enumerate(clustering.labels_.tolist()):
+    #         clusters[label].append(i)
+    #     for cluster in clusters:
+    #         cluster.sort()
+    #     clusters.sort(key = lambda cluster: len(cluster), reverse = True)
+
+    #     grads_for_clusters = []
+    #     for cluster in clusters:
+    #         grads = [X[i] for i in cluster]
+    #         grads_for_clusters.append(grads)
+            
+    #     for i, cluster in enumerate(clusters):
+    #         cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
+
+
+    #     if clustering_params=='lsrs': 
+    #         grads_for_clusters = []       
+    #         for cluster in clusters:
+    #             grads = [nets[i] for i in cluster]
+    #             grads_for_clusters.append(grads)
+
+    #         print('clusters ', clusters)
+
+    #         for i, cluster in enumerate(clusters):
+    #             cluster.sort(key = lambda x: self.get_average_distance(nets[x], grads_for_clusters[i]))
+    #             # clusters[i] = cluster[:5]
+    #             for idx, cluster_elem in enumerate(clusters[i]):
+    #                 if idx>=5:
+    #                     self.validator_trust_scores[cluster_elem] = 1/idx
+    #         print('clusters ', clusters)
+
+    #     # print('Clustering cost ',self.clustering_cost(clustering.labels_, X, iterative_k))
+    #     # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
+    #     # from sklearn.metrics.cluster import adjusted_rand_score
+    #     # print('Original Copylist', copylist)
+    #     # print('Found clusters', clustering.labels_)
+
+
+
+    #     #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+    #     #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+    #     # print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
+    #     # self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
+    #     # self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
+    #     # self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+
+    #     return clustering.labels_, clusters
+    
+
+
+    # def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
+    #     client_grads = []
+    #     alphas = []
+    #     names = []
+    #     for name, data in updates.items():
+    #         client_grads.append(data[1])  # gradient
+    #         alphas.append(data[0])  # num_samples
+    #         names.append(name)
+
+    #     grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        
+    #     if epoch==0:
+    #         _, clusters = self.cluster_grads(epoch, clustering_params='lsrs')
+    #         self.clusters = clusters
+    #         all_group_nos = []
+    #         for i, cluster in enumerate(self.clusters):
+    #             if len(clusters) > 2:
+    #                 all_group_nos.append(i)
+    #         self.all_group_nos = all_group_nos
+
+    #         print('Spectral clustering output')
+    #         self.print_clusters(clusters)
+    #     if epoch<0:
+    #         # def check_in_val_combinations(val_tuples, client_id):
+    #         #     for (_, val_id) in val_tuples:
+    #         #         if client_id == val_id:
+    #         #             return True
+    #         #     return False
+
+    #         all_val_acc_list = []
+    #         print(f'Validating all clients at epoch {epoch}')
+    #         for idx, net in enumerate(tqdm(self.benign_nets + self.mal_nets, disable=tqdm_disable)):
+    #             # combination_index = random.randint(0, self.num_of_val_client_combinations-1)
+    #             # val_client_indice_tuples = self.val_client_indice_tuples_list[combination_index]
+    #             # while check_in_val_combinations(val_client_indice_tuples, idx):
+    #             #     combination_index = random.randint(0, self.num_of_val_client_combinations-1)
+    #             #     val_client_indice_tuples = self.val_client_indice_tuples_list[combination_index]
+    #             val_client_indice_tuples=[]
+    #             for i, cluster in enumerate(self.clusters):
+    #                 if len(cluster) > 2:
+    #                     v1, v2 = random.sample(cluster, 2)
+    #                     val_client_indice_tuples.append((i, v1))
+    #                     val_client_indice_tuples.append((i, v2))
+
+    #             val_acc_list=[]
+    #             for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
+    #                 _, _, val_test_loader = train_loaders[epoch][val_idx]
+    #                 val_acc, val_acc_by_class = validation_test(net, val_test_loader, is_poisonous=(epoch>=self.poison_starts_at_epoch) and (val_idx>self.num_of_benign_nets))
+    #                 # print(idx, val_idx, cluster_dict[group_no], val_acc)
+    #                 # val_acc_mat[idx][iidx] = val_acc
+    #                 # if idx in cluster_dict[group_no]:
+    #                 #     val_acc_same_group[idx][iidx] = 1
+    #                 if idx in self.clusters[group_no]:
+    #                     val_acc_same_group = 1
+    #                 else:
+    #                     val_acc_same_group = 0
+    #                 val_acc_list.append((val_idx, val_acc_same_group, val_acc.item(), val_acc_by_class))
+    #             all_val_acc_list.append(val_acc_list)
+    #         # self.debug_log['val_logs'][epoch]['val_acc_mat'] = val_acc_mat
+    #         # self.debug_log['val_logs'][epoch]['val_acc_same_group'] = val_acc_same_group
+    #         # self.debug_log['val_logs'][epoch]['val_client_indice_tuples_list'] = self.val_client_indice_tuples_list
+    #         # self.debug_log['val_logs'][epoch]['cluster_dict'] = self.cluster_dict
+    #         self.debug_log['val_logs'][epoch]['all_val_acc_list'] = all_val_acc_list
+
+
+              
+    #     else:
+    #         # agglomerative clustering based validation
+
+    #         #get agglomerative clusters
+    #         if epoch<2 or np.random.random_sample() < np.min([0.1, np.exp(-epoch*0.1)/(1. + np.exp(-epoch*0.1))]):
+    #             _, self.clusters_agg = self.cluster_grads(epoch, clustering_method='Agglomerative')
+    #         clusters_agg = self.clusters_agg
+    #         self.print_clusters(clusters_agg)
+    #         nets = self.benign_nets + self.mal_nets
+    #         all_val_acc_list_dict = {}
+    #         print(f'Validating all clients at epoch {epoch}')
+    #         val_client_indice_tuples=[]
+    #         for i, val_cluster in enumerate(self.clusters):
+    #             val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
+    #             # if np.max(val_trust_scores) < 0.01:
+    #             #     for vid in val_cluster:
+    #             #         self.validator_trust_scores[vid] = 1.
+    #             if len(val_cluster) > 2 and np.max(val_trust_scores) > 0.05:
+    #                 # v1, v2 = random.sample(val_cluster, 2)
+    #                 val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
+    #                 v1, v2 = np.random.choice(val_cluster, 2, replace=False, p=val_trust_scores)
+    #                 val_client_indice_tuples.append((i, v1))
+    #                 val_client_indice_tuples.append((i, v2))
+
+    #         for idx, cluster in enumerate(tqdm(clusters_agg, disable=tqdm_disable)):
+    #             nets_in_cluster = [nets[iidx].state_dict() for iidx in cluster]
+    #             cluster_avg_net = CNN()
+    #             cluster_avg_net.set_param_to_zero()
+    #             cluster_avg_net.aggregate(nets_in_cluster)
+
+
+    #             val_acc_list=[]
+    #             for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
+    #                 # no validation data exchange between malicious clients
+    #                 # _, _, val_test_loader = train_loaders[epoch][val_idx]
+    #                 # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
+    #                 if val_idx<self.num_of_benign_nets or aa0==0:
+    #                     _, _, val_test_loader = train_loaders[epoch][val_idx]
+    #                 else:
+    #                     first_target_group_mal_index = np.where(np.array(copylist)==target_class)[0][aa0]
+    #                     _, _, val_test_loader = train_loaders[epoch][first_target_group_mal_index]
+    #                 val_acc, val_acc_by_class = validation_test(cluster_avg_net, val_test_loader, is_poisonous=(epoch>=self.poison_starts_at_epoch) and (val_idx>self.num_of_benign_nets))
+    #                 # if val_idx>=self.num_of_benign_nets:
+    #                 #     print(val_acc, val_acc_by_class)
+    #                 # print(idx, val_idx, cluster_dict[group_no], val_acc)
+    #                 # val_acc_mat[idx][iidx] = val_acc
+    #                 # if idx in cluster_dict[group_no]:
+    #                 #     val_acc_same_group[idx][iidx] = 1
+    #                 val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
+                
+    #             for client in cluster:
+    #                 all_val_acc_list_dict[client] = val_acc_list
+
+    #         all_val_acc_list = []
+    #         for idx in range(self.num_of_benign_nets+self.num_of_mal_nets):
+    #             all_val_acc_list.append(all_val_acc_list_dict[idx])
+
+    #     def get_group_no(validator_id, clustr):
+    #         for grp_no in range(len(clustr)):
+    #             if validator_id in clustr[grp_no]:
+    #                 return grp_no
+    #         return -1
+
+    #     def get_min_group_and_score(val_score_by_grp_dict):
+    #         min_val = 100
+    #         min_grp_no = -1
+    #         for grp_no in val_score_by_grp_dict.keys():
+    #             if val_score_by_group_dict[grp_no] < min_val:
+    #                 min_val = val_score_by_group_dict[grp_no]
+    #                 min_grp_no = grp_no
+    #         return min_grp_no, min_val
+
+    #     all_val_score_by_group_dict=[]
+
+    #     all_val_score = []
+    #     all_val_score_min_grp=[]
+    #     for client_id in range(self.num_of_benign_nets + self.num_of_mal_nets):
+    #         val_score_by_group_dict={}
+    #         val_acc_list = all_val_acc_list[client_id]
+    #         # take minimum of two
+    #         # for iidx, (val_idx, _, val_acc, _) in enumerate(val_acc_list):
+    #         #     grp_no = get_group_no(val_idx, self.clusters)
+    #         #     if grp_no in val_score_by_group_dict.keys():
+    #         #         # if average
+    #         #         # val_score_by_group_dict[grp_no] += val_acc
+    #         #         # val_score_by_group_dict[grp_no] /= 2
+    #         #         # if minimum
+    #         #         val_score_by_group_dict[grp_no] = np.minimum(val_score_by_group_dict[grp_no], val_acc)
+
+    #         #     else:
+    #         #         val_score_by_group_dict[grp_no] = val_acc
+
+            
+    #         # take the one closer to the others
+    #         validators = {}
+    #         for iidx, (val_idx, _, val_acc, val_acc_report) in enumerate(val_acc_list):
+    #             grp_no = get_group_no(val_idx, self.clusters)
+    #             if grp_no in val_score_by_group_dict.keys():
+    #                 # if average
+    #                 # val_score_by_group_dict[grp_no] += val_acc
+    #                 # val_score_by_group_dict[grp_no] /= 2
+    #                 # if minimum
+    #                 val_score_by_group_dict[grp_no].append((val_acc, val_acc_report))
+    #                 validators[grp_no].append(val_idx)
+    #             else:
+    #                 val_score_by_group_dict[grp_no] = [(val_acc, val_acc_report)]
+    #                 validators[grp_no]= [val_idx]
+            
+    #         all_grp_nos = list(val_score_by_group_dict.keys())
+    #         total_acc = 0.
+    #         for grp_no in all_grp_nos:
+    #             for (val_acc, val_acc_report) in val_score_by_group_dict[grp_no]:
+    #                 total_acc += val_acc_report[target_class]
+
+    #         new_val_score_by_group_dict = {}
+    #         for grp_no in all_grp_nos:
+    #             val_acc_0 = val_score_by_group_dict[grp_no][0][1][target_class]
+    #             val_acc_1 = val_score_by_group_dict[grp_no][1][1][target_class]
+    #             total_acc_excluding = total_acc - val_acc_0 - val_acc_1
+    #             mean_acc_excluding = total_acc_excluding/(2*(len(all_grp_nos)-1))
+    #             if min(abs(mean_acc_excluding-val_acc_0),abs(mean_acc_excluding-val_acc_1))>40.:
+    #                 repl_acc = 0.
+    #                 for grp_idx in all_grp_nos:
+    #                     if grp_idx != grp_no:
+    #                         for (val_acc, val_acc_report) in val_score_by_group_dict[grp_idx]:
+    #                             repl_acc += val_acc
+    #                 repl_acc = repl_acc/(2*(len(all_grp_nos)-1))
+    #                 new_val_score_by_group_dict[grp_no] = repl_acc
+    #                 for validator in validators[grp_no]:
+    #                     self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+    #             elif abs(mean_acc_excluding-val_acc_0)<abs(mean_acc_excluding-val_acc_1):
+    #                 if abs(mean_acc_excluding-val_acc_1)>40.:
+    #                     validator = validators[grp_no][1]
+    #                     self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+    #                 new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][0][0]
+    #             else:
+    #                 if abs(mean_acc_excluding-val_acc_0)>40.:
+    #                     validator = validators[grp_no][0]
+    #                     self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+    #                 new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][1][0]
+    #         for grp_no in self.all_group_nos:
+    #             if grp_no not in new_val_score_by_group_dict.keys():
+    #                 new_val_score_by_group_dict[grp_no] = -1
+    #         val_score_by_group_dict = new_val_score_by_group_dict
+                            
+    #         all_val_score_by_group_dict.append(val_score_by_group_dict)
+    #         min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
+    #         all_val_score.append(min_val_score)
+    #         all_val_score_min_grp.append(min_val_grp_no)
+              
+    #     if epoch<0:
+    #         self.global_net.set_param_to_zero()
+    #         self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
+    #     elif epoch == 0:
+
+    #         self.all_val_score = all_val_score
+    #         self.all_val_score_min_grp = all_val_score_min_grp
+
+    #         aggr_weights = np.array(all_val_score)
+    #         aggr_weights = aggr_weights/np.sum(aggr_weights)
+
+    #         self.global_net.set_param_to_zero()
+    #         self.global_net.aggregate([net.state_dict() for net in self.benign_nets + self.mal_nets],
+    #             aggr_weights=aggr_weights
+    #         )
+        
+    #     else:
+    #         for client_id in range(self.num_of_benign_nets + self.num_of_mal_nets):
+    #             prev_val_score = self.all_val_score[client_id]
+    #             if prev_val_score < 50.:
+    #                 prev_val_grp_no = self.all_val_score_min_grp[client_id]
+    #                 current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
+    #                 if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
+    #                     all_val_score[client_id] = prev_val_score/2
+    #                     all_val_score_min_grp[client_id] = prev_val_grp_no
+    #         self.all_val_score = all_val_score
+    #         self.all_val_score_min_grp = all_val_score_min_grp
+
+    #         aggr_weights = np.array(all_val_score)
+    #         aggr_weights = np.minimum(aggr_weights, 50.)
+    #         aggr_weights = aggr_weights/np.sum(aggr_weights)
+
+    #         self.global_net.set_param_to_zero()
+    #         self.global_net.aggregate([net.state_dict() for net in self.benign_nets + self.mal_nets],
+    #             aggr_weights=aggr_weights
+    #         )
+
+    #         self.debug_log['val_logs'][epoch]['agglom_cluster_list'] = clusters_agg
+    #         self.debug_log['val_logs'][epoch]['all_val_acc_list'] = all_val_acc_list
+    #         self.debug_log['val_logs'][epoch]['all_val_scores'] = self.all_val_score
+    #         self.debug_log['val_logs'][epoch]['all_val_score_min_grp'] = self.all_val_score_min_grp
+    #         self.debug_log['val_logs'][epoch]['aggr_weights'] = aggr_weights
+    #         self.debug_log['val_logs'][epoch]['all_val_score_by_group_dict'] = all_val_score_by_group_dict
+    #         self.debug_log['val_logs'][epoch]['validator_trust_scores'] = self.validator_trust_scores
+
+    #         print('\n\n\nValidator Trust Scores\n\n', self.validator_trust_scores)
+
         
     def fltrust(self, target_model, updates):
         client_grads = []
