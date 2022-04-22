@@ -289,69 +289,67 @@ class Helper:
 
         return params
 
-    # def cluster_grads(self, updates, clustering_method='Spectral', clustering_params='grads'):
-    #     nets = updates
-    #     nets= np.array(nets)
-    #     if save_local_models_opt:
-    #         self.save_local_models(iter, nets)
-    #     if clustering_params=='lsrs':
-    #         X = self.get_label_skew_ratios()
-    #     elif clustering_params=='grads':
-    #         X = nets
+    def cluster_grads(self, updates, clustering_method='Spectral', clustering_params='grads'):
+        nets = updates
+        nets= np.array(nets)
+        if clustering_params=='lsrs':
+            X = self.lsrs
+        elif clustering_params=='grads':
+            X = nets
 
-    #     if clustering_method == 'Spectral':
-    #         clustering = SpectralClustering(n_clusters=iterative_k, affinity='cosine').fit(X)
-    #     elif clustering_method == 'Agglomerative':
-    #         clustering = AgglomerativeClustering(n_clusters=iterative_k, affinity='cosine', linkage='complete').fit(X)
+        if clustering_method == 'Spectral':
+            clustering = SpectralClustering(n_clusters=iterative_k, affinity='cosine').fit(X)
+        elif clustering_method == 'Agglomerative':
+            clustering = AgglomerativeClustering(n_clusters=2, affinity='cosine', linkage='complete').fit(X)
 
-    #     clusters = [[] for _ in range(iterative_k)]
-    #     for i, label in enumerate(clustering.labels_.tolist()):
-    #         clusters[label].append(i)
-    #     for cluster in clusters:
-    #         cluster.sort()
-    #     clusters.sort(key = lambda cluster: len(cluster), reverse = True)
+        clusters = [[] for _ in range(iterative_k)]
+        for i, label in enumerate(clustering.labels_.tolist()):
+            clusters[label].append(i)
+        for cluster in clusters:
+            cluster.sort()
+        clusters.sort(key = lambda cluster: len(cluster), reverse = True)
 
-    #     grads_for_clusters = []
-    #     for cluster in clusters:
-    #         grads = [X[i] for i in cluster]
-    #         grads_for_clusters.append(grads)
+        grads_for_clusters = []
+        for cluster in clusters:
+            grads = [X[i] for i in cluster]
+            grads_for_clusters.append(grads)
             
-    #     for i, cluster in enumerate(clusters):
-    #         cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
+        for i, cluster in enumerate(clusters):
+            cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
 
 
-    #     if clustering_params=='lsrs': 
-    #         grads_for_clusters = []       
-    #         for cluster in clusters:
-    #             grads = [nets[i] for i in cluster]
-    #             grads_for_clusters.append(grads)
+        if clustering_params=='lsrs': 
+            grads_for_clusters = []       
+            for cluster in clusters:
+                grads = [nets[i] for i in cluster]
+                grads_for_clusters.append(grads)
 
-    #         print('clusters ', clusters)
+            print('clusters ', clusters)
 
-    #         for i, cluster in enumerate(clusters):
-    #             cluster.sort(key = lambda x: self.get_average_distance(nets[x], grads_for_clusters[i]))
-    #             # clusters[i] = cluster[:5]
-    #             for idx, cluster_elem in enumerate(clusters[i]):
-    #                 if idx>=5:
-    #                     self.validator_trust_scores[cluster_elem] = 1/idx
-    #         print('clusters ', clusters)
+            for i, cluster in enumerate(clusters):
+                cluster.sort(key = lambda x: self.get_average_distance(nets[x], grads_for_clusters[i]))
+                # clusters[i] = cluster[:5]
+                for idx, cluster_elem in enumerate(clusters[i]):
+                    if idx>=5:
+                        self.validator_trust_scores[cluster_elem] = 1/idx
+            print('clusters ', clusters)
 
-    #     # print('Clustering cost ',self.clustering_cost(clustering.labels_, X, iterative_k))
-    #     # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
-    #     # from sklearn.metrics.cluster import adjusted_rand_score
-    #     # print('Original Copylist', copylist)
-    #     # print('Found clusters', clustering.labels_)
+        # print('Clustering cost ',self.clustering_cost(clustering.labels_, X, iterative_k))
+        # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
+        # from sklearn.metrics.cluster import adjusted_rand_score
+        # print('Original Copylist', copylist)
+        # print('Found clusters', clustering.labels_)
 
 
 
-    #     #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
-    #     #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
-    #     # print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
-    #     # self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
-    #     # self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
-    #     # self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
+        #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
+        #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
+        # print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
+        # self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
+        # self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
+        # self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
 
-    #     return clustering.labels_, clusters
+        return clustering.labels_, clusters
     
 
 

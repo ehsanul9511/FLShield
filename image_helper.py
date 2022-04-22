@@ -1,5 +1,6 @@
 from collections import defaultdict
 import matplotlib.pyplot as plt
+from prometheus_client import Counter
 
 import torch
 import torch.utils.data
@@ -25,6 +26,9 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 import datetime
 import json
+
+from tqdm import tqdm
+from collections import Counter
 
 
 class ImageHelper(Helper):
@@ -170,6 +174,24 @@ class ImageHelper(Helper):
                                             batch_size=self.params['batch_size'],
                                             sampler=torch.utils.data.sampler.SubsetRandomSampler(
                                                 poison_label_inds))
+
+    def get_label_skew_ratios(self, dataset, num_of_classes=10):
+        dataset_classes = {}
+        # for ind, x in enumerate(dataset):
+        #     _, label = x
+        #     #if ind in self.params['poison_images'] or ind in self.params['poison_images_test']:
+        #     #    continue
+        #     if label in dataset_classes:
+        #         dataset_classes[label] += 1
+        #     else:
+        #         dataset_classes[label] = 1
+        # for key in dataset_classes.keys():
+        #     # dataset_classes[key] = dataset_classes[key] 
+
+        #     dataset_classes[key] = float("{:.2f}".format(dataset_classes[key]/len(dataset)))
+        dataset_classes = dict(Counter(dataset.targets))
+        print(dataset_classes)
+        return dataset_classes
 
     def assign_data(self, train_data, bias, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
         # assign data to the clients
@@ -347,6 +369,14 @@ class ImageHelper(Helper):
 
         logger.info('train loaders done')
         self.train_data = train_loaders
+        self.lsrs = []
+
+        for id in tqdm(range(len(train_loaders))):
+            (_, train_loader) = train_loaders[id]
+            lsr = self.get_label_skew_ratios(train_loader.dataset)
+            self.lsrs.append((id, lsr))
+        logger.info(f'lsrs ready: {self.lsrs}')
+
         self.test_data = self.get_test()
         self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
 
