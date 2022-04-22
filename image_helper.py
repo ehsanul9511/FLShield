@@ -170,6 +170,103 @@ class ImageHelper(Helper):
                                             batch_size=self.params['batch_size'],
                                             sampler=torch.utils.data.sampler.SubsetRandomSampler(
                                                 poison_label_inds))
+
+    def assign_data(self, train_data, bias, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
+        # assign data to the clients
+        other_group_size = (1 - bias) / (num_labels - 1)
+        worker_per_group = num_workers / num_labels
+
+        #assign training data to each worker
+        each_worker_data = [[] for _ in range(num_workers)]
+        each_worker_label = [[] for _ in range(num_workers)]   
+        server_data = []
+        server_label = []
+        
+        # compute the labels needed for each class
+        real_dis = [1. / num_labels for _ in range(num_labels)]
+        samp_dis = [0 for _ in range(num_labels)]
+        num1 = int(server_pc * p)
+        samp_dis[server_case2_cls] = num1
+        average_num = (server_pc - num1) / (num_labels - 1)
+        resid = average_num - np.floor(average_num)
+        sum_res = 0.
+        for other_num in range(num_labels - 1):
+            if other_num == server_case2_cls:
+                continue
+            samp_dis[other_num] = int(average_num)
+            sum_res += resid
+            if sum_res >= 1.0:
+                samp_dis[other_num] += 1
+                sum_res -= 1
+        samp_dis[num_labels - 1] = server_pc - np.sum(samp_dis[:num_labels - 1])
+
+        # privacy experiment only
+        server_additional_label_0_samples_counter = 0    
+        server_add_data=[]
+        server_add_label=[]
+
+        # randomly assign the data points based on the labels
+        server_counter = [0 for _ in range(num_labels)]
+        for _, (x, y) in enumerate(train_data):
+            '''
+            if dataset == "FashionMNIST":
+                x = x.as_in_context(ctx).reshape(1,1,28,28)
+            else:
+                raise NotImplementedError
+            y = y.as_in_context(ctx)
+            '''
+
+            upper_bound = y * (1. - bias) / (num_labels - 1) + bias
+            lower_bound = y * (1. - bias) / (num_labels - 1)
+
+            # print(y, upper_bound, lower_bound)
+
+            # experiment 2 only
+            # upper_bound_offset = 0.4 if y==0 else 0
+            # upper_bound_offset = float(args.upper_bound_offset) if y==0 else 0
+            upper_bound_offset = 0
+            rd = np.random.random_sample()
+
+
+            other_group_size = (1 - upper_bound - upper_bound_offset + lower_bound) / (num_labels - 1)
+
+            if rd > upper_bound + upper_bound_offset:
+                worker_group = int(np.floor((rd - upper_bound - upper_bound_offset) / other_group_size) + y + 1)
+            elif rd < lower_bound:
+                worker_group = int(np.floor(rd / other_group_size))
+            # experiment 2 only
+            elif rd > upper_bound:
+                continue
+            else:
+                worker_group = y
+            # if y==0 and y != worker_group:
+            #     print(rd, y, worker_group)
+            if server_counter[int(y)] < samp_dis[int(y)] and flt_aggr:
+                server_data.append(x)
+                server_label.append(y)
+                server_counter[int(y)] += 1
+            else:
+                rd = np.random.random_sample()
+                selected_worker = int(worker_group * worker_per_group + int(np.floor(rd * worker_per_group)))
+                each_worker_data[selected_worker].append(x)
+                each_worker_label[selected_worker].append(y)
+    
+        #     server_data = nd.concat(*server_data, dim=0)
+        #     server_label = nd.concat(*server_label, dim=0)
+        
+        
+    #     each_worker_data = [nd.concat(*each_worker, dim=0) for each_worker in each_worker_data] 
+    #     each_worker_label = [nd.concat(*each_worker, dim=0) for each_worker in each_worker_label]
+        
+
+    #     # randomly permute the workers
+    #     random_order = np.random.RandomState(seed=seed).permutation(num_workers)
+    #     each_worker_data = [each_worker_data[i] for i in random_order]
+    #     each_worker_label = [each_worker_label[i] for i in random_order]
+        
+
+        return server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label
+
     def load_data(self):
         logger.info('Loading data')
         dataPath = './data'
@@ -221,7 +318,20 @@ class ImageHelper(Helper):
 
         self.classes_dict = self.build_classes_dict()
         logger.info('build_classes_dict done')
-        if self.params['sampling_dirichlet']:
+        if self.params['noniid']:
+            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.1, p=0.1, flt_aggr=1)
+            ewd.append(sd)
+            ewl.append(sl)
+
+            train_loaders = []
+            for id_worker in range(len(ewd)):
+                dataset_per_worker=[]
+                for idx in range(len(ewd[id_worker])):
+                    dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
+                if len(dataset_per_worker) != 0:
+                    train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
+                    train_loaders.append((id_worker, train_loader))
+        elif self.params['sampling_dirichlet']:
             ## sample indices for participants using Dirichlet distribution
             indices_per_participant = self.sample_dirichlet_train_data(
                 self.params['number_of_total_participants'], #100

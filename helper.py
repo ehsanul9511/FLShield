@@ -18,6 +18,8 @@ import config
 import copy
 import utils.csv_record
 
+from sklearn.cluster import AgglomerativeClustering, SpectralClustering
+
 class Helper:
     def __init__(self, current_time, params, name):
         self.current_time = current_time
@@ -197,7 +199,7 @@ class Helper:
                  number of training samples corresponding to the update, and update
                  is a list of variable weights
          """
-        if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+        if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0] # agg 1 interval
@@ -256,7 +258,38 @@ class Helper:
             data.add_(update_per_layer)
         return True
 
-    def foolsgold_update(self,target_model,updates):
+    def cos_calc_btn_grads(self, l1, l2):
+        return torch.dot(l1, l2)/(torch.linalg.norm(l1)+1e-9)/(torch.linalg.norm(l2)+1e-9)
+
+    def convert_model_to_param_list(self, model):
+        '''
+        num_of_param=0
+        for param in model.state_dict().values():
+            num_of_param += torch.numel(param)
+        
+
+        params=torch.ones([num_of_param])
+        '''
+        # if torch.typename(model)!='OrderedDict':
+        #     model = model.state_dict()
+
+        idx=0
+        params_to_copy_group=[]
+        for name, param in model.items():
+            num_params_to_copy = torch.numel(param)
+            params_to_copy_group.append(param.reshape([num_params_to_copy]).clone().detach())
+            idx+=num_params_to_copy
+
+        params=torch.ones([idx])
+        idx=0
+        for param in params_to_copy_group:    
+            for par in param:
+                params[idx].copy_(par)
+                idx += 1
+
+        return params
+        
+    def fltrust(self, target_model, updates):
         client_grads = []
         alphas = []
         names = []
@@ -265,6 +298,66 @@ class Helper:
             alphas.append(data[0])  # num_samples
             names.append(name)
 
+        grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        clean_server_grad = grads[-1]
+        cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
+        logger.info(f'cos_sims: {cos_sims}')
+
+        cos_sims = np.maximum(np.array(cos_sims), 0)
+        norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
+        for i in range(len(norm_weights)):
+            norm_weights[i] = norm_weights[i] * torch.linalg.norm(clean_server_grad) / (torch.linalg.norm(grads[i]))
+
+        wv = norm_weights
+        # wv = np.ones(self.params['no_models'])
+        # wv = wv/len(wv)
+        logger.info(f'wv: {wv}')
+        agg_grads = {}
+        # Iterate through each layer
+        for name in client_grads[0].keys():
+            assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+            temp = wv[0] * client_grads[0][name].cpu().clone()
+            # Aggregate gradients for a layer
+            for c, client_grad in enumerate(client_grads):
+                if c == 0:
+                    continue
+                temp += wv[c] * client_grad[name].cpu()
+                # print(temp)
+                # temp += wv[c]
+            # temp = temp / len(client_grads)
+            agg_grads[name] = temp
+
+        print(self.convert_model_to_param_list(agg_grads))
+
+
+        target_model.train()
+        # train and update
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+                                    momentum=self.params['momentum'],
+                                    weight_decay=self.params['decay'])
+
+        optimizer.zero_grad()
+        # print(client_grads[0])
+        print(f'before update {self.convert_model_to_param_list(target_model.state_dict())}')
+        for i, (name, params) in enumerate(target_model.named_parameters()):
+            agg_grads[name]=-agg_grads[name] * self.params["eta"]
+            if params.requires_grad:
+                params.grad = agg_grads[name].to(config.device)
+        optimizer.step()
+        print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
+        # utils.csv_record.add_weight_result(names, wv, alpha)
+        return True, names, wv
+
+
+    def foolsgold_update(self,target_model,updates):
+        client_grads = []
+        alphas = []
+        names = []
+        for name, data in updates.items():
+            client_grads.append(data[1])  # gradient
+            alphas.append(data[0])  # num_samples
+            names.append(name)
+        
         adver_ratio = 0
         for i in range(0, len(names)):
             _name = names[i]
@@ -282,11 +375,15 @@ class Helper:
                                     weight_decay=self.params['decay'])
 
         optimizer.zero_grad()
+        print(client_grads[0])
         agg_grads, wv,alpha = self.fg.aggregate_gradients(client_grads,names)
+        grad_state_dict = {}
         for i, (name, params) in enumerate(target_model.named_parameters()):
+            grad_state_dict[name] = agg_grads[i]
             agg_grads[i]=agg_grads[i] * self.params["eta"]
             if params.requires_grad:
                 params.grad = agg_grads[i].to(config.device)
+        print(self.convert_model_to_param_list(grad_state_dict))
         optimizer.step()
         wv=wv.tolist()
         utils.csv_record.add_weight_result(names, wv, alpha)

@@ -86,7 +86,7 @@ if __name__ == '__main__':
     np.random.seed(1)
     time_start_load_everything = time.time()
     parser = argparse.ArgumentParser(description='PPDL')
-    parser.add_argument('--params', dest='params')
+    parser.add_argument('--params', dest='params', default='utils/mnist_params.yaml')
     args = parser.parse_args()
     with open(f'./{args.params}', 'r') as f:
         params_loaded = yaml.load(f)
@@ -132,6 +132,8 @@ if __name__ == '__main__':
     submit_update_dict = None
     num_no_progress = 0
 
+    print(helper.params['0_poison_epochs'])
+
     for epoch in range(helper.start_epoch, helper.params['epochs'] + 1, helper.params['aggr_epoch_interval']):
         start_time = time.time()
         t = time.time()
@@ -156,9 +158,9 @@ if __name__ == '__main__':
                 for adv in helper.params['adversary_list']:
                     if adv not in adversarial_name_keys:
                         nonattacker.append(copy.deepcopy(adv))
-                benign_num = helper.params['no_models'] - len(adversarial_name_keys)
+                benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 1
                 random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
-                agent_name_keys = adversarial_name_keys + random_agent_name_keys
+                agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
         else:
             if helper.params['is_random_adversary']==False:
                 adversarial_name_keys=copy.deepcopy(helper.params['adversary_list'])
@@ -172,13 +174,17 @@ if __name__ == '__main__':
         weight_accumulator, updates = helper.accumulate_weight(weight_accumulator, epochs_submit_update_dict,
                                                                agent_name_keys, num_samples_dict)
         is_updated = True
-        if helper.params['aggregation_methods'] == config.AGGR_MEAN:
+        if helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
+            is_updated, names, weights = helper.fltrust(helper.target_model, updates)
+            vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
+        elif helper.params['aggregation_methods'] == config.AGGR_MEAN:
             # Average the models
             is_updated = helper.average_shrink_models(weight_accumulator=weight_accumulator,
                                                       target_model=helper.target_model,
                                                       epoch_interval=helper.params['aggr_epoch_interval'])
             num_oracle_calls = 1
         elif helper.params['aggregation_methods'] == config.AGGR_GEO_MED:
+            
             maxiter = helper.params['geom_median_maxiter']
             num_oracle_calls, is_updated, names, weights, alphas = helper.geometric_median_update(helper.target_model, updates, maxiter=maxiter)
             vis_agg_weight(helper, names, weights, epoch, vis, adversarial_name_keys)
