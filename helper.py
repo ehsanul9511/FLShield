@@ -19,6 +19,7 @@ import copy
 import utils.csv_record
 
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering
+from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 
 class Helper:
     def __init__(self, current_time, params, name):
@@ -289,8 +290,16 @@ class Helper:
 
         return params
 
-    def cluster_grads(self, updates, clustering_method='Spectral', clustering_params='grads'):
-        nets = updates
+    def get_validation_score(self, candidate, cluster):
+        centroid = np.mean(cluster, axis=0)
+        return np.mean(euclidean_distances([candidate, centroid]))
+
+    def get_average_distance(self, candidate, cluster):
+        # return np.sum(euclidean_distances(cluster, [candidate]))/(len(cluster)-1)
+        return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
+
+    def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
+        nets = grads
         nets= np.array(nets)
         if clustering_params=='lsrs':
             X = self.lsrs
@@ -298,11 +307,11 @@ class Helper:
             X = nets
 
         if clustering_method == 'Spectral':
-            clustering = SpectralClustering(n_clusters=iterative_k, affinity='cosine').fit(X)
+            clustering = SpectralClustering(n_clusters=k, affinity='cosine').fit(X)
         elif clustering_method == 'Agglomerative':
             clustering = AgglomerativeClustering(n_clusters=2, affinity='cosine', linkage='complete').fit(X)
 
-        clusters = [[] for _ in range(iterative_k)]
+        clusters = [[] for _ in range(k)]
         for i, label in enumerate(clustering.labels_.tolist()):
             clusters[label].append(i)
         for cluster in clusters:
@@ -333,21 +342,6 @@ class Helper:
                     if idx>=5:
                         self.validator_trust_scores[cluster_elem] = 1/idx
             print('clusters ', clusters)
-
-        # print('Clustering cost ',self.clustering_cost(clustering.labels_, X, iterative_k))
-        # clustering = AgglomerativeClustering(n_clusters=num_of_distributions, affinity='cosine', linkage='complete').fit(X)
-        # from sklearn.metrics.cluster import adjusted_rand_score
-        # print('Original Copylist', copylist)
-        # print('Found clusters', clustering.labels_)
-
-
-
-        #print('Original groups', [np.argwhere(np.array(copylist)==i).flatten() for i in range(num_of_distributions)])
-        #print('Clustered groups', [np.argwhere(clustering.labels_==i).flatten() for i in range(num_of_distributions)])
-        # print('Clustering score', adjusted_rand_score(clustering.labels_.tolist(), copylist))
-        # self.log.append((iter, 'Original copylist', 'cluster_grads', copylist))
-        # self.log.append((iter, 'Clusters', 'cluster_grads', clustering.labels_))
-        # self.debug_log['cluster_without_running_avg'].append((iter, 'Cluster Score', 'cluster_grads', adjusted_rand_score(clustering.labels_.tolist(), copylist)))
 
         return clustering.labels_, clusters
     

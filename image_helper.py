@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import OrderedDict
 import matplotlib.pyplot as plt
 from prometheus_client import Counter
 
@@ -175,7 +176,7 @@ class ImageHelper(Helper):
                                             sampler=torch.utils.data.sampler.SubsetRandomSampler(
                                                 poison_label_inds))
 
-    def get_label_skew_ratios(self, dataset, num_of_classes=10):
+    def get_label_skew_ratios(self, dataset, id, num_of_classes=10):
         dataset_classes = {}
         # for ind, x in enumerate(dataset):
         #     _, label = x
@@ -189,8 +190,23 @@ class ImageHelper(Helper):
         #     # dataset_classes[key] = dataset_classes[key] 
 
         #     dataset_classes[key] = float("{:.2f}".format(dataset_classes[key]/len(dataset)))
-        dataset_classes = dict(Counter(dataset.targets))
-        print(dataset_classes)
+        if self.params['noniid']:
+            y_labels = []
+            for x, y in dataset:
+                y_labels.append(y)
+        else:
+            y_labels=[t.item() for t in dataset.targets]
+            indices = self.indices_per_participant[id]
+            y_labels = np.array(y_labels)
+            y_labels = y_labels[indices]
+        dataset_dict = OrderedDict(Counter(y_labels))
+        # dataset_classes = []
+        # for c in range(num_of_classes):
+        #     dataset_classes.append(dataset_dict[c])
+        # dataset_classes = np.array(dataset_classes)
+        # print(dataset_classes)
+        dataset_classes = np.array(list(dataset_dict.values()))
+        dataset_classes = dataset_classes/np.sum(dataset_classes)
         return dataset_classes
 
     def assign_data(self, train_data, bias, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
@@ -230,22 +246,11 @@ class ImageHelper(Helper):
         # randomly assign the data points based on the labels
         server_counter = [0 for _ in range(num_labels)]
         for _, (x, y) in enumerate(train_data):
-            '''
-            if dataset == "FashionMNIST":
-                x = x.as_in_context(ctx).reshape(1,1,28,28)
-            else:
-                raise NotImplementedError
-            y = y.as_in_context(ctx)
-            '''
+
 
             upper_bound = y * (1. - bias) / (num_labels - 1) + bias
             lower_bound = y * (1. - bias) / (num_labels - 1)
 
-            # print(y, upper_bound, lower_bound)
-
-            # experiment 2 only
-            # upper_bound_offset = 0.4 if y==0 else 0
-            # upper_bound_offset = float(args.upper_bound_offset) if y==0 else 0
             upper_bound_offset = 0
             rd = np.random.random_sample()
 
@@ -261,8 +266,7 @@ class ImageHelper(Helper):
                 continue
             else:
                 worker_group = y
-            # if y==0 and y != worker_group:
-            #     print(rd, y, worker_group)
+
             if server_counter[int(y)] < samp_dis[int(y)] and flt_aggr:
                 server_data.append(x)
                 server_label.append(y)
@@ -272,20 +276,6 @@ class ImageHelper(Helper):
                 selected_worker = int(worker_group * worker_per_group + int(np.floor(rd * worker_per_group)))
                 each_worker_data[selected_worker].append(x)
                 each_worker_label[selected_worker].append(y)
-    
-        #     server_data = nd.concat(*server_data, dim=0)
-        #     server_label = nd.concat(*server_label, dim=0)
-        
-        
-    #     each_worker_data = [nd.concat(*each_worker, dim=0) for each_worker in each_worker_data] 
-    #     each_worker_label = [nd.concat(*each_worker, dim=0) for each_worker in each_worker_label]
-        
-
-    #     # randomly permute the workers
-    #     random_order = np.random.RandomState(seed=seed).permutation(num_workers)
-    #     each_worker_data = [each_worker_data[i] for i in random_order]
-    #     each_worker_label = [each_worker_label[i] for i in random_order]
-        
 
         return server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label
 
@@ -358,6 +348,7 @@ class ImageHelper(Helper):
             indices_per_participant = self.sample_dirichlet_train_data(
                 self.params['number_of_total_participants'], #100
                 alpha=self.params['dirichlet_alpha'])
+            self.indices_per_participant = indices_per_participant
             train_loaders = [(pos, self.get_train(indices)) for pos, indices in
                              indices_per_participant.items()]
         else:
@@ -369,13 +360,15 @@ class ImageHelper(Helper):
 
         logger.info('train loaders done')
         self.train_data = train_loaders
-        self.lsrs = []
 
-        for id in tqdm(range(len(train_loaders))):
-            (_, train_loader) = train_loaders[id]
-            lsr = self.get_label_skew_ratios(train_loader.dataset)
-            self.lsrs.append((id, lsr))
-        logger.info(f'lsrs ready: {self.lsrs}')
+        if self.params['noniid'] or self.params['sampling_dirichlet']:
+            self.lsrs = []
+
+            for id in tqdm(range(len(train_loaders))):
+                (_, train_loader) = train_loaders[id]
+                lsr = self.get_label_skew_ratios(train_loader.dataset, id)
+                self.lsrs.append((lsr)
+            logger.info(f'lsrs ready: {self.lsrs}')
 
         self.test_data = self.get_test()
         self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
