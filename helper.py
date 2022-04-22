@@ -345,8 +345,6 @@ class Helper:
 
         return clustering.labels_, clusters
     
-
-
     # def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
     #     client_grads = []
     #     alphas = []
