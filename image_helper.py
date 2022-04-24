@@ -74,6 +74,22 @@ class ImageHelper(Helper):
         self.local_model = local_model
         self.target_model = target_model
 
+    def new_model(self):
+        if self.params['type']==config.TYPE_CIFAR:
+            new_model = ResNet18(name='Dummy',
+                                   created_time=self.params['current_time'])
+
+        elif self.params['type']==config.TYPE_MNIST:
+            new_model = MnistNet(name='Dummy',
+                                    created_time=self.params['current_time'])
+
+        elif self.params['type']==config.TYPE_TINYIMAGENET:
+            new_model = resnet18(name='Dummy',
+                                    created_time=self.params['current_time'])
+
+        new_model=new_model.to(device)
+        return new_model        
+
     def build_classes_dict(self):
         cifar_classes = {}
         for ind, x in enumerate(self.train_dataset):  # for cifar: 50000; for tinyimagenet: 100000
@@ -332,8 +348,9 @@ class ImageHelper(Helper):
         logger.info('build_classes_dict done')
         if self.params['noniid']:
             sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.5, p=0.1, flt_aggr=1)
-            ewd.append(sd)
-            ewl.append(sl)
+            if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+                ewd.append(sd)
+                ewl.append(sl)
 
             train_loaders = []
             for id_worker in range(len(ewd)):
