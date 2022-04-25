@@ -441,8 +441,6 @@ class Helper:
                     val_client_indice_tuples.append((i, v1))
                     val_client_indice_tuples.append((i, v2))
 
-            print(val_client_indice_tuples)
-
             for idx, cluster in enumerate(clusters_agg):
                 if len(cluster) == 0:
                     continue
@@ -468,13 +466,7 @@ class Helper:
                         if c == 0:
                             continue
                         temp += wv * cluster_grad[name].cpu()
-                        # print(temp)
-                        # temp += wv[c]
-                    # temp = temp / len(cluster_grads)
                     agg_grads[name] = temp
-
-                print(self.convert_model_to_param_list(agg_grads))
-
 
                 agg_model.train()
                 # train and update
@@ -483,7 +475,6 @@ class Helper:
                                             weight_decay=self.params['decay'])
 
                 optimizer.zero_grad()
-                # print(client_grads[0])
                 for i, (name, params) in enumerate(agg_model.named_parameters()):
                     agg_grads[name]=-agg_grads[name] * self.params["eta"]
                     if params.requires_grad:
@@ -572,8 +563,6 @@ class Helper:
                     min_diff_by_class[c] = np.min([np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][0][1][c]), np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][1][1][c])])
                 
                 target_class = np.argmax(min_diff_by_class)
-
-                # print(f'target class calculation {client_id} {grp_no} {mean_by_class} {min_diff_by_class} {target_class}')
                 
                 val_acc_0 = val_score_by_group_dict[grp_no][0][1][target_class]
                 val_acc_1 = val_score_by_group_dict[grp_no][1][1][target_class]
@@ -599,12 +588,10 @@ class Helper:
                         validator = validators[grp_no][0]
                         self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
                     new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][1][0]
-            for grp_no in self.all_group_nos:
-                if grp_no not in new_val_score_by_group_dict.keys():
-                    new_val_score_by_group_dict[grp_no] = -1
+            # for grp_no in self.all_group_nos:
+            #     if grp_no not in new_val_score_by_group_dict.keys():
+            #         new_val_score_by_group_dict[grp_no] = -1
             val_score_by_group_dict = new_val_score_by_group_dict
-
-            print(val_score_by_group_dict)
             
             all_val_score_by_group_dict[client_id] = val_score_by_group_dict
             min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
@@ -619,8 +606,55 @@ class Helper:
             self.all_val_score = all_val_score
             self.all_val_score_min_grp = all_val_score_min_grp
 
-            all_val_score = [self.all_val_score[client_id] for client_id in names]
-            aggr_weights = np.array(all_val_score)
+            aggr_weights = [self.all_val_score[client_id] for client_id in names]
+            aggr_weights = np.array(aggr_weights)
+            aggr_weights = aggr_weights/np.sum(aggr_weights)
+
+            wv = aggr_weights
+            logger.info(f'wv: {wv}')
+            agg_grads = {}
+            # Iterate through each layer
+            for name in client_grads[0].keys():
+                assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+                temp = wv[0] * client_grads[0][name].cpu().clone()
+                # Aggregate gradients for a layer
+                for c, client_grad in enumerate(client_grads):
+                    if c == 0:
+                        continue
+                    temp += wv[c] * client_grad[name].cpu()
+                agg_grads[name] = temp
+
+            target_model.train()
+            # train and update
+            optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+                                        momentum=self.params['momentum'],
+                                        weight_decay=self.params['decay'])
+
+            optimizer.zero_grad()
+            for i, (name, params) in enumerate(target_model.named_parameters()):
+                agg_grads[name]=-agg_grads[name] * self.params["eta"]
+                if params.requires_grad:
+                    params.grad = agg_grads[name].to(config.device)
+            optimizer.step()
+        
+        else:
+            for client_id in names:
+                if client_id in self.all_val_score.keys():
+                    prev_val_score = self.all_val_score[client_id]
+                    if prev_val_score < 50.:
+                        prev_val_grp_no = self.all_val_score_min_grp[client_id]
+                        current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
+                        if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
+                            all_val_score[client_id] = prev_val_score/2
+                            all_val_score_min_grp[client_id] = prev_val_grp_no
+            
+            for name in all_val_score.keys():
+                self.all_val_score[name] = all_val_score[name]
+            for name in all_val_score_min_grp.keys():
+                self.all_val_score_min_grp[name] = all_val_score_min_grp[name]
+
+            aggr_weights = [self.all_val_score[client_id] for client_id in names]
+            aggr_weights = np.array(aggr_weights)
             aggr_weights = aggr_weights/np.sum(aggr_weights)
 
             wv = aggr_weights
@@ -656,57 +690,7 @@ class Helper:
             optimizer.step()
             print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
         
-        else:
-            for client_id in names:
-                if client_id in self.all_val_score.keys():
-                    prev_val_score = self.all_val_score[client_id]
-                    if prev_val_score < 50.:
-                        prev_val_grp_no = self.all_val_score_min_grp[client_id]
-                        if client_id not in all_val_score_by_group_dict.keys():
-                            print(all_val_score_by_group_dict.keys())
-                        current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
-                        if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
-                            all_val_score[client_id] = prev_val_score/2
-                            all_val_score_min_grp[client_id] = prev_val_grp_no
-            self.all_val_score = all_val_score
-            self.all_val_score_min_grp = all_val_score_min_grp
-
-            all_val_score = [self.all_val_score[client_id] for client_id in names]
-            aggr_weights = np.array(all_val_score)
-            aggr_weights = aggr_weights/np.sum(aggr_weights)
-
-            wv = aggr_weights
-            logger.info(f'wv: {wv}')
-            agg_grads = {}
-            # Iterate through each layer
-            for name in client_grads[0].keys():
-                assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-                temp = wv[0] * client_grads[0][name].cpu().clone()
-                # Aggregate gradients for a layer
-                for c, client_grad in enumerate(client_grads):
-                    if c == 0:
-                        continue
-                    temp += wv[c] * client_grad[name].cpu()
-                    # print(temp)
-                    # temp += wv[c]
-                # temp = temp / len(client_grads)
-                agg_grads[name] = temp
-
-            target_model.train()
-            # train and update
-            optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-                                        momentum=self.params['momentum'],
-                                        weight_decay=self.params['decay'])
-
-            optimizer.zero_grad()
-            # print(client_grads[0])
-            print(f'before update {self.convert_model_to_param_list(target_model.state_dict())}')
-            for i, (name, params) in enumerate(target_model.named_parameters()):
-                agg_grads[name]=-agg_grads[name] * self.params["eta"]
-                if params.requires_grad:
-                    params.grad = agg_grads[name].to(config.device)
-            optimizer.step()
-            print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
+        print(f'all_val_score: {self.all_val_score}')
 
     #         self.debug_log['val_logs'][epoch]['agglom_cluster_list'] = clusters_agg
     #         self.debug_log['val_logs'][epoch]['all_val_acc_list'] = all_val_acc_list
