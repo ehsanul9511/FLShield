@@ -299,7 +299,7 @@ class Helper:
         if clustering_method == 'Spectral':
             clustering = SpectralClustering(n_clusters=k, affinity='cosine').fit(X)
         elif clustering_method == 'Agglomerative':
-            clustering = AgglomerativeClustering(n_clusters=2, affinity='cosine', linkage='complete').fit(X)
+            clustering = AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(X)
 
         clusters = [[] for _ in range(k)]
         for i, label in enumerate(clustering.labels_.tolist()):
@@ -549,20 +549,36 @@ class Helper:
                     val_score_by_group_dict[grp_no] = [(val_acc, val_acc_report)]
                     validators[grp_no]= [val_idx]
 
-            target_class=2
-            
             all_grp_nos = list(val_score_by_group_dict.keys())
-            total_acc = 0.
-            for grp_no in all_grp_nos:
-                for (val_acc, val_acc_report) in val_score_by_group_dict[grp_no]:
-                    total_acc += val_acc_report[target_class]
 
             new_val_score_by_group_dict = {}
             for grp_no in all_grp_nos:
+                mean_by_class = {}
+                for c in range(10):
+                    mean_by_class[c] = 0.
+                    for group_no in val_score_by_group_dict.keys():
+                        if group_no != grp_no:
+                            for grp_mm in range(2):
+                                mean_by_class[c] += val_score_by_group_dict[group_no][grp_mm][1][c]
+                    mean_by_class[c] /= ((len(val_score_by_group_dict.keys())-1) * 2)
+
+                # total_acc = 0.
+                # for group_no in all_grp_nos:
+                #     for (val_acc, val_acc_report) in val_score_by_group_dict[group_no]:
+                #         total_acc += val_acc_report[target_class]
+
+                min_diff_by_class = [0. for c in range(10)]
+                for c in range(10):
+                    min_diff_by_class[c] = np.min([np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][0][1][c]), np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][1][1][c])])
+                
+                target_class = np.argmax(min_diff_by_class)
+
+                # print(f'target class calculation {client_id} {grp_no} {mean_by_class} {min_diff_by_class} {target_class}')
+                
                 val_acc_0 = val_score_by_group_dict[grp_no][0][1][target_class]
                 val_acc_1 = val_score_by_group_dict[grp_no][1][1][target_class]
-                total_acc_excluding = total_acc - val_acc_0 - val_acc_1
-                mean_acc_excluding = total_acc_excluding/(2*(len(all_grp_nos)-1))
+                # total_acc_excluding = total_acc - val_acc_0 - val_acc_1
+                mean_acc_excluding = mean_by_class[target_class]
                 if min(abs(mean_acc_excluding-val_acc_0),abs(mean_acc_excluding-val_acc_1))>40.:
                     repl_acc = 0.
                     for grp_idx in all_grp_nos:

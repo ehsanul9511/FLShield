@@ -158,9 +158,14 @@ if __name__ == '__main__':
                 for adv in helper.params['adversary_list']:
                     if adv not in adversarial_name_keys:
                         nonattacker.append(copy.deepcopy(adv))
-                benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 1
-                random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
-                agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
+                if helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
+                    benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 1
+                    random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
+                    agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
+                else:
+                    benign_num = helper.params['no_models'] - len(adversarial_name_keys)
+                    random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
+                    agent_name_keys = adversarial_name_keys + random_agent_name_keys
         else:
             if helper.params['is_random_adversary']==False:
                 adversarial_name_keys=copy.deepcopy(helper.params['adversary_list'])
