@@ -703,7 +703,7 @@ class Helper:
             # optimizer.step()
             # print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
 
-        norms = [torch.linalg.norm(grad) for grad in grads]
+        norms = [torch.linalg.norm(grad).item() for grad in grads]
         norm_median = np.median(norms)
         clipping_weights = [min(norm_median/norm, 1) for norm in norms]
         wv = [w*c for w,c in zip(wv, clipping_weights)]
