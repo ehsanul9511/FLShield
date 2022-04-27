@@ -265,7 +265,7 @@ class Helper:
         """
         Add noise to the model weights.
         """
-        for name, data in self.model.state_dict().items():
+        for name, data in self.target_model.state_dict().items():
             if self.params.get('tied', False) and name == 'decoder.weight':
                 continue
 
