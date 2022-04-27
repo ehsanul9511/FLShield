@@ -190,8 +190,10 @@ class Helper:
 
     @staticmethod
     def dp_noise(param, sigma):
-
-        noised_layer = torch.cuda.FloatTensor(param.shape).normal_(mean=0, std=sigma)
+        if torch.cuda.is_available():
+            noised_layer = torch.cuda.FloatTensor(param.shape).normal_(mean=0, std=sigma)
+        else:
+            noised_layer = torch.FloatTensor(param.shape).normal_(mean=0, std=sigma)
 
         return noised_layer
 
