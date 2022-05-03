@@ -78,6 +78,7 @@ def Mytest_poison_label_flip(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.target_class_test_loader
+        # data_iterator = helper.get_test()
         for batch_id, batch in enumerate(data_iterator):
             data, targets = helper.get_batch(data_iterator, batch, evaluation=True)
             dataset_size += len(data)

@@ -163,9 +163,9 @@ if __name__ == '__main__':
                     random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
                     agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
                 else:
-                    benign_num = helper.params['no_models'] - len(adversarial_name_keys)
+                    benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 4
                     random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
-                    agent_name_keys = adversarial_name_keys + random_agent_name_keys
+                    agent_name_keys = adversarial_name_keys + random_agent_name_keys + [25, 26, 27, 28]
         else:
             if helper.params['is_random_adversary']==False:
                 adversarial_name_keys=copy.deepcopy(helper.params['adversary_list'])

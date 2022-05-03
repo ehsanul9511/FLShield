@@ -19,7 +19,7 @@ attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 10
+no_models: 20
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: false
@@ -34,7 +34,8 @@ scale_weights_poison: 100
 eta: 1  # single-shot: 0.1; multi-shot: 1
 
 # distributed attackers: (training img num : 606 - 591 - 568 - 557)
-adversary_list: [41, 73, 51, 74]
+# adversary_list: [41, 73, 51, 74]
+adversary_list: [21, 22, 23, 24]
 # centralized attacker: (training img num :602)
 #adversary_list: [95]
 
