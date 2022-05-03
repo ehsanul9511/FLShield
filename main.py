@@ -218,13 +218,20 @@ if __name__ == '__main__':
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
 
         if helper.params['is_poison']:
-
-            epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
-                                                                                    epoch=temp_global_epoch,
-                                                                                    model=helper.target_model,
-                                                                                    is_poison=True,
-                                                                                    visualize=True,
-                                                                                    agent_name_key="global")
+            if helper.params['attack_methods'] == config.ATTACK_DBA:
+                epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
+                                                                                        epoch=temp_global_epoch,
+                                                                                        model=helper.target_model,
+                                                                                        is_poison=True,
+                                                                                        visualize=True,
+                                                                                        agent_name_key="global")
+            elif helper.params['attack_methods'] == config.ATTACK_TLF:
+                epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
+                                                                                        epoch=temp_global_epoch,
+                                                                                        model=helper.target_model,
+                                                                                        is_poison=True,
+                                                                                        visualize=False,
+                                                                                        agent_name_key="global")
 
             csv_record.posiontest_result.append(
                 ["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])

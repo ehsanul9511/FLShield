@@ -50,6 +50,57 @@ def Mytest(helper, epoch,
     model.train()
     return (total_l, acc, correct, dataset_size)
 
+def Mytest_poison_label_flip(helper, epoch,
+           model, is_poison=False, visualize=True, agent_name_key=""):
+	# model.eval()
+	# test_loss = 0
+	# correct = 0
+	# with torch.no_grad():
+	# 	for data, target in target_class_test_loader:
+	# 	    data, target = get_batch((data, target))
+	# 	    output = network(data)
+	# 	    loss_func=nn.CrossEntropyLoss()
+	# 	    test_loss += loss_func(output, target).item()
+	# 	    pred = output.data.max(1, keepdim=True)[1]
+	# 	    correct += pred.eq(target.data.view_as(pred)).sum()
+	# test_loss /= len(target_class_test_loader.dataset)
+	# test_losses.append(test_loss)
+	# if print_flag:
+	# 	print('\nTarget Class Test set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+	# 	test_loss, correct, len(target_class_test_loader.dataset),
+	# 	100. * correct / len(target_class_test_loader.dataset)))
+
+    model.eval()
+    total_loss = 0
+    correct = 0
+    dataset_size = 0
+    if helper.params['type'] == config.TYPE_CIFAR \
+            or helper.params['type'] == config.TYPE_MNIST \
+            or helper.params['type'] == config.TYPE_TINYIMAGENET:
+        data_iterator = helper.target_class_test_loader
+        for batch_id, batch in enumerate(data_iterator):
+            data, targets = helper.get_batch(data_iterator, batch, evaluation=True)
+            dataset_size += len(data)
+            output = model(data)
+            total_loss += nn.functional.cross_entropy(output, targets,
+                                                      reduction='sum').item()  # sum up batch loss
+            pred = output.data.max(1)[1]  # get the index of the max log-probability
+            correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
+
+    acc = 100.0 * (float(correct) / float(dataset_size))  if dataset_size!=0 else 0
+    total_l = total_loss / dataset_size if dataset_size!=0 else 0
+
+    main.logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
+                     'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
+                                                        total_l, correct, dataset_size,
+                                                        acc))
+    # if visualize: # loss =total_l
+    #     model.test_vis(vis=main.vis, epoch=epoch, acc=acc, loss=None,
+    #                    eid=helper.params['environment_name'],
+    #                    agent_name_key=str(agent_name_key))
+    model.train()
+    return (total_l, acc, correct, dataset_size)
+
 
 def Mytest_poison(helper, epoch,
                   model, is_poison=False, visualize=True, agent_name_key=""):

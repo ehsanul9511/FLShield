@@ -344,6 +344,12 @@ class ImageHelper(Helper):
                                                    _data_transforms['val'])
             logger.info('reading data done')
 
+        target_class_test_data=[]
+        for _, (x, y) in enumerate(self.test_dataset):
+            if y==self.params['targeted_label_flip_class']:
+                target_class_test_data.append((x, y))
+        self.target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=self.params['test_batch_size'], shuffle=True)
+
         self.classes_dict = self.build_classes_dict()
         logger.info('build_classes_dict done')
         if self.params['noniid']:
@@ -445,6 +451,27 @@ class ImageHelper(Helper):
             data.requires_grad_(False)
             target.requires_grad_(False)
         return data, target
+
+    def get_poison_batch_for_targeted_label_flip(self, bptt):
+
+        images, targets = bptt
+
+        poison_count= 0
+        new_images=images
+        new_targets=targets
+
+        for index in range(0, len(images)):
+            if targets[index]==self.params['targeted_label_flip_class']: # poison all data when testing
+                new_targets[index] = 10-self.params['targeted_label_flip_class']-1
+                new_images[index] = images[index]
+                poison_count+=1
+            else:
+                new_images[index] = images[index]
+                new_targets[index]= targets[index]
+
+        new_images = new_images.to(device)
+        new_targets = new_targets.to(device).long()
+        return new_images,new_targets,poison_count    
 
     def get_poison_batch(self, bptt,adversarial_index=-1, evaluation=False):
 
