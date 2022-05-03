@@ -115,7 +115,7 @@ if __name__ == '__main__':
     logger.info(f'create model done')
     ### Create models
     if helper.params['is_poison']:
-        logger.info(f"Poisoned following participants: {(helper.params['adversary_list'])}")
+        logger.info(f"Poisoned following participants: {(helper.adversarial_namelist)}")
 
     best_loss = float('inf')
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
     submit_update_dict = None
     num_no_progress = 0
 
-    print(helper.params['0_poison_epochs'])
+    # print(helper.params['0_poison_epochs'])
 
     for epoch in range(helper.start_epoch, helper.params['epochs'] + 1, helper.params['aggr_epoch_interval']):
         start_time = time.time()
@@ -141,21 +141,21 @@ if __name__ == '__main__':
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
         if helper.params['is_random_namelist']:
-            if helper.params['is_random_adversary']:  # random choose , maybe don't have advasarial
+            if helper.params['is_random_adversary'] or helper.params['random_adversary_for_label_flip']:  # random choose , maybe don't have advasarial
                 agent_name_keys = random.sample(helper.participants_list, helper.params['no_models'])
                 for _name_keys in agent_name_keys:
-                    if _name_keys in helper.params['adversary_list']:
+                    if _name_keys in helper.adversarial_namelist:
                         adversarial_name_keys.append(_name_keys)
             else:  # must have advasarial if this epoch is in their poison epoch
                 ongoing_epochs = list(range(epoch, epoch + helper.params['aggr_epoch_interval']))
-                for idx in range(0, len(helper.params['adversary_list'])):
+                for idx in range(0, len(helper.adversarial_namelist)):
                     for ongoing_epoch in ongoing_epochs:
-                        if ongoing_epoch in helper.params[str(idx) + '_poison_epochs']:
-                            if helper.params['adversary_list'][idx] not in adversarial_name_keys:
-                                adversarial_name_keys.append(helper.params['adversary_list'][idx])
+                        if ongoing_epoch in helper.poison_epochs_by_adversary[idx]:
+                            if helper.adversarial_namelist[idx] not in adversarial_name_keys:
+                                adversarial_name_keys.append(helper.adversarial_namelist[idx])
 
                 nonattacker=[]
-                for adv in helper.params['adversary_list']:
+                for adv in helper.adversarial_namelist:
                     if adv not in adversarial_name_keys:
                         nonattacker.append(copy.deepcopy(adv))
                 if helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
@@ -163,12 +163,12 @@ if __name__ == '__main__':
                     random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
                     agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
                 else:
-                    benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 4
+                    benign_num = helper.params['no_models'] - len(adversarial_name_keys)
                     random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
-                    agent_name_keys = adversarial_name_keys + random_agent_name_keys + [25, 26, 27, 28]
+                    agent_name_keys = adversarial_name_keys + random_agent_name_keys
         else:
             if helper.params['is_random_adversary']==False:
-                adversarial_name_keys=copy.deepcopy(helper.params['adversary_list'])
+                adversarial_name_keys=copy.deepcopy(helper.adversarial_namelist)
         logger.info(f'Server Epoch:{epoch} choose agents : {agent_name_keys}.')
         epochs_submit_update_dict, num_samples_dict = train.train(helper=helper, start_epoch=epoch,
                                                                   local_model=helper.local_model,
@@ -244,12 +244,12 @@ if __name__ == '__main__':
                 helper.target_model.trigger_agent_test_vis(vis=vis, epoch=epoch, acc=epoch_acc_p, loss=None,
                                                            eid=helper.params['environment_name'],
                                                            name="global_combine")
-            if len(helper.params['adversary_list']) == 1:  # centralized attack
+            if len(helper.adversarial_namelist) == 1:  # centralized attack
                 if helper.params['centralized_test_trigger'] == True:  # centralized attack test on local triggers
                     for j in range(0, helper.params['trigger_num']):
                         trigger_test_byindex(helper, j, vis, epoch)
             else:  # distributed attack
-                for agent_name_key in helper.params['adversary_list']:
+                for agent_name_key in helper.adversarial_namelist:
                     trigger_test_byname(helper, agent_name_key, vis, epoch)
 
         helper.save_model(epoch=epoch, val_loss=epoch_loss)

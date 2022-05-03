@@ -22,6 +22,7 @@ from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
 from tqdm import tqdm
+from termcolor import colored
 
 class Helper:
     def __init__(self, current_time, params, name):
@@ -204,7 +205,8 @@ class Helper:
                  number of training samples corresponding to the update, and update
                  is a list of variable weights
          """
-        if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+        # if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0] # agg 1 interval
@@ -708,7 +710,15 @@ class Helper:
         clipping_weights = [min(norm_median/norm, 1) for norm in norms]
         wv = [w*c for w,c in zip(wv, clipping_weights)]
         print(f'clipping_weights: {clipping_weights}')
-        print(f'wv: {wv}')
+        wv_print_str= '['
+        for idx, w in enumerate(wv):
+            wv_print_str += ' '
+            if names[idx] in self.adversarial_namelist:
+                wv_print_str += colored(str(w), 'blue')
+            else:
+                wv_print_str += str(w)
+        wv_print_str += ']'
+        print(f'wv: {wv_print_str}')
 
         for name in client_grads[0].keys():
             assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
@@ -821,7 +831,7 @@ class Helper:
         adver_ratio = 0
         for i in range(0, len(names)):
             _name = names[i]
-            if _name in self.params['adversary_list']:
+            if _name in self.adversarial_namelist:
                 adver_ratio += alphas[i]
         adver_ratio = adver_ratio / sum(alphas)
         poison_fraction = adver_ratio * self.params['poisoning_per_batch'] / self.params['batch_size']
@@ -863,7 +873,7 @@ class Helper:
         adver_ratio=0
         for i in range(0,len(names)):
             _name= names[i]
-            if _name in self.params['adversary_list']:
+            if _name in self.adversarial_namelist:
                 adver_ratio+= alphas[i]
         adver_ratio= adver_ratio/ sum(alphas)
         poison_fraction= adver_ratio* self.params['poisoning_per_batch']/ self.params['batch_size']

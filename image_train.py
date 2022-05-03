@@ -15,7 +15,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
     num_samples_dict = dict()
     current_number_of_adversaries=0
     for temp_name in agent_name_keys:
-        if temp_name in helper.params['adversary_list']:
+        if temp_name in helper.adversarial_namelist:
             current_number_of_adversaries+=1
 
     helper.local_models = {}
@@ -38,15 +38,15 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
         model.train()
         adversarial_index= -1
         localmodel_poison_epochs = helper.params['poison_epochs']
-        if is_poison and agent_name_key in helper.params['adversary_list']:
-            for temp_index in range(0, len(helper.params['adversary_list'])):
-                if int(agent_name_key) == helper.params['adversary_list'][temp_index]:
+        if is_poison and agent_name_key in helper.adversarial_namelist:
+            for temp_index in range(0, len(helper.adversarial_namelist)):
+                if int(agent_name_key) == helper.adversarial_namelist[temp_index]:
                     adversarial_index= temp_index
-                    localmodel_poison_epochs = helper.params[str(temp_index) + '_poison_epochs']
+                    localmodel_poison_epochs = helper.poison_epochs_by_adversary[adversarial_index]
                     main.logger.info(
                         f'poison local model {agent_name_key} index {adversarial_index} ')
                     break
-            if len(helper.params['adversary_list']) == 1:
+            if len(helper.adversarial_namelist) == 1:
                 adversarial_index = -1  # the global pattern
 
         for epoch in range(start_epoch, start_epoch + helper.params['aggr_epoch_interval']):
@@ -55,7 +55,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
             for name, param in target_model.named_parameters():
                 target_params_variables[name] = last_local_model[name].clone().detach().requires_grad_(False)
 
-            if is_poison and agent_name_key in helper.params['adversary_list'] and (epoch in localmodel_poison_epochs):
+            if is_poison and agent_name_key in helper.adversarial_namelist and (epoch in localmodel_poison_epochs):
                 main.logger.info('poison_now')
 
                 poison_lr = helper.params['poison_lr']
@@ -284,7 +284,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 csv_record.test_result.append([agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
             if is_poison:
-                if agent_name_key in helper.params['adversary_list'] and (epoch in localmodel_poison_epochs):
+                if agent_name_key in helper.adversarial_namelist and (epoch in localmodel_poison_epochs):
                     if helper.params['attack_methods'] == config.ATTACK_DBA:
                         epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
                                                                                             epoch=epoch,
@@ -303,7 +303,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                 #  test on local triggers
-                if agent_name_key in helper.params['adversary_list']:
+                if agent_name_key in helper.adversarial_namelist:
                     if helper.params['vis_trigger_split_test']:
                         model.trigger_agent_test_vis(vis=main.vis, epoch=epoch, acc=epoch_acc, loss=None,
                                                      eid=helper.params['environment_name'],

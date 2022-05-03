@@ -397,14 +397,24 @@ class ImageHelper(Helper):
         self.test_data = self.get_test()
         self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
 
-        self.advasarial_namelist = self.params['adversary_list']
 
         if self.params['is_random_namelist'] == False:
             self.participants_list = self.params['participants_namelist']
         else:
             self.participants_list = list(range(self.params['number_of_total_participants']))
         # random.shuffle(self.participants_list)
-        self.benign_namelist =list(set(self.participants_list) - set(self.advasarial_namelist))
+
+        self.poison_epochs_by_adversary = {}
+        if self.params['random_adversary_for_label_flip']:
+            self.adversarial_namelist = random.sample(self.participants_list, self.params['number_of_adversary_for_label_flip'])
+            for idx, id in enumerate(self.adversarial_namelist):
+                self.poison_epochs_by_adversary[idx] = self.params[f'0_poison_epochs']
+        else:
+            self.adversarial_namelist = self.params['adversary_list']
+            for idx, id in enumerate(self.adversarial_namelist):
+                self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
+
+        self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
     def get_train(self, indices):
         """
