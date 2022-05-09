@@ -353,7 +353,7 @@ class ImageHelper(Helper):
         self.classes_dict = self.build_classes_dict()
         logger.info('build_classes_dict done')
         if self.params['noniid']:
-            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.1, p=0.1, flt_aggr=1)
+            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.5, p=0.1, flt_aggr=1)
             if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
                 ewd.append(sd)
                 ewl.append(sl)

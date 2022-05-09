@@ -71,6 +71,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 temp_local_epoch = (epoch - 1) *internal_epoch_num
                 for internal_epoch in range(1, internal_epoch_num + 1):
                     temp_local_epoch += 1
+                    main.logger.info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
                     _, data_iterator = helper.train_data[agent_name_key]
                     poison_data_count = 0
                     total_loss = 0.
@@ -327,6 +328,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 last_local_model[name] = copy.deepcopy(data)
 
             if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+            # if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
                 epochs_local_update_list.append(client_grad)
             else:
                 epochs_local_update_list.append(local_model_update_dict)

@@ -3,3 +3,8 @@ data/
 models/__pycache__/
 saved_models/
 utils/__pycache__/
+plots/
+*.err
+*.out
+*.ipynb
+*.sh

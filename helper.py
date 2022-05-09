@@ -21,6 +21,8 @@ import utils.csv_record
 from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+from sklearn.metrics import silhouette_score
+from scipy.stats import stats
 from tqdm import tqdm
 from termcolor import colored
 
@@ -38,7 +40,7 @@ class Helper:
         self.params = params
         self.name = name
         self.best_loss = math.inf
-        self.folder_path = f'saved_models/model_{self.name}_{current_time}'
+        self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
         try:
             os.mkdir(self.folder_path)
         except FileExistsError:
@@ -303,9 +305,36 @@ class Helper:
     def get_average_distance(self, candidate, cluster):
         # return np.sum(euclidean_distances(cluster, [candidate]))/(len(cluster)-1)
         return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
+    
+    def get_optimal_k_for_clustering(self, grads):
+        coses = []
+        # nets = grads
+        nets = [grad.numpy() for grad in grads]
+        # nets = [np.array(grad) for grad in grads]
+        # for i1, net1 in enumerate(nets):
+        #     coses_l=[]
+        #     for i2, net2 in enumerate(nets):
+        #         coses_l.append(1-cos_calc_btn_grads(net1.grad_params, net2.grad_params))
+        #     coses.append(coses_l)
+        coses = cosine_distances(nets, nets)
+        coses = np.array(coses)
+        np.fill_diagonal(coses, 0)
+        # logger.info(f'coses: {coses}')
+        
+        sil= []
+        for k in range(2, min(len(nets), 15)+1):
+            clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
+            labels = clustering.labels_
+            print(labels)
+            sil.append(silhouette_score(coses, labels, metric='precomputed'))
+        # print(sil)
+        logger.info(f'Silhouette scores: {sil}')
+        return sil.index(max(sil))+2, coses
 
     def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
         nets = [grad.numpy() for grad in grads]
+        # nets = [np.array(grad) for grad in grads]
+        # nets = grads
         if clustering_params=='lsrs':
             X = self.lsrs
         elif clustering_params=='grads':
@@ -314,7 +343,10 @@ class Helper:
         if clustering_method == 'Spectral':
             clustering = SpectralClustering(n_clusters=k, affinity='cosine').fit(X)
         elif clustering_method == 'Agglomerative':
-            clustering = AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(X)
+            k, coses = self.get_optimal_k_for_clustering(grads)
+            # print(k)
+            # clustering = AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(X)
+            clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
 
         clusters = [[] for _ in range(k)]
         for i, label in enumerate(clustering.labels_.tolist()):
@@ -396,6 +428,9 @@ class Helper:
                 correct_by_class[class_label] = correct_by_class[class_label].item()
             # print(correct_by_class)
         return 100. * correct / len(test_loader.dataset), correct_by_class
+
+    def print_util(self, a, b):
+        return str(a) + ': ' + str(b)
     
     def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
         client_grads = []
@@ -407,6 +442,7 @@ class Helper:
             names.append(name)
 
         grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        # grads = client_grads
         print(names)
         if epoch==1:
             self.validator_trust_scores = [1. for _ in range(self.params['number_of_total_participants'])]
@@ -435,6 +471,8 @@ class Helper:
             else:
                 k = 2
             _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=k)
+            if self.params['no_models'] < 10:
+                self.clusters_agg = [[i] for i in range(self.params['no_models'])]
             clusters_agg = []
             for clstr in self.clusters_agg:
                 clstr = [names[c] for c in clstr]
@@ -443,6 +481,7 @@ class Helper:
             nets = self.local_models
             all_val_acc_list_dict = {}
             print(f'Validating all clients at epoch {epoch}')
+            print(f'{self.clusters_agg}_{clusters_agg}')
             val_client_indice_tuples=[]
             for i, val_cluster in enumerate(self.clusters):
                 val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
@@ -459,42 +498,45 @@ class Helper:
             for idx, cluster in enumerate(clusters_agg):
                 if len(cluster) == 0:
                     continue
-                agg_model = self.new_model()
-                agg_model.copy_params(self.target_model.state_dict())
+                if len(cluster) != 1:
+                    agg_model = self.new_model()
+                    agg_model.copy_params(self.target_model.state_dict())
 
-                cluster_grads = []
-                for iidx, name in enumerate(names):
-                    if name in cluster:
-                        print(name)
-                        cluster_grads.append(client_grads[iidx])
-                
-                wv = 1/len(cluster)
-                # wv = np.ones(self.params['no_models'])
-                # wv = wv/len(wv)
-                logger.info(f'wv: {wv}')
-                agg_grads = {}
-                # Iterate through each layer
-                for name in cluster_grads[0].keys():
-                    temp = wv * cluster_grads[0][name].cpu().clone()
-                    # Aggregate gradients for a layer
-                    for c, cluster_grad in enumerate(cluster_grads):
-                        if c == 0:
-                            continue
-                        temp += wv * cluster_grad[name].cpu()
-                    agg_grads[name] = temp
+                    cluster_grads = []
+                    for iidx, name in enumerate(names):
+                        if name in cluster:
+                            print(name)
+                            cluster_grads.append(client_grads[iidx])
+                    
+                    wv = 1/len(cluster)
+                    # wv = np.ones(self.params['no_models'])
+                    # wv = wv/len(wv)
+                    logger.info(f'wv: {wv}')
+                    agg_grads = {}
+                    # Iterate through each layer
+                    for name in cluster_grads[0].keys():
+                        temp = wv * cluster_grads[0][name].cpu().clone()
+                        # Aggregate gradients for a layer
+                        for c, cluster_grad in enumerate(cluster_grads):
+                            if c == 0:
+                                continue
+                            temp += wv * cluster_grad[name].cpu()
+                        agg_grads[name] = temp
 
-                agg_model.train()
-                # train and update
-                optimizer = torch.optim.SGD(agg_model.parameters(), lr=self.params['lr'],
-                                            momentum=self.params['momentum'],
-                                            weight_decay=self.params['decay'])
+                    agg_model.train()
+                    # train and update
+                    optimizer = torch.optim.SGD(agg_model.parameters(), lr=self.params['lr'],
+                                                momentum=self.params['momentum'],
+                                                weight_decay=self.params['decay'])
 
-                optimizer.zero_grad()
-                for i, (name, params) in enumerate(agg_model.named_parameters()):
-                    agg_grads[name]=-agg_grads[name] * self.params["eta"]
-                    if params.requires_grad:
-                        params.grad = agg_grads[name].to(config.device)
-                optimizer.step()
+                    optimizer.zero_grad()
+                    for i, (name, params) in enumerate(agg_model.named_parameters()):
+                        agg_grads[name]=-agg_grads[name] * self.params["eta"]
+                        if params.requires_grad:
+                            params.grad = agg_grads[name].to(config.device)
+                    optimizer.step()
+                else:
+                    agg_model = self.local_models[cluster[0]]
 
 
                 val_acc_list=[]
@@ -506,7 +548,13 @@ class Helper:
                         _, val_test_loader = self.train_data[val_idx]
                     else:
                         _, val_test_loader = self.train_data[val_idx]
-                    val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=(val_idx>=80), adv_index=0)
+                    if val_idx in self.adversarial_namelist:
+                        is_poisonous_validator = True
+                    else:
+                        is_poisonous_validator = False
+                    val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
+                    # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}')
+                    logger.info(f'cluster_idx: {idx}, val_idx: {val_idx}, val_acc: {val_acc}, val_acc_by_class: {val_acc_by_class}')
                     val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
                 
                 for client in cluster:
@@ -705,11 +753,44 @@ class Helper:
             # optimizer.step()
             # print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
 
+
         norms = [torch.linalg.norm(grad).item() for grad in grads]
         norm_median = np.median(norms)
         clipping_weights = [min(norm_median/norm, 1) for norm in norms]
         wv = [w*c for w,c in zip(wv, clipping_weights)]
-        print(f'clipping_weights: {clipping_weights}')
+
+        # min_aggr_weights_index = np.argmin(wv)
+        # for cluster in self.clusters_agg:
+        #     if min_aggr_weights_index in cluster:
+        #         for client_id in cluster:
+        #             wv[client_id] = 0
+
+        # wv = wv/np.sum(wv)
+
+        cluster_avg_wvs = []
+        for cluster_id, cluster in enumerate(self.clusters_agg):
+            cluster_avg_wvs.append(np.median([wv[client_id] for client_id in cluster]))
+        # min_cluster_avg_wvs_index = np.argmin(cluster_avg_wvs)
+        zscore_by_clusters = stats.zscore(cluster_avg_wvs)
+
+        # for client_id in self.clusters_agg[min_cluster_avg_wvs_index]:
+        #     wv[client_id] = 0
+
+        for cl_num, cluster in enumerate(self.clusters_agg):
+            mal_count = 0
+            for client_id in cluster:
+                if names[client_id] in self.adversarial_namelist:
+                    mal_count += 1
+            mal_count = mal_count/len(cluster)
+
+            logger.info(f'{clusters_agg[cl_num]}, {mal_count}, {zscore_by_clusters[cl_num]}')
+            if zscore_by_clusters[cl_num] < -1:
+                for client_id in cluster:
+                    wv[client_id] = 0
+
+        logger.info(f'clipping_weights: {clipping_weights}')
+        logger.info(f'adversarial clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.adversarial_namelist]}')
+        logger.info(f'benign clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.benign_namelist]}')
         wv_print_str= '['
         for idx, w in enumerate(wv):
             wv_print_str += ' '
@@ -744,8 +825,12 @@ class Helper:
         optimizer.step()
         noise_level = self.params['sigma'] * norm_median
         self.add_noise(noise_level=noise_level)
-        print(f'all_val_score: {self.all_val_score}')
-
+        logger.info(f'wv: {wv}')
+        logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
+        logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
+        logger.info(f'all_val_score: {self.all_val_score}')
+        logger.info(f'all_mal_val_score: {[(client_id, self.all_val_score[client_id]) for client_id in self.adversarial_namelist if client_id in self.all_val_score]}')
+        logger.info(f'all_benign_val_score: {[(client_id, self.all_val_score[client_id]) for client_id in self.benign_namelist if client_id in self.all_val_score]}')
     #         self.debug_log['val_logs'][epoch]['agglom_cluster_list'] = clusters_agg
     #         self.debug_log['val_logs'][epoch]['all_val_acc_list'] = all_val_acc_list
     #         self.debug_log['val_logs'][epoch]['all_val_scores'] = self.all_val_score
@@ -767,6 +852,7 @@ class Helper:
             names.append(name)
 
         grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        # grads = client_grads
         clean_server_grad = grads[-1]
         cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
         logger.info(f'cos_sims: {cos_sims}')
@@ -845,7 +931,7 @@ class Helper:
                                     weight_decay=self.params['decay'])
 
         optimizer.zero_grad()
-        print(client_grads[0])
+        # print(client_grads[0])
         agg_grads, wv,alpha = self.fg.aggregate_gradients(client_grads,names)
         grad_state_dict = {}
         for i, (name, params) in enumerate(target_model.named_parameters()):
@@ -853,7 +939,7 @@ class Helper:
             agg_grads[i]=agg_grads[i] * self.params["eta"]
             if params.requires_grad:
                 params.grad = agg_grads[i].to(config.device)
-        print(self.convert_model_to_param_list(grad_state_dict))
+        # print(self.convert_model_to_param_list(grad_state_dict))
         optimizer.step()
         wv=wv.tolist()
         utils.csv_record.add_weight_result(names, wv, alpha)
