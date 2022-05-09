@@ -178,6 +178,7 @@ if __name__ == '__main__':
         # for agnt in helper.local_models.keys():
         #     print(helper.local_models[agnt].state_dict())
         logger.info(f'time spent on training: {time.time() - t}')
+        t = time.time()
         weight_accumulator, updates = helper.accumulate_weight(weight_accumulator, epochs_submit_update_dict,
                                                                agent_name_keys, num_samples_dict)
         is_updated = True
@@ -204,6 +205,9 @@ if __name__ == '__main__':
             vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
             vis_fg_alpha(helper,names,alphas,epoch,vis,adversarial_name_keys )
             num_oracle_calls = 1
+
+        logger.info(f'time spent on aggregation: {time.time() - t}')
+        t=time.time()
 
         # clear the weight_accumulator
         weight_accumulator = helper.init_weight_accumulator(helper.target_model)
@@ -249,8 +253,12 @@ if __name__ == '__main__':
                     for j in range(0, helper.params['trigger_num']):
                         trigger_test_byindex(helper, j, vis, epoch)
             else:  # distributed attack
-                for agent_name_key in helper.adversarial_namelist:
-                    trigger_test_byname(helper, agent_name_key, vis, epoch)
+                if helper.params['speed_boost'] == False:
+                    for agent_name_key in helper.adversarial_namelist:
+                        trigger_test_byname(helper, agent_name_key, vis, epoch)
+
+        logger.info(f'time spent on testing: {time.time() - t}')
+        t = time.time()
 
         helper.save_model(epoch=epoch, val_loss=epoch_loss)
         logger.info(f'Done in {time.time() - start_time} sec.')

@@ -153,29 +153,30 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
 
                 if not helper.params['baseline']:
                     main.logger.info(f'will scale.')
-                    epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
-                                                                                   model=model, is_poison=False,
-                                                                                   visualize=False,
-                                                                                   agent_name_key=agent_name_key)
-                    csv_record.test_result.append(
-                        [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+                    if not helper.params['speed_boost']:
+                        epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
+                                                                                    model=model, is_poison=False,
+                                                                                    visualize=False,
+                                                                                    agent_name_key=agent_name_key)
+                        csv_record.test_result.append(
+                            [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
-                    if helper.params['attack_methods'] == config.ATTACK_DBA:
-                        epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
-                                                                                            epoch=epoch,
-                                                                                            model=model,
-                                                                                            is_poison=True,
-                                                                                            visualize=False,
-                                                                                            agent_name_key=agent_name_key)
-                    elif helper.params['attack_methods'] == config.ATTACK_TLF:
-                        epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
-                                                                                            epoch=epoch,
-                                                                                            model=model,
-                                                                                            is_poison=True,
-                                                                                            visualize=False,
-                                                                                            agent_name_key=agent_name_key)                        
-                    csv_record.posiontest_result.append(
-                        [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+                        if helper.params['attack_methods'] == config.ATTACK_DBA:
+                            epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
+                                                                                                epoch=epoch,
+                                                                                                model=model,
+                                                                                                is_poison=True,
+                                                                                                visualize=False,
+                                                                                                agent_name_key=agent_name_key)
+                        elif helper.params['attack_methods'] == config.ATTACK_TLF:
+                            epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
+                                                                                                epoch=epoch,
+                                                                                                model=model,
+                                                                                                is_poison=True,
+                                                                                                visualize=False,
+                                                                                                agent_name_key=agent_name_key)                        
+                        csv_record.posiontest_result.append(
+                            [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                     clip_rate = helper.params['scale_weights_poison']
                     main.logger.info(f"Scaling by  {clip_rate}")
@@ -279,12 +280,13 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                             f'Distance to the global model: {dis2global_list}. ')
 
                 # test local model after internal epoch finishing
-                epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
-                                                                               model=model, is_poison=False, visualize=True,
-                                                                               agent_name_key=agent_name_key)
-                csv_record.test_result.append([agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+                if not helper.params['speed_boost']:
+                    epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
+                                                                                model=model, is_poison=False, visualize=True,
+                                                                                agent_name_key=agent_name_key)
+                    csv_record.test_result.append([agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
-            if is_poison:
+            if is_poison and not helper.params['speed_boost']:
                 if agent_name_key in helper.adversarial_namelist and (epoch in localmodel_poison_epochs):
                     if helper.params['attack_methods'] == config.ATTACK_DBA:
                         epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,

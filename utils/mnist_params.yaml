@@ -12,8 +12,8 @@ internal_epochs: 1
 internal_poison_epochs: 1
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
-# aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold']
-aggregation_methods: 'our_aggr'
+# aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold', 'our_aggr]
+aggregation_methods: 'foolsgold'
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba' ]
 attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
@@ -43,7 +43,7 @@ targeted_label_flip_class: 0
 poison_label_swap: 2
 random_adversary_for_label_flip: true
 number_of_adversary_for_label_flip: 30
-centralized_test_trigger: True
+centralized_test_trigger: False
 trigger_num: 4
 
 ## gap 2 size 1*4 base (0, 0)
@@ -86,9 +86,10 @@ resumed_model: false
 resumed_model_name: mnist_pretrain/model_last.pt.tar.epoch_10
 resumed_model_path: mnist_pretrain/
 
+speed_boost: true
 vis_train: false
 vis_train_batch_loss: false
-vis_trigger_split_test: true
+vis_trigger_split_test: false
 track_distance: false
 batch_track_distance: false
 log_interval: 2

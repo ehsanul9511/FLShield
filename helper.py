@@ -433,6 +433,9 @@ class Helper:
         return str(a) + ': ' + str(b)
     
     def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
+        start_time = time.time()
+        t = time.time()
+        logger.info(f'Started clustering guided aggregation')
         client_grads = []
         alphas = []
         names = []
@@ -442,6 +445,8 @@ class Helper:
             names.append(name)
 
         grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
+        t = time.time()
         # grads = client_grads
         print(names)
         if epoch==1:
@@ -456,6 +461,9 @@ class Helper:
 
             print('Spectral clustering output')
             print(clusters)
+            
+            logger.info(f'Spectral Clustering: Time: {time.time() - t}')
+            t = time.time()
 
         if epoch <0:
             assert epoch == 0, 'fix epoch {}'.format(len(epoch))
@@ -466,13 +474,19 @@ class Helper:
 
             #get agglomerative clusters
             # if epoch<2 or np.random.random_sample() < np.min([0.1, np.exp(-epoch*0.1)/(1. + np.exp(-epoch*0.1))]):
-            if epoch<5:
-                k = 5
-            else:
-                k = 2
-            _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=k)
+            # if epoch<5:
+            #     k = 5
+            # else:
+            #     k = 2
+            # _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
             if self.params['no_models'] < 10:
                 self.clusters_agg = [[i] for i in range(self.params['no_models'])]
+            else:
+                _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
+            
+            logger.info(f'Agglomerative Clustering: Time: {time.time() - t}')
+            t = time.time()
+
             clusters_agg = []
             for clstr in self.clusters_agg:
                 clstr = [names[c] for c in clstr]
@@ -554,15 +568,14 @@ class Helper:
                         is_poisonous_validator = False
                     val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
                     # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}')
-                    logger.info(f'cluster_idx: {idx}, val_idx: {val_idx}, val_acc: {val_acc}, val_acc_by_class: {val_acc_by_class}')
+                    logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}, val_acc_by_class: {val_acc_by_class}')
                     val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
                 
                 for client in cluster:
                     all_val_acc_list_dict[client] = val_acc_list
 
-    #         all_val_acc_list = []
-    #         for idx in range(self.num_of_benign_nets+self.num_of_mal_nets):
-    #             all_val_acc_list.append(all_val_acc_list_dict[idx])
+            logger.info(f'Validation Done: Time: {time.time() - t}')
+            t = time.time()
 
         def get_group_no(validator_id, clustr):
             for grp_no in range(len(clustr)):
@@ -660,6 +673,9 @@ class Helper:
             min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
             all_val_score[client_id] = min_val_score
             all_val_score_min_grp[client_id] = min_val_grp_no
+
+        logger.info(f'Validation scoring by group done: {time.time()-t}')
+        t = time.time()
               
         if epoch<1:
             self.global_net.set_param_to_zero()
@@ -825,6 +841,8 @@ class Helper:
         optimizer.step()
         noise_level = self.params['sigma'] * norm_median
         self.add_noise(noise_level=noise_level)
+        logger.info(f'Aggregation Done: Time {time.time() - t}')
+        t = time.time()
         logger.info(f'wv: {wv}')
         logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
         logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
