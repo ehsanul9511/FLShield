@@ -11,6 +11,10 @@ import config
 
 def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_name_keys):
 
+    def main_logger_info(info):
+        if not helper.params['minimize_logging']:
+            main.logger.info(info)
+
     epochs_submit_update_dict = dict()
     num_samples_dict = dict()
     current_number_of_adversaries=0
@@ -43,7 +47,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 if int(agent_name_key) == helper.adversarial_namelist[temp_index]:
                     adversarial_index= temp_index
                     localmodel_poison_epochs = helper.poison_epochs_by_adversary[adversarial_index]
-                    main.logger.info(
+                    main_logger_info(
                         f'poison local model {agent_name_key} index {adversarial_index} ')
                     break
             if len(helper.adversarial_namelist) == 1:
@@ -56,7 +60,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 target_params_variables[name] = last_local_model[name].clone().detach().requires_grad_(False)
 
             if is_poison and agent_name_key in helper.adversarial_namelist and (epoch in localmodel_poison_epochs):
-                main.logger.info('poison_now')
+                main_logger_info('poison_now')
 
                 poison_lr = helper.params['poison_lr']
                 internal_epoch_num = helper.params['internal_poison_epochs']
@@ -71,7 +75,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 temp_local_epoch = (epoch - 1) *internal_epoch_num
                 for internal_epoch in range(1, internal_epoch_num + 1):
                     temp_local_epoch += 1
-                    main.logger.info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
+                    main_logger_info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
                     _, data_iterator = helper.train_data[agent_name_key]
                     poison_data_count = 0
                     total_loss = 0.
@@ -97,7 +101,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         loss.backward()
 
                         # get gradients
-                        if helper.params['aggregation_methods']==config.AGGR_FOOLSGOLD:
+                        # if helper.params['aggregation_methods']==config.AGGR_FOOLSGOLD:
+                        if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
                             for i, (name, params) in enumerate(model.named_parameters()):
                                 if params.requires_grad:
                                     if internal_epoch == 1 and batch_id == 0:
@@ -123,11 +128,11 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
 
                     if step_lr:
                         scheduler.step()
-                        main.logger.info(f'Current lr: {scheduler.get_lr()}')
+                        main_logger_info(f'Current lr: {scheduler.get_lr()}')
 
                     acc = 100.0 * (float(correct) / float(dataset_size))
                     total_l = total_loss / dataset_size
-                    main.logger.info(
+                    main_logger_info(
                         '___PoisonTrain {} ,  epoch {:3d}, local model {}, internal_epoch {:3d},  Average loss: {:.4f}, '
                         'Accuracy: {}/{} ({:.4f}%), train_poison_data_count: {}'.format(model.name, epoch, agent_name_key,
                                                                                       internal_epoch,
@@ -142,17 +147,17 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                         name=str(agent_name_key) )
                     num_samples_dict[agent_name_key] = dataset_size
                     if helper.params["batch_track_distance"]:
-                        main.logger.info(
+                        main_logger_info(
                             f'MODEL {model_id}. P-norm is {helper.model_global_norm(model):.4f}. '
                             f'Distance to the global model: {dis2global_list}. ')
 
                 # internal epoch finish
-                main.logger.info(f'Global model norm: {helper.model_global_norm(target_model)}.')
-                main.logger.info(f'Norm before scaling: {helper.model_global_norm(model)}. '
+                main_logger_info(f'Global model norm: {helper.model_global_norm(target_model)}.')
+                main_logger_info(f'Norm before scaling: {helper.model_global_norm(model)}. '
                                  f'Distance: {helper.model_dist_norm(model, target_params_variables)}')
 
                 if not helper.params['baseline']:
-                    main.logger.info(f'will scale.')
+                    main_logger_info(f'will scale.')
                     if not helper.params['speed_boost']:
                         epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
                                                                                     model=model, is_poison=False,
@@ -179,13 +184,13 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                             [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                     clip_rate = helper.params['scale_weights_poison']
-                    main.logger.info(f"Scaling by  {clip_rate}")
+                    main_logger_info(f"Scaling by  {clip_rate}")
                     for key, value in model.state_dict().items():
                         target_value  = last_local_model[key]
                         new_value = target_value + (value - target_value) * clip_rate
                         model.state_dict()[key].copy_(new_value)
                     distance = helper.model_dist_norm(model, target_params_variables)
-                    main.logger.info(
+                    main_logger_info(
                         f'Scaled Norm after poisoning: '
                         f'{helper.model_global_norm(model)}, distance: {distance}')
                     csv_record.scale_temp_one_row.append(epoch)
@@ -200,7 +205,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                                        name=str(agent_name_key), is_poisoned=True)
 
                 distance = helper.model_dist_norm(model, target_params_variables)
-                main.logger.info(f"Total norm for {current_number_of_adversaries} "
+                main_logger_info(f"Total norm for {current_number_of_adversaries} "
                                  f"adversaries is: {helper.model_global_norm(model)}. distance: {distance}")
 
             else:
@@ -224,7 +229,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         loss.backward()
 
                         # get gradients
-                        if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+                        # if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+                        if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
                             for i, (name, params) in enumerate(model.named_parameters()):
                                 if params.requires_grad:
                                     if internal_epoch == 1 and batch_id == 0:
@@ -260,7 +266,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
 
                     acc = 100.0 * (float(correct) / float(dataset_size))
                     total_l = total_loss / dataset_size
-                    main.logger.info(
+                    main_logger_info(
                         '___Train {},  epoch {:3d}, local model {}, internal_epoch {:3d},  Average loss: {:.4f}, '
                         'Accuracy: {}/{} ({:.4f}%)'.format(model.name, epoch, agent_name_key, internal_epoch,
                                                            total_l, correct, dataset_size,
@@ -275,7 +281,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     num_samples_dict[agent_name_key] = dataset_size
 
                     if helper.params["batch_track_distance"]:
-                        main.logger.info(
+                        main_logger_info(
                             f'MODEL {model_id}. P-norm is {helper.model_global_norm(model):.4f}. '
                             f'Distance to the global model: {dis2global_list}. ')
 
@@ -329,8 +335,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 local_model_update_dict[name] = (data - last_local_model[name])
                 last_local_model[name] = copy.deepcopy(data)
 
-            if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
-            # if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
+            # if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+            if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
                 epochs_local_update_list.append(client_grad)
             else:
                 epochs_local_update_list.append(local_model_update_dict)
