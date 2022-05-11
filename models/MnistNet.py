@@ -17,26 +17,10 @@ class MnistNet(SimpleNet):
     def __init__(self, name=None, created_time=None):
         super(MnistNet, self).__init__(f'{name}_Simple', created_time)
 
-        self.conv1 = nn.Sequential(         
-            nn.Conv2d(
-                in_channels=1,              
-                out_channels=16,            
-                kernel_size=5,              
-                stride=1,                   
-                padding=2,                  
-            ),                              
-            nn.ReLU(),                      
-            nn.MaxPool2d(kernel_size=2),    
-        )
-        self.conv2 = nn.Sequential(         
-            nn.Conv2d(16, 32, 5, 1, 2),     
-            nn.ReLU(),                      
-            nn.MaxPool2d(2),                
-        )
-        # fully connected layer, output 10 classes
-        self.fc1 = nn.Linear(32 * 7 * 7, 500)
+        self.conv1 = nn.Conv2d(1, 20, 5, 1)
+        self.conv2 = nn.Conv2d(20, 50, 5, 1)
+        self.fc1 = nn.Linear(4 * 4 * 50, 500)
         self.fc2 = nn.Linear(500, 10)
-        # self.fc2 = nn.Linear(28*28, 10)
 
     def forward(self, x):
         x = F.relu(self.conv1(x))
@@ -44,6 +28,7 @@ class MnistNet(SimpleNet):
         x = F.relu(self.conv2(x))
         x = F.max_pool2d(x, 2, 2)
         x = x.view(-1, 4 * 4 * 50)
+        # x = x.view(-1, 32 * 7 * 7)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
 

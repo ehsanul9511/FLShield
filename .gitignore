@@ -8,3 +8,4 @@ plots/
 *.out
 *.ipynb
 *.sh
+utils/*temp*

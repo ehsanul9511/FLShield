@@ -353,7 +353,7 @@ class ImageHelper(Helper):
         self.classes_dict = self.build_classes_dict()
         logger.info('build_classes_dict done')
         if self.params['noniid']:
-            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=0.5, p=0.1, flt_aggr=1)
+            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1)
             if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
                 ewd.append(sd)
                 ewl.append(sl)
@@ -408,11 +408,14 @@ class ImageHelper(Helper):
         if self.params['random_adversary_for_label_flip']:
             self.adversarial_namelist = random.sample(self.participants_list, self.params['number_of_adversary_for_label_flip'])
             for idx, id in enumerate(self.adversarial_namelist):
-                self.poison_epochs_by_adversary[idx] = self.params[f'0_poison_epochs']
+                self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
         else:
             self.adversarial_namelist = self.params['adversary_list']
             for idx, id in enumerate(self.adversarial_namelist):
-                self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
+                if self.params['attack_methods'] == config.ATTACK_TLF:
+                    self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+                else:
+                    self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
