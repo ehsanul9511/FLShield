@@ -19,13 +19,14 @@ attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 20
+no_models: 100
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: false
 is_poison: true
 
 noniid: true
+bias: 0.5
 sampling_dirichlet: true
 dirichlet_alpha: 0.5
 baseline: true # single-shot: false; multi-shot:true
@@ -35,13 +36,14 @@ eta: 1  # single-shot: 0.1; multi-shot: 1
 
 # distributed attackers: (training img num : 606 - 591 - 568 - 557)
 # adversary_list: [41, 73, 51, 74]
-adversary_list: [21, 22, 23, 24]
+# adversary_list: [21, 22, 23, 24]
+adversary_list: [ 1,  9,  7, 13, 19, 18, 24, 20, 29, 31, 30, 36, 47, 42, 45, 54, 59, 56, 65, 68, 63, 70, 79, 75, 84, 86, 83, 95, 91, 96]
 # centralized attacker: (training img num :602)
 #adversary_list: [95]
 
-targeted_label_flip_class: 0
+targeted_label_flip_class: 7
 poison_label_swap: 2
-random_adversary_for_label_flip: true
+random_adversary_for_label_flip: false
 number_of_adversary_for_label_flip: 30
 centralized_test_trigger: False
 trigger_num: 4
