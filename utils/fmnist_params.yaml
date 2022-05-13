@@ -1,5 +1,5 @@
 ---
-type: mnist
+type: fmnist
 test_batch_size: 64
 lr: 0.1
 poison_lr: 0.05
@@ -13,13 +13,13 @@ internal_poison_epochs: 1
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold', 'our_aggr']
-aggregation_methods: 'our_aggr'
+aggregation_methods: 'mean'
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba' ]
 attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 100
+no_models: 25
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: false
@@ -41,7 +41,7 @@ adversary_list: [ 1,  9,  7, 13, 19, 18, 24, 20, 29, 31, 30, 36, 47, 42, 45, 54,
 # centralized attacker: (training img num :602)
 #adversary_list: [95]
 
-targeted_label_flip_class: 1
+targeted_label_flip_class: 8
 poison_label_swap: 2
 random_adversary_for_label_flip: false
 number_of_adversary_for_label_flip: 30

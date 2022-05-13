@@ -86,7 +86,7 @@ if __name__ == '__main__':
     np.random.seed(1)
     time_start_load_everything = time.time()
     parser = argparse.ArgumentParser(description='PPDL')
-    parser.add_argument('--params', dest='params', default='utils/mnist_params.yaml')
+    parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
     args = parser.parse_args()
     with open(f'./{args.params}', 'r') as f:
         params_loaded = yaml.load(f)
@@ -102,6 +102,10 @@ if __name__ == '__main__':
     elif params_loaded['type'] == config.TYPE_MNIST:
         helper = ImageHelper(current_time=current_time, params=params_loaded,
                              name=params_loaded.get('name', 'mnist'))
+        helper.load_data()
+    elif params_loaded['type'] == config.TYPE_FMNIST:
+        helper = ImageHelper(current_time=current_time, params=params_loaded,
+                             name=params_loaded.get('name', 'fmnist'))
         helper.load_data()
     elif params_loaded['type'] == config.TYPE_TINYIMAGENET:
         helper = ImageHelper(current_time=current_time, params=params_loaded,
@@ -184,6 +188,7 @@ if __name__ == '__main__':
         #     print(helper.local_models[agnt].state_dict())
         logger.info(f'time spent on training: {time.time() - t}')
         t = time.time()
+        logger.info(f'state_name_keys: {agent_name_keys}')
         weight_accumulator, updates = helper.accumulate_weight(weight_accumulator, epochs_submit_update_dict,
                                                                agent_name_keys, num_samples_dict)
         is_updated = True

@@ -9,3 +9,5 @@ plots/
 *.ipynb
 *.sh
 utils/*temp*
+outputs/
+batch_script*

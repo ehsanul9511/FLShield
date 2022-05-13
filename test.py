@@ -25,6 +25,7 @@ def Mytest(helper, epoch,
 
     elif helper.params['type'] == config.TYPE_CIFAR \
             or helper.params['type'] == config.TYPE_MNIST \
+            or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.test_data
         for batch_id, batch in enumerate(data_iterator):
@@ -76,6 +77,7 @@ def Mytest_poison_label_flip(helper, epoch,
     dataset_size = 0
     if helper.params['type'] == config.TYPE_CIFAR \
             or helper.params['type'] == config.TYPE_MNIST \
+            or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.target_class_test_loader
         # data_iterator = helper.get_test()
@@ -141,6 +143,7 @@ def Mytest_poison(helper, epoch,
                 correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
     elif helper.params['type'] == config.TYPE_CIFAR \
             or helper.params['type'] == config.TYPE_MNIST \
+            or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.test_data_poison
         for batch_id, batch in enumerate(data_iterator):
@@ -208,6 +211,7 @@ def Mytest_poison_trigger(helper, model, adver_trigger_index):
 
     elif helper.params['type'] == config.TYPE_CIFAR \
             or helper.params['type'] == config.TYPE_MNIST \
+            or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.test_data_poison
         adv_index = adver_trigger_index
@@ -266,6 +270,7 @@ def Mytest_poison_agent_trigger(helper, model, agent_name_key):
 
     elif helper.params['type'] == config.TYPE_CIFAR \
             or helper.params['type'] == config.TYPE_MNIST \
+            or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.test_data_poison
         adv_index = -1

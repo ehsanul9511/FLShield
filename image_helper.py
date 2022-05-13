@@ -43,7 +43,7 @@ class ImageHelper(Helper):
             target_model = ResNet18(name='Target',
                                    created_time=self.params['current_time'])
 
-        elif self.params['type']==config.TYPE_MNIST:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST]:
             local_model = MnistNet(name='Local',
                                    created_time=self.params['current_time'])
             target_model = MnistNet(name='Target',
@@ -79,7 +79,7 @@ class ImageHelper(Helper):
             new_model = ResNet18(name='Dummy',
                                    created_time=self.params['current_time'])
 
-        elif self.params['type']==config.TYPE_MNIST:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST]:
             new_model = MnistNet(name='Dummy',
                                     created_time=self.params['current_time'])
 
@@ -324,6 +324,16 @@ class ImageHelper(Helper):
                     transforms.ToTensor(),
                     # transforms.Normalize((0.1307,), (0.3081,))
                 ]))
+        elif self.params['type'] == config.TYPE_FMNIST:
+            self.train_dataset = datasets.FashionMNIST('./data', train=True, download=True,
+                               transform=transforms.Compose([
+                                   transforms.ToTensor(),
+                                   # transforms.Normalize((0.1307,), (0.3081,))
+                               ]))
+            self.test_dataset = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([
+                    transforms.ToTensor(),
+                    # transforms.Normalize((0.1307,), (0.3081,))
+                ]))
         elif self.params['type'] == config.TYPE_TINYIMAGENET:
 
             _data_transforms = {
@@ -538,7 +548,7 @@ class ImageHelper(Helper):
                 image[2][pos[0]][pos[1]] = 1
 
 
-        elif self.params['type'] == config.TYPE_MNIST:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST]:
 
             for i in range(0, len(poison_patterns)):
                 pos = poison_patterns[i]
