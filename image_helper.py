@@ -356,7 +356,7 @@ class ImageHelper(Helper):
 
         target_class_test_data=[]
         for _, (x, y) in enumerate(self.test_dataset):
-            if y==self.params['targeted_label_flip_class']:
+            if y==self.source_class:
                 target_class_test_data.append((x, y))
         self.target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=self.params['test_batch_size'], shuffle=True)
 
@@ -423,7 +423,10 @@ class ImageHelper(Helper):
             self.adversarial_namelist = self.params['adversary_list']
             for idx, id in enumerate(self.adversarial_namelist):
                 if self.params['attack_methods'] == config.ATTACK_TLF:
-                    self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+                    if self.params['skip_iteration_in_tlf']:
+                        self.poison_epochs_by_adversary[idx] = [2*i+1 for i in range(self.params['epochs']//2)]
+                    else:
+                        self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
                 else:
                     self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
 
@@ -484,11 +487,11 @@ class ImageHelper(Helper):
         new_targets=targets
 
         if target_class==-1:
-            target_class = self.params['targeted_label_flip_class']
+            target_class = self.source_class
 
         for index in range(0, len(images)):
             if targets[index]==target_class: # poison all data when testing
-                new_targets[index] = 10-target_class-1
+                new_targets[index] = self.target_class
                 new_images[index] = images[index]
                 poison_count+=1
             else:

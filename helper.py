@@ -22,7 +22,7 @@ import test
 
 from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering
-from sklearn.metrics.pairwise import cosine_distances, euclidean_distances
+from sklearn.metrics.pairwise import cosine_distances, euclidean_distances, cosine_similarity
 from sklearn.metrics import silhouette_score
 from scipy.stats import stats
 from tqdm import tqdm
@@ -43,7 +43,7 @@ class Helper:
         self.name = name
         self.best_loss = math.inf
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
-        self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["targeted_label_flip_class"]}_no_models_{self.params["no_models"]}'
+        self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
         try:
             os.mkdir(self.folder_path)
         except FileExistsError:
@@ -58,6 +58,20 @@ class Helper:
         self.params['current_time'] = self.current_time
         self.params['folder_path'] = self.folder_path
         self.fg= FoolsGold(use_memory=self.params['fg_use_memory'])
+
+        if self.params['attack_methods'] == config.ATTACK_TLF:
+            if self.params['type'] in config.target_class_dict.keys():
+                self.source_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][0]
+                self.target_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][1]
+            else:
+                self.source_class = int(self.params['tlf_label'])
+                self.target_class = 9 - self.source_class
+
+        if self.params['aggregation_methods'] == config.AGGR_AFA:
+            self.good_count = [0 for _ in range(self.params['number_of_total_participants'])]
+            self.bad_count = [0 for _ in range(self.params['number_of_total_participants'])]
+            self.prob_good_model = [0. for _ in range(self.params['number_of_total_participants'])]
+
 
     def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
         if not self.params['save_model']:
@@ -590,7 +604,7 @@ class Helper:
                     # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
                     if val_idx in self.adversarial_namelist:
                         adv_list = np.array(self.adversarial_namelist)
-                        _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.params['targeted_label_flip_class']*10])]
+                        _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
                     else:
                         _, val_test_loader = self.train_data[val_idx]
                     if val_idx in self.adversarial_namelist:
@@ -888,11 +902,6 @@ class Helper:
             temp = temp / len(client_grads)
             agg_grads.append(temp)
 
-        epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=self, epoch=epoch,
-                                                                       model=self.target_model, is_poison=False,
-                                                                       visualize=True, agent_name_key="global")
-        logger.info(f'epoch_loss: {epoch_loss}, epoch_acc: {epoch_acc}, epoch_corret: {epoch_corret}, epoch_total: {epoch_total}')
-
         target_model.train()
         # train and update
         optimizer = torch.optim.SGD(target_model.parameters(), lr=1,
@@ -990,6 +999,96 @@ class Helper:
         # utils.csv_record.add_weight_result(names, wv, alpha)
         return True, names, wv
 
+    def calc_prob_for_AFA(self, participant_no):
+        return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)
+
+    def AFA(self, target_model, updates):
+        client_grads = []
+        alphas = []
+        names = []
+        for name, data in updates.items():
+            client_grads.append(data[1])  # gradient
+            alphas.append(data[0])  # num_samples
+            names.append(name)
+
+        # good_set = set(self.adversarial_namelist + self.benign_namelist)
+        good_set = set(np.arange(self.params['no_models']))
+        bad_set = set()
+        r_set = set([-1])
+        epsilon = self.params['afa_epsilon']
+
+        while len(r_set) > 0:
+            r_set.clear()
+
+            wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
+            agg_grads = []
+            # Iterate through each layer
+            for i in range(len(client_grads[0])):
+                # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+                temp = wv[0] * client_grads[0][i].cpu().clone()
+                # Aggregate gradients for a layer
+                for c, client_grad in enumerate(client_grads):
+                    if c == 0:
+                        continue
+                    temp += wv[c] * client_grad[i].cpu()
+                temp = temp / len(client_grads)
+                agg_grads.append(temp)
+
+            grads = [self.flatten_gradient(client_grad) for cl_id, client_grad in enumerate(client_grads) if cl_id in good_set]
+            agg_grad_flat = self.flatten_gradient(agg_grads)
+            cos_sims = np.array([cosine_similarity(client_grad, agg_grad_flat) for client_grad in grads])
+
+            mean_cos_sim, median_cos_sim, std_cos_sim = np.mean(cos_sims), np.median(cos_sims), np.std(cos_sims)
+
+            if mean_cos_sim < median_cos_sim:
+                for client in good_set:
+                    if cos_sims[client] < median_cos_sim - epsilon * std_cos_sim:
+                        r_set.add(client)
+                        good_set.remove(client)
+            else:
+                for client in good_set:
+                    if cos_sims[client] > median_cos_sim + epsilon * std_cos_sim:
+                        r_set.add(client)
+                        good_set.remove(client)
+            
+            epsilon += self.params['afa_del_epsilon']
+            bad_set = bad_set.union(r_set)
+
+        wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
+        agg_grads = []
+        # Iterate through each layer
+        for i in range(len(client_grads[0])):
+            # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+            temp = wv[0] * client_grads[0][i].cpu().clone()
+            # Aggregate gradients for a layer
+            for c, client_grad in enumerate(client_grads):
+                if c == 0:
+                    continue
+                temp += wv[c] * client_grad[i].cpu()
+            temp = temp / len(client_grads)
+            agg_grads.append(temp)
+
+        target_model.train()
+        # train and update
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+                                    momentum=self.params['momentum'],
+                                    weight_decay=self.params['decay'])
+
+        optimizer.zero_grad()
+
+        for i, (name, params) in enumerate(target_model.named_parameters()):
+            agg_grads[i]=agg_grads[i] * self.params["eta"]
+            if params.requires_grad:
+                params.grad = agg_grads[i].to(config.device)
+        # print(self.convert_model_to_param_list(grad_state_dict))
+        optimizer.step()
+
+        for cl_id in bad_set:
+            self.bad_count[names[cl_id]] += 1
+        for cl_id in good_set:
+            self.good_count[names[cl_id]] += 1
+
+        return True, names, wv
 
     def foolsgold_update(self,target_model,updates):
         client_grads = []
@@ -1012,7 +1111,8 @@ class Helper:
 
         target_model.train()
         # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+        # probably need to apply a global learning rate
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=1,
                                     momentum=self.params['momentum'],
                                     weight_decay=self.params['decay'])
 
