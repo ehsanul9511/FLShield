@@ -225,7 +225,7 @@ class Helper:
                  is a list of variable weights
          """
         # if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS]:
+        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0] # agg 1 interval
@@ -1002,7 +1002,7 @@ class Helper:
     def calc_prob_for_AFA(self, participant_no):
         return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)
 
-    def AFA(self, target_model, updates):
+    def afa_method(self, target_model, updates):
         client_grads = []
         alphas = []
         names = []
@@ -1018,36 +1018,45 @@ class Helper:
         epsilon = self.params['afa_epsilon']
 
         while len(r_set) > 0:
+            logger.info(f'r_set: {r_set}')
+            logger.info(f'good_set: {good_set}')
+            logger.info(f'bad_set: {bad_set}')
             r_set.clear()
 
             wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
+            # might want to try using this later
+            good_client_grads=[client_grads[m_id] for m_id in good_set]
             agg_grads = []
             # Iterate through each layer
             for i in range(len(client_grads[0])):
                 # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
                 temp = wv[0] * client_grads[0][i].cpu().clone()
                 # Aggregate gradients for a layer
-                for c, client_grad in enumerate(client_grads):
+                for c, cl_id in enumerate(good_set):
                     if c == 0:
                         continue
-                    temp += wv[c] * client_grad[i].cpu()
-                temp = temp / len(client_grads)
+                    temp += wv[c] * client_grads[cl_id][i].cpu()
+                # temp = temp / len(wv)
                 agg_grads.append(temp)
 
             grads = [self.flatten_gradient(client_grad) for cl_id, client_grad in enumerate(client_grads) if cl_id in good_set]
             agg_grad_flat = self.flatten_gradient(agg_grads)
-            cos_sims = np.array([cosine_similarity(client_grad, agg_grad_flat) for client_grad in grads])
+            # cos_sims = np.array([cosine_similarity(client_grad, agg_grad_flat) for client_grad in grads])
+            cos_sims = np.array(cosine_similarity(grads, [agg_grad_flat])).flatten()
+            logger.info(f'cos_sims: {cos_sims}')
 
             mean_cos_sim, median_cos_sim, std_cos_sim = np.mean(cos_sims), np.median(cos_sims), np.std(cos_sims)
 
             if mean_cos_sim < median_cos_sim:
-                for client in good_set:
-                    if cos_sims[client] < median_cos_sim - epsilon * std_cos_sim:
+                good_set_copy = good_set.copy()
+                for cl_id, client in enumerate(good_set_copy):
+                    if cos_sims[cl_id] < median_cos_sim - epsilon * std_cos_sim:
                         r_set.add(client)
                         good_set.remove(client)
             else:
-                for client in good_set:
-                    if cos_sims[client] > median_cos_sim + epsilon * std_cos_sim:
+                good_set_copy = good_set.copy()
+                for cl_id, client in enumerate(good_set_copy):
+                    if cos_sims[cl_id] > median_cos_sim + epsilon * std_cos_sim:
                         r_set.add(client)
                         good_set.remove(client)
             
@@ -1061,11 +1070,11 @@ class Helper:
             # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
             temp = wv[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
-            for c, client_grad in enumerate(client_grads):
+            for c, cl_id in enumerate(good_set):
                 if c == 0:
                     continue
-                temp += wv[c] * client_grad[i].cpu()
-            temp = temp / len(client_grads)
+                temp += wv[c] * client_grads[cl_id][i].cpu()
+            # temp = temp / len(wv)
             agg_grads.append(temp)
 
         target_model.train()
