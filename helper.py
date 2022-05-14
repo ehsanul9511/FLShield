@@ -946,37 +946,36 @@ class Helper:
             alphas.append(data[0])  # num_samples
             names.append(name)
 
-        grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
         # grads = client_grads
         clean_server_grad = grads[-1]
-        cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
+        # cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
+        cos_sims = np.array(cosine_similarity(grads, [clean_server_grad])).flatten()
         logger.info(f'cos_sims: {cos_sims}')
 
         cos_sims = np.maximum(np.array(cos_sims), 0)
         norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
         for i in range(len(norm_weights)):
-            norm_weights[i] = norm_weights[i] * torch.linalg.norm(clean_server_grad) / (torch.linalg.norm(grads[i]))
+            norm_weights[i] = norm_weights[i] * np.linalg.norm(clean_server_grad) / (np.linalg.norm(grads[i]))
 
         wv = norm_weights
         # wv = np.ones(self.params['no_models'])
         # wv = wv/len(wv)
         logger.info(f'wv: {wv}')
-        agg_grads = {}
+
+        agg_grads = []
         # Iterate through each layer
-        for name in client_grads[0].keys():
-            assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * client_grads[0][name].cpu().clone()
+        for i in range(len(client_grads[0])):
+            temp = wv[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
             for c, client_grad in enumerate(client_grads):
                 if c == 0:
                     continue
-                temp += wv[c] * client_grad[name].cpu()
+                temp += wv[c] * client_grad[i].cpu()
                 # print(temp)
                 # temp += wv[c]
             # temp = temp / len(client_grads)
-            agg_grads[name] = temp
-
-        print(self.convert_model_to_param_list(agg_grads))
+            agg_grads.append(temp)
 
 
         target_model.train()
@@ -986,16 +985,14 @@ class Helper:
                                     weight_decay=self.params['decay'])
 
         optimizer.zero_grad()
-        # print(client_grads[0])
-        print(f'before update {self.convert_model_to_param_list(target_model.state_dict())}')
+        # print(client_grads[0])        
         for i, (name, params) in enumerate(target_model.named_parameters()):
-            agg_grads[name]=-agg_grads[name] * self.params["eta"]
+            agg_grads[i]=agg_grads[i] * self.params["eta"]
             if params.requires_grad:
-                params.grad = agg_grads[name].to(config.device)
+                params.grad = agg_grads[i].to(config.device)
         optimizer.step()
         # noise_level = self.params['sigma']
         # self.add_noise(noise_level=noise_level)
-        print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
         # utils.csv_record.add_weight_result(names, wv, alpha)
         return True, names, wv
 
