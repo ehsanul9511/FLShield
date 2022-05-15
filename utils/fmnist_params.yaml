@@ -44,9 +44,9 @@ adversary_list: [ 1,  9,  7, 13, 19, 18, 24, 20, 29, 31, 30, 36, 47, 42, 45, 54,
 
 tlf_label: 'easy'
 poison_label_swap: 2
-random_adversary_for_label_flip: false
-number_of_adversary_for_label_flip: 40
-skip_iteration_in_tlf: true
+random_adversary_for_label_flip: true
+number_of_adversary_for_label_flip: 80
+skip_iteration_in_tlf: false
 
 afa_alpha_0: 3
 afa_beta_0: 3

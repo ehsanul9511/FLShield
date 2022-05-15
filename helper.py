@@ -784,35 +784,6 @@ class Helper:
             wv = aggr_weights
             logger.info(f'wv: {wv}')
             agg_grads = {}
-            # Iterate through each layer
-            # for name in client_grads[0].keys():
-            #     assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            #     temp = wv[0] * client_grads[0][name].cpu().clone()
-            #     # Aggregate gradients for a layer
-            #     for c, client_grad in enumerate(client_grads):
-            #         if c == 0:
-            #             continue
-            #         temp += wv[c] * client_grad[name].cpu()
-            #         # print(temp)
-            #         # temp += wv[c]
-            #     # temp = temp / len(client_grads)
-            #     agg_grads[name] = temp
-
-            # target_model.train()
-            # # train and update
-            # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-            #                             momentum=self.params['momentum'],
-            #                             weight_decay=self.params['decay'])
-
-            # optimizer.zero_grad()
-            # # print(client_grads[0])
-            # print(f'before update {self.convert_model_to_param_list(target_model.state_dict())}')
-            # for i, (name, params) in enumerate(target_model.named_parameters()):
-            #     agg_grads[name]=-agg_grads[name] * self.params["eta"]
-            #     if params.requires_grad:
-            #         params.grad = agg_grads[name].to(config.device)
-            # optimizer.step()
-            # print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
 
 
         # norms = [torch.linalg.norm(grad).item() for grad in grads]
@@ -866,29 +837,6 @@ class Helper:
         wv_print_str += ']'
         print(f'wv: {wv_print_str}')
 
-        # for name in client_grads[0].keys():
-        #     assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-        #     temp = wv[0] * client_grads[0][name].cpu().clone()
-        #     # Aggregate gradients for a layer
-        #     for c, client_grad in enumerate(client_grads):
-        #         if c == 0:
-        #             continue
-        #         temp += wv[c] * client_grad[name].cpu()
-        #     agg_grads[name] = temp
-
-        # target_model.train()
-        # # train and update
-        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-        #                             momentum=self.params['momentum'],
-        #                             weight_decay=self.params['decay'])
-
-        # optimizer.zero_grad()
-        # for i, (name, params) in enumerate(target_model.named_parameters()):
-        #     agg_grads[name]=-agg_grads[name] * self.params["eta"]
-        #     if params.requires_grad:
-        #         params.grad = agg_grads[name].to(config.device)
-        # optimizer.step()
-
         agg_grads = []
         # Iterate through each layer
         for i in range(len(client_grads[0])):
@@ -904,7 +852,7 @@ class Helper:
 
         target_model.train()
         # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=1,
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
                                     momentum=self.params['momentum'],
                                     weight_decay=self.params['decay'])
 
