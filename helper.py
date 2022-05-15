@@ -225,7 +225,7 @@ class Helper:
                  is a list of variable weights
          """
         # if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA]:
+        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0] # agg 1 interval
@@ -998,6 +998,48 @@ class Helper:
 
     def calc_prob_for_AFA(self, participant_no):
         return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)
+
+    def fedavg(self, target_model, updates):
+        client_grads = []
+        alphas = []
+        names = []
+        for name, data in updates.items():
+            client_grads.append(data[1])
+            alphas.append(data[0])  # num_samples
+            names.append(name)
+
+        wv = np.array(alphas)/np.sum(alphas)
+        logger.info(f'alphas: {alphas}')
+        logger.info(f'wv: {wv}')
+        agg_grads = []
+        # Iterate through each layer
+        for i in range(len(client_grads[0])):
+            # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+            temp = wv[0] * client_grads[0][i].cpu().clone()
+            # Aggregate gradients for a layer
+            for c, client_grad in enumerate(client_grads):
+                if c == 0:
+                    continue
+                temp += wv[c] * client_grad[i].cpu()
+            # temp = temp / len(wv)
+            agg_grads.append(temp)
+
+        target_model.train()
+        # train and update
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+                                    momentum=self.params['momentum'],
+                                    weight_decay=self.params['decay'])
+
+        optimizer.zero_grad()
+
+        for i, (name, params) in enumerate(target_model.named_parameters()):
+            agg_grads[i]=agg_grads[i] * self.params["eta"]
+            if params.requires_grad:
+                params.grad = agg_grads[i].to(config.device)
+        # print(self.convert_model_to_param_list(grad_state_dict))
+        optimizer.step()
+
+        return True
 
     def afa_method(self, target_model, updates):
         client_grads = []

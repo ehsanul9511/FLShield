@@ -201,10 +201,11 @@ if __name__ == '__main__':
             vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
         elif helper.params['aggregation_methods'] == config.AGGR_MEAN:
             # Average the models
-            is_updated = helper.average_shrink_models(weight_accumulator=weight_accumulator,
-                                                      target_model=helper.target_model,
-                                                      epoch_interval=helper.params['aggr_epoch_interval'])
-            num_oracle_calls = 1
+            # is_updated = helper.average_shrink_models(weight_accumulator=weight_accumulator,
+            #                                           target_model=helper.target_model,
+            #                                           epoch_interval=helper.params['aggr_epoch_interval'])
+            # num_oracle_calls = 1
+            is_updated = helper.fedavg(helper.target_model, updates)
         elif helper.params['aggregation_methods'] == config.AGGR_GEO_MED:
             
             maxiter = helper.params['geom_median_maxiter']
