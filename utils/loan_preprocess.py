@@ -1,8 +1,14 @@
 import csv
 import pandas as pd
+import os
+from pathlib import Path
 
-filepath = '../data/lending-club-loan-data/loan.csv'
-df = pd.read_csv(filepath)
+filepath = os.getcwd()
+# filepath = Path(filepath)
+# filepath = filepath.parent.absolute().__str__()
+filepath += '/data/lending-club-loan-data/'
+os.chdir(filepath)
+df = pd.read_csv('accepted.csv')
 # Copy Dataframe
 data= df.copy()
 data = data.drop(['id','member_id','emp_title','issue_d','zip_code','emp_length','title','earliest_cr_line','last_pymnt_d','hardship_start_date','desc','hardship_end_date','payment_plan_start_date','next_pymnt_d','settlement_date','last_credit_pull_d','debt_settlement_flag_date','sec_app_earliest_cr_line'], axis=1)

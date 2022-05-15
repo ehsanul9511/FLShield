@@ -11,3 +11,4 @@ plots/
 utils/*temp*
 outputs/
 batch_script*
+.DS_Store
