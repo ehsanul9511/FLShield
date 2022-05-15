@@ -578,7 +578,7 @@ class Helper:
                             if c == 0:
                                 continue
                             temp += wv * client_grad[i].cpu()
-                        temp = temp / len(cluster_grads)
+                        # temp = temp / len(cluster_grads)
                         agg_grads.append(temp)
 
                     agg_model.train()
@@ -899,7 +899,7 @@ class Helper:
                 if c == 0:
                     continue
                 temp += wv[c] * client_grad[i].cpu()
-            temp = temp / len(client_grads)
+            # temp = temp / len(client_grads)
             agg_grads.append(temp)
 
         target_model.train()
@@ -968,7 +968,7 @@ class Helper:
         for i in range(len(client_grads[0])):
             temp = wv[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
-            for c, client_grad in enumerate(client_grads):
+            for c, client_grad in enumerate(client_grads[:-1]):
                 if c == 0:
                     continue
                 temp += wv[c] * client_grad[i].cpu()
