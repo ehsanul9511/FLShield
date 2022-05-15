@@ -1065,16 +1065,18 @@ class Helper:
             wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
             # might want to try using this later
             good_client_grads=[client_grads[m_id] for m_id in good_set]
+            good_alphas=[alphas[m_id] for m_id in good_set]
+            good_alphas = np.array(good_alphas)/np.sum(good_alphas)
             agg_grads = []
             # Iterate through each layer
             for i in range(len(client_grads[0])):
                 # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-                temp = wv[0] * client_grads[0][i].cpu().clone()
+                temp = wv[0] * good_alphas[0] * client_grads[0][i].cpu().clone()
                 # Aggregate gradients for a layer
                 for c, cl_id in enumerate(good_set):
                     if c == 0:
                         continue
-                    temp += wv[c] * client_grads[cl_id][i].cpu()
+                    temp += wv[c] * good_alphas[c] * client_grads[cl_id][i].cpu()
                 # temp = temp / len(wv)
                 agg_grads.append(temp)
 
@@ -1103,16 +1105,18 @@ class Helper:
             bad_set = bad_set.union(r_set)
 
         wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
+        good_alphas=[alphas[m_id] for m_id in good_set]
+        good_alphas = np.array(good_alphas)/np.sum(good_alphas)
         agg_grads = []
         # Iterate through each layer
         for i in range(len(client_grads[0])):
             # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * client_grads[0][i].cpu().clone()
+            temp = wv[0] * good_alphas[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
             for c, cl_id in enumerate(good_set):
                 if c == 0:
                     continue
-                temp += wv[c] * client_grads[cl_id][i].cpu()
+                temp += wv[c] * good_alphas[c] * client_grads[cl_id][i].cpu()
             # temp = temp / len(wv)
             agg_grads.append(temp)
 
