@@ -225,7 +225,7 @@ class Helper:
                  is a list of variable weights
          """
         # if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA]:
+        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0] # agg 1 interval
@@ -578,7 +578,7 @@ class Helper:
                             if c == 0:
                                 continue
                             temp += wv * client_grad[i].cpu()
-                        temp = temp / len(cluster_grads)
+                        # temp = temp / len(cluster_grads)
                         agg_grads.append(temp)
 
                     agg_model.train()
@@ -784,35 +784,6 @@ class Helper:
             wv = aggr_weights
             logger.info(f'wv: {wv}')
             agg_grads = {}
-            # Iterate through each layer
-            # for name in client_grads[0].keys():
-            #     assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            #     temp = wv[0] * client_grads[0][name].cpu().clone()
-            #     # Aggregate gradients for a layer
-            #     for c, client_grad in enumerate(client_grads):
-            #         if c == 0:
-            #             continue
-            #         temp += wv[c] * client_grad[name].cpu()
-            #         # print(temp)
-            #         # temp += wv[c]
-            #     # temp = temp / len(client_grads)
-            #     agg_grads[name] = temp
-
-            # target_model.train()
-            # # train and update
-            # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-            #                             momentum=self.params['momentum'],
-            #                             weight_decay=self.params['decay'])
-
-            # optimizer.zero_grad()
-            # # print(client_grads[0])
-            # print(f'before update {self.convert_model_to_param_list(target_model.state_dict())}')
-            # for i, (name, params) in enumerate(target_model.named_parameters()):
-            #     agg_grads[name]=-agg_grads[name] * self.params["eta"]
-            #     if params.requires_grad:
-            #         params.grad = agg_grads[name].to(config.device)
-            # optimizer.step()
-            # print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
 
 
         # norms = [torch.linalg.norm(grad).item() for grad in grads]
@@ -866,29 +837,6 @@ class Helper:
         wv_print_str += ']'
         print(f'wv: {wv_print_str}')
 
-        # for name in client_grads[0].keys():
-        #     assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-        #     temp = wv[0] * client_grads[0][name].cpu().clone()
-        #     # Aggregate gradients for a layer
-        #     for c, client_grad in enumerate(client_grads):
-        #         if c == 0:
-        #             continue
-        #         temp += wv[c] * client_grad[name].cpu()
-        #     agg_grads[name] = temp
-
-        # target_model.train()
-        # # train and update
-        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-        #                             momentum=self.params['momentum'],
-        #                             weight_decay=self.params['decay'])
-
-        # optimizer.zero_grad()
-        # for i, (name, params) in enumerate(target_model.named_parameters()):
-        #     agg_grads[name]=-agg_grads[name] * self.params["eta"]
-        #     if params.requires_grad:
-        #         params.grad = agg_grads[name].to(config.device)
-        # optimizer.step()
-
         agg_grads = []
         # Iterate through each layer
         for i in range(len(client_grads[0])):
@@ -899,12 +847,12 @@ class Helper:
                 if c == 0:
                     continue
                 temp += wv[c] * client_grad[i].cpu()
-            temp = temp / len(client_grads)
+            # temp = temp / len(client_grads)
             agg_grads.append(temp)
 
         target_model.train()
         # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=1,
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
                                     momentum=self.params['momentum'],
                                     weight_decay=self.params['decay'])
 
@@ -946,37 +894,36 @@ class Helper:
             alphas.append(data[0])  # num_samples
             names.append(name)
 
-        grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
         # grads = client_grads
         clean_server_grad = grads[-1]
-        cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
+        # cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
+        cos_sims = np.array(cosine_similarity(grads, [clean_server_grad])).flatten()
         logger.info(f'cos_sims: {cos_sims}')
 
         cos_sims = np.maximum(np.array(cos_sims), 0)
         norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
         for i in range(len(norm_weights)):
-            norm_weights[i] = norm_weights[i] * torch.linalg.norm(clean_server_grad) / (torch.linalg.norm(grads[i]))
+            norm_weights[i] = norm_weights[i] * np.linalg.norm(clean_server_grad) / (np.linalg.norm(grads[i]))
 
         wv = norm_weights
         # wv = np.ones(self.params['no_models'])
         # wv = wv/len(wv)
         logger.info(f'wv: {wv}')
-        agg_grads = {}
+
+        agg_grads = []
         # Iterate through each layer
-        for name in client_grads[0].keys():
-            assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * client_grads[0][name].cpu().clone()
+        for i in range(len(client_grads[0])):
+            temp = wv[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
-            for c, client_grad in enumerate(client_grads):
+            for c, client_grad in enumerate(client_grads[:-1]):
                 if c == 0:
                     continue
-                temp += wv[c] * client_grad[name].cpu()
+                temp += wv[c] * client_grad[i].cpu()
                 # print(temp)
                 # temp += wv[c]
             # temp = temp / len(client_grads)
-            agg_grads[name] = temp
-
-        print(self.convert_model_to_param_list(agg_grads))
+            agg_grads.append(temp)
 
 
         target_model.train()
@@ -986,21 +933,61 @@ class Helper:
                                     weight_decay=self.params['decay'])
 
         optimizer.zero_grad()
-        # print(client_grads[0])
-        print(f'before update {self.convert_model_to_param_list(target_model.state_dict())}')
+        # print(client_grads[0])        
         for i, (name, params) in enumerate(target_model.named_parameters()):
-            agg_grads[name]=-agg_grads[name] * self.params["eta"]
+            agg_grads[i]=agg_grads[i] * self.params["eta"]
             if params.requires_grad:
-                params.grad = agg_grads[name].to(config.device)
+                params.grad = agg_grads[i].to(config.device)
         optimizer.step()
         # noise_level = self.params['sigma']
         # self.add_noise(noise_level=noise_level)
-        print(f'after update {self.convert_model_to_param_list(target_model.state_dict())}')
         # utils.csv_record.add_weight_result(names, wv, alpha)
         return True, names, wv
 
     def calc_prob_for_AFA(self, participant_no):
         return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)
+
+    def fedavg(self, target_model, updates):
+        client_grads = []
+        alphas = []
+        names = []
+        for name, data in updates.items():
+            client_grads.append(data[1])
+            alphas.append(data[0])  # num_samples
+            names.append(name)
+
+        wv = np.array(alphas)/np.sum(alphas)
+        logger.info(f'alphas: {alphas}')
+        logger.info(f'wv: {wv}')
+        agg_grads = []
+        # Iterate through each layer
+        for i in range(len(client_grads[0])):
+            # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+            temp = wv[0] * client_grads[0][i].cpu().clone()
+            # Aggregate gradients for a layer
+            for c, client_grad in enumerate(client_grads):
+                if c == 0:
+                    continue
+                temp += wv[c] * client_grad[i].cpu()
+            # temp = temp / len(wv)
+            agg_grads.append(temp)
+
+        target_model.train()
+        # train and update
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+                                    momentum=self.params['momentum'],
+                                    weight_decay=self.params['decay'])
+
+        optimizer.zero_grad()
+
+        for i, (name, params) in enumerate(target_model.named_parameters()):
+            agg_grads[i]=agg_grads[i] * self.params["eta"]
+            if params.requires_grad:
+                params.grad = agg_grads[i].to(config.device)
+        # print(self.convert_model_to_param_list(grad_state_dict))
+        optimizer.step()
+
+        return True
 
     def afa_method(self, target_model, updates):
         client_grads = []
@@ -1026,16 +1013,18 @@ class Helper:
             wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
             # might want to try using this later
             good_client_grads=[client_grads[m_id] for m_id in good_set]
+            good_alphas=[alphas[m_id] for m_id in good_set]
+            good_alphas = np.array(good_alphas)/np.sum(good_alphas)
             agg_grads = []
             # Iterate through each layer
             for i in range(len(client_grads[0])):
                 # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-                temp = wv[0] * client_grads[0][i].cpu().clone()
+                temp = wv[0] * good_alphas[0] * client_grads[0][i].cpu().clone()
                 # Aggregate gradients for a layer
                 for c, cl_id in enumerate(good_set):
                     if c == 0:
                         continue
-                    temp += wv[c] * client_grads[cl_id][i].cpu()
+                    temp += wv[c] * good_alphas[c] * client_grads[cl_id][i].cpu()
                 # temp = temp / len(wv)
                 agg_grads.append(temp)
 
@@ -1064,16 +1053,18 @@ class Helper:
             bad_set = bad_set.union(r_set)
 
         wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
+        good_alphas=[alphas[m_id] for m_id in good_set]
+        good_alphas = np.array(good_alphas)/np.sum(good_alphas)
         agg_grads = []
         # Iterate through each layer
         for i in range(len(client_grads[0])):
             # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * client_grads[0][i].cpu().clone()
+            temp = wv[0] * good_alphas[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
             for c, cl_id in enumerate(good_set):
                 if c == 0:
                     continue
-                temp += wv[c] * client_grads[cl_id][i].cpu()
+                temp += wv[c] * good_alphas[c] * client_grads[cl_id][i].cpu()
             # temp = temp / len(wv)
             agg_grads.append(temp)
 
