@@ -80,7 +80,7 @@ save_on_epochs: [11,13,15,20]
 #resumed_model_name: recover/model_cifar_10k.pt.tar
 #resumed_model: model_image_Aug.20_10.38.31/model_last.pt.tar.epoch
 
-resumed_model: true
+resumed_model: false
 resumed_model_name: loan_pretrain/model_last.pt.tar.epoch_9
 
 report_train_loss: false
@@ -115,4 +115,8 @@ poison_decay: 0.005
 poison_step_lr: true
 
 results_json: true
+
+attack_methods: 'dba'
+random_adversary_for_label_flip: false
+speed_boost: true
 

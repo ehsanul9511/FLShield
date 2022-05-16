@@ -9,8 +9,15 @@ filepath = os.getcwd()
 filepath += '/data/lending-club-loan-data/'
 os.chdir(filepath)
 df = pd.read_csv('accepted.csv')
+# df2 = pd.read_csv('rejected.csv')
+# # df = pd.read_csv('Loan_status_2007-2020Q3.gzip')
+# column_list = df.columns.values.tolist()
+# print(sorted(column_list))
+# column_list = df2.columns.values.tolist()
+# print(sorted(column_list))
 # Copy Dataframe
-data= df.copy()
+# data= df.append(df2, ignore_index=True)
+data = df
 data = data.drop(['id','member_id','emp_title','issue_d','zip_code','emp_length','title','earliest_cr_line','last_pymnt_d','hardship_start_date','desc','hardship_end_date','payment_plan_start_date','next_pymnt_d','settlement_date','last_credit_pull_d','debt_settlement_flag_date','sec_app_earliest_cr_line'], axis=1)
 data = data.drop(['url','mths_since_last_delinq','mths_since_last_major_derog','mths_since_last_record','annual_inc_joint','dti_joint','verification_status_joint','mths_since_recent_bc_dlq','mths_since_recent_revol_delinq','revol_bal_joint','sec_app_inq_last_6mths','sec_app_mort_acc','sec_app_open_acc','sec_app_revol_util','sec_app_open_act_il',
                 'sec_app_num_rev_accts','sec_app_chargeoff_within_12_mths','sec_app_collections_12_mths_ex_med','sec_app_mths_since_last_major_derog','hardship_type','hardship_reason','hardship_status','deferral_term','hardship_amount','hardship_length','hardship_dpd','hardship_loan_status','orig_projected_additional_accrued_interest','hardship_payoff_balance_amount',

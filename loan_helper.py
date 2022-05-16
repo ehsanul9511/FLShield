@@ -112,11 +112,11 @@ class LoanHelper(Helper):
         self.statehelper_dic ={}
         self.allStateHelperList=[]
         self.participants_list=[]
-        self.advasarial_namelist=params_loaded['adversary_list']
+        self.adversarial_namelist=params_loaded['adversary_list']
         self.benign_namelist = []
         self.feature_dict = dict()
 
-        filepath_prefix='./data/loan/'
+        filepath_prefix='./data/data/loan/'
         all_userfilename_list = os.listdir(filepath_prefix)
         for j in range(0,len(all_userfilename_list)):
             user_filename = all_userfilename_list[j]
@@ -136,13 +136,17 @@ class LoanHelper(Helper):
                 break
             user_filename = all_userfilename_list[j]
             state_name = user_filename[5:7]
-            if state_name not in self.advasarial_namelist:
+            if state_name not in self.adversarial_namelist:
                 self.benign_namelist.append(state_name)
 
         if params_loaded['is_random_namelist']==False:
             self.participants_list = params_loaded['participants_namelist']
         else:
-            self.participants_list= self.benign_namelist+ self.advasarial_namelist
+            self.participants_list= self.benign_namelist+ self.adversarial_namelist
+
+        self.poison_epochs_by_adversary = {}
+        for idx, id in enumerate(self.adversarial_namelist):
+            self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
 
 
 class LoanDataset(data.Dataset):

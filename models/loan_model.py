@@ -8,7 +8,8 @@ import pdb
 
 
 class LoanNet(SimpleNet):
-    def __init__(self, in_dim=91, n_hidden_1=46, n_hidden_2=23, out_dim=9, name=None, created_time=None):
+    # def __init__(self, in_dim=91, n_hidden_1=46, n_hidden_2=23, out_dim=9, name=None, created_time=None):
+    def __init__(self, in_dim=97, n_hidden_1=46, n_hidden_2=23, out_dim=10, name=None, created_time=None):
         super(LoanNet, self).__init__(f'{name}_Simple', created_time)
         self.layer1 = nn.Sequential(nn.Linear(in_dim, n_hidden_1),
                                     nn.Dropout(0.5), # drop 50% of the neuron to avoid over-fitting

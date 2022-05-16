@@ -86,7 +86,7 @@ if __name__ == '__main__':
     np.random.seed(1)
     time_start_load_everything = time.time()
     parser = argparse.ArgumentParser(description='PPDL')
-    parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
+    parser.add_argument('--params', dest='params', default='utils/loan_params.yaml')
     args = parser.parse_args()
     with open(f'./{args.params}', 'r') as f:
         params_loaded = yaml.load(f)

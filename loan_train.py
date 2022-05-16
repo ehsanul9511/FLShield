@@ -181,6 +181,8 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                                                                                     evaluation=False)
                         dataset_size += len(data)
                         output = model(data)
+                        # main.logger.info(f'output: {output}')
+                        # main.logger.info(f'targets: {targets}')
                         loss = nn.functional.cross_entropy(output, targets)
                         loss.backward()
 
@@ -217,12 +219,13 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                     num_samples_dict[state_key] = dataset_size
 
             # test local model after internal epoch train finish
-            epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
-                                                                      model=model, is_poison=False, visualize=True,
-                                                                      agent_name_key=state_key)
-            csv_record.test_result.append([state_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+            if not helper.params['speed_boost']:
+                epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
+                                                                        model=model, is_poison=False, visualize=True,
+                                                                        agent_name_key=state_key)
+                csv_record.test_result.append([state_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
-            if is_poison:
+            if is_poison and not helper.params['speed_boost']:
                 if state_key in helper.params['adversary_list'] and (epoch in localmodel_poison_epochs):
                     epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison(helper=helper, epoch=epoch,
                                                                                      model=model, is_poison=True,
