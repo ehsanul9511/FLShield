@@ -899,30 +899,42 @@ class Helper:
         clean_server_grad = grads[-1]
         # cos_sims = [self.cos_calc_btn_grads(client_grad, clean_server_grad) for client_grad in grads]
         cos_sims = np.array(cosine_similarity(grads, [clean_server_grad])).flatten()
+        all_cos_sims = cos_sims
+        cos_sims = cos_sims[:-1]
         logger.info(f'cos_sims: {cos_sims}')
 
-        cos_sims = np.maximum(np.array(cos_sims), 0)
-        norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
-        for i in range(len(norm_weights)):
-            norm_weights[i] = norm_weights[i] * np.linalg.norm(clean_server_grad) / (np.linalg.norm(grads[i]))
+        # cos_sims = np.maximum(np.array(cos_sims), 0)
+        # norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
+        # for i in range(len(norm_weights)):
+        #     norm_weights[i] = norm_weights[i] * np.linalg.norm(clean_server_grad) / (np.linalg.norm(grads[i]))
+        trust_scores = np.zeros(cos_sims.shape)
+        for i in range(len(cos_sims)):
+            trust_scores[i] = abs(cos_sims[i]/np.linalg.norm(grads[i])/np.linalg.norm(clean_server_grad))
 
-        wv = norm_weights
+        clipping_coeffs = np.ones(len(trust_scores))
+        for i in range(len(trust_scores)):
+            clipping_coeffs[i] = np.linalg.norm(clean_server_grad) / np.linalg.norm(grads[i])
+
+        wv = trust_scores
+        sum_trust_scores = np.sum(trust_scores)
         # wv = np.ones(self.params['no_models'])
         # wv = wv/len(wv)
+        logger.info(f'clipping_coeffs: {clipping_coeffs}')
         logger.info(f'wv: {wv}')
+        logger.info(f'wv: {wv/sum_trust_scores}')
 
         agg_grads = []
         # Iterate through each layer
         for i in range(len(client_grads[0])):
-            temp = wv[0] * client_grads[0][i].cpu().clone()
+            temp = wv[0] * clipping_coeffs[0] * client_grads[0][i].cpu().clone()
             # Aggregate gradients for a layer
             for c, client_grad in enumerate(client_grads[:-1]):
                 if c == 0:
                     continue
-                temp += wv[c] * client_grad[i].cpu()
+                temp += wv[c] * clipping_coeffs[c] * client_grad[i].cpu()
                 # print(temp)
                 # temp += wv[c]
-            # temp = temp / len(client_grads)
+            temp = temp / sum_trust_scores
             agg_grads.append(temp)
 
 
@@ -942,7 +954,7 @@ class Helper:
         # noise_level = self.params['sigma']
         # self.add_noise(noise_level=noise_level)
         # utils.csv_record.add_weight_result(names, wv, alpha)
-        return True, names, wv
+        return True, names, all_cos_sims
 
     def calc_prob_for_AFA(self, participant_no):
         return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)

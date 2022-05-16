@@ -429,7 +429,8 @@ class ImageHelper(Helper):
                 else:
                     self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
             else:
-                self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
+                mod_idx = idx%4
+                self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs']
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
