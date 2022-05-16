@@ -65,6 +65,7 @@ is_poison: true
 centralized_test_trigger: True
 poison_epochs: [1]
 poison_label_swap: 7
+tlf_label: 7
 alpha_loss: 1
 s_norm: 1000000
 
@@ -116,7 +117,7 @@ poison_step_lr: true
 
 results_json: true
 
-attack_methods: 'dba'
+attack_methods: 'targeted_label_flip'
 random_adversary_for_label_flip: false
 speed_boost: true
 

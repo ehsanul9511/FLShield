@@ -116,7 +116,7 @@ class LoanHelper(Helper):
         self.benign_namelist = []
         self.feature_dict = dict()
 
-        filepath_prefix='./data/data/loan/'
+        filepath_prefix='./data/loan/'
         all_userfilename_list = os.listdir(filepath_prefix)
         for j in range(0,len(all_userfilename_list)):
             user_filename = all_userfilename_list[j]

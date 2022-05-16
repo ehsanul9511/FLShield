@@ -354,11 +354,12 @@ class ImageHelper(Helper):
                                                    _data_transforms['val'])
             logger.info('reading data done')
 
-        target_class_test_data=[]
-        for _, (x, y) in enumerate(self.test_dataset):
-            if y==self.source_class:
-                target_class_test_data.append((x, y))
-        self.target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=self.params['test_batch_size'], shuffle=True)
+        if self.params['attack_methods'] == config.ATTACK_TLF:
+            target_class_test_data=[]
+            for _, (x, y) in enumerate(self.test_dataset):
+                if y==self.source_class:
+                    target_class_test_data.append((x, y))
+            self.target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=self.params['test_batch_size'], shuffle=True)
 
         self.classes_dict = self.build_classes_dict()
         logger.info('build_classes_dict done')
@@ -416,20 +417,19 @@ class ImageHelper(Helper):
         # random.shuffle(self.participants_list)
 
         self.poison_epochs_by_adversary = {}
-        if self.params['random_adversary_for_label_flip']:
-            self.adversarial_namelist = random.sample(self.participants_list, self.params['number_of_adversary_for_label_flip'])
-            for idx, id in enumerate(self.adversarial_namelist):
-                self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+        # if self.params['random_adversary_for_label_flip']:
+        if self.params['is_random_adversary']:
+            self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
         else:
             self.adversarial_namelist = self.params['adversary_list']
-            for idx, id in enumerate(self.adversarial_namelist):
-                if self.params['attack_methods'] == config.ATTACK_TLF:
-                    if self.params['skip_iteration_in_tlf']:
-                        self.poison_epochs_by_adversary[idx] = [2*i+1 for i in range(self.params['epochs']//2)]
-                    else:
-                        self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+        for idx, id in enumerate(self.adversarial_namelist):
+            if self.params['attack_methods'] == config.ATTACK_TLF:
+                if self.params['skip_iteration_in_tlf']:
+                    self.poison_epochs_by_adversary[idx] = [2*i+1 for i in range(self.params['epochs']//2)]
                 else:
-                    self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
+                    self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+            else:
+                self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 

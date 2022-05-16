@@ -86,7 +86,7 @@ if __name__ == '__main__':
     np.random.seed(1)
     time_start_load_everything = time.time()
     parser = argparse.ArgumentParser(description='PPDL')
-    parser.add_argument('--params', dest='params', default='utils/loan_params.yaml')
+    parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
     args = parser.parse_args()
     with open(f'./{args.params}', 'r') as f:
         params_loaded = yaml.load(f)
@@ -149,35 +149,36 @@ if __name__ == '__main__':
             adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
             random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
             agent_name_keys = adversarial_name_keys + random_agent_name_keys
-        elif helper.params['is_random_namelist']:
-            if helper.params['is_random_adversary'] or helper.params['random_adversary_for_label_flip']:  # random choose , maybe don't have advasarial
-                agent_name_keys = random.sample(helper.participants_list, helper.params['no_models'])
-                for _name_keys in agent_name_keys:
-                    if _name_keys in helper.adversarial_namelist:
-                        adversarial_name_keys.append(_name_keys)
-            else:  # must have advasarial if this epoch is in their poison epoch
-                ongoing_epochs = list(range(epoch, epoch + helper.params['aggr_epoch_interval']))
-                for idx in range(0, len(helper.adversarial_namelist)):
-                    for ongoing_epoch in ongoing_epochs:
-                        if ongoing_epoch in helper.poison_epochs_by_adversary[idx]:
-                            if helper.adversarial_namelist[idx] not in adversarial_name_keys:
-                                adversarial_name_keys.append(helper.adversarial_namelist[idx])
-
-                nonattacker=[]
-                for adv in helper.adversarial_namelist:
-                    if adv not in adversarial_name_keys:
-                        nonattacker.append(copy.deepcopy(adv))
-                if helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
-                    benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 1
-                    random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
-                    agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
-                else:
-                    benign_num = helper.params['no_models'] - len(adversarial_name_keys)
-                    random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
-                    agent_name_keys = adversarial_name_keys + random_agent_name_keys
+        # elif helper.params['is_random_namelist']:
         else:
-            if helper.params['is_random_adversary']==False:
-                adversarial_name_keys=copy.deepcopy(helper.adversarial_namelist)
+            # if helper.params['is_random_adversary'] or helper.params['random_adversary_for_label_flip']:  # random choose , maybe don't have advasarial
+            #     agent_name_keys = random.sample(helper.participants_list, helper.params['no_models'])
+            #     for _name_keys in agent_name_keys:
+            #         if _name_keys in helper.adversarial_namelist:
+            #             adversarial_name_keys.append(_name_keys)
+            # else:  # must have advasarial if this epoch is in their poison epoch
+            ongoing_epochs = list(range(epoch, epoch + helper.params['aggr_epoch_interval']))
+            for idx in range(0, len(helper.adversarial_namelist)):
+                for ongoing_epoch in ongoing_epochs:
+                    if ongoing_epoch in helper.poison_epochs_by_adversary[idx]:
+                        if helper.adversarial_namelist[idx] not in adversarial_name_keys:
+                            adversarial_name_keys.append(helper.adversarial_namelist[idx])
+
+            nonattacker=[]
+            for adv in helper.adversarial_namelist:
+                if adv not in adversarial_name_keys:
+                    nonattacker.append(copy.deepcopy(adv))
+            if helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
+                benign_num = helper.params['no_models'] - len(adversarial_name_keys) - 1
+                random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
+                agent_name_keys = adversarial_name_keys + random_agent_name_keys + [helper.params['number_of_total_participants']-1]
+            else:
+                benign_num = helper.params['no_models'] - len(adversarial_name_keys)
+                random_agent_name_keys = random.sample(helper.benign_namelist+nonattacker, benign_num)
+                agent_name_keys = adversarial_name_keys + random_agent_name_keys
+        # else:
+        #     if helper.params['is_random_adversary']==False:
+        #         adversarial_name_keys=copy.deepcopy(helper.adversarial_namelist)
         logger.info(f'Server Epoch:{epoch} choose agents : {agent_name_keys}.')
         epochs_submit_update_dict, num_samples_dict = train.train(helper=helper, start_epoch=epoch,
                                                                   local_model=helper.local_model,

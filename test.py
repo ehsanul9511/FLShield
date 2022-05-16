@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import config
+import numpy as np
 
 import main
 
@@ -75,14 +76,38 @@ def Mytest_poison_label_flip(helper, epoch,
     total_loss = 0
     correct = 0
     dataset_size = 0
-    if helper.params['type'] == config.TYPE_CIFAR \
+    if helper.params['type'] == config.TYPE_LOAN:
+        for i in range(0, len(helper.allStateHelperList)):
+            state_helper = helper.allStateHelperList[i]
+            data_iterator = state_helper.get_testloader()
+            for batch_id, batch in enumerate(data_iterator):
+                for index in range(0, len(batch[1])):
+                    # if batch[1][index] == helper.params['poison_label_swap']:
+                    #     batch[1][index] = 8 - helper.params['poison_label_swap']
+                    if batch[1][index] == helper.source_class:
+                        batch[1][index] = helper.target_class
+                data, targets = state_helper.get_batch(data_iterator, batch, evaluation=True)
+                output = model(data)
+                total_loss += nn.functional.cross_entropy(output, targets,
+                                                          reduction='sum').item()  # sum up batch loss
+                pred = output.data.max(1)[1]  # get the index of the max log-probability
+                # checking attack success rate
+                target_class_indices = np.where(targets.cpu().data.numpy()==helper.target_class)
+                dataset_size += len(target_class_indices[0])
+                correct += pred.eq(targets.data.view_as(pred)).cpu().data.numpy()[target_class_indices].sum()
+                # print(target_class_indices)
+                # print(pred.eq(targets.data.view_as(pred)).cpu().data.numpy())
+                # print(pred.eq(targets.data.view_as(pred)).cpu().data.numpy()[target_class_indices])
+    elif helper.params['type'] == config.TYPE_CIFAR \
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.target_class_test_loader
         # data_iterator = helper.get_test()
         for batch_id, batch in enumerate(data_iterator):
-            data, targets = helper.get_batch(data_iterator, batch, evaluation=True)
+            # data, targets = helper.get_batch(data_iterator, batch, evaluation=True)
+            # checking attack success rate
+            data, targets, poison_num = helper.get_poison_batch_for_targeted_label_flip(batch)
             dataset_size += len(data)
             output = model(data)
             total_loss += nn.functional.cross_entropy(output, targets,

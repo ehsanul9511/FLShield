@@ -96,15 +96,22 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                     correct = 0
                     dataset_size = 0
                     for batch_id, batch in enumerate(data_iterator):
-                        for index in range(0, helper.params['poisoning_per_batch']):
-                            if index >= len(batch[1]):
-                                break
-                            batch[1][index] = helper.params['poison_label_swap']
-                            for j in range(0,len(trigger_names)):
-                                name= trigger_names[j]
-                                value= trigger_values[j]
-                                batch[0][index][helper.feature_dict[name]] = value
-                            poison_data_count += 1
+                        if helper.params['attack_methods'] == config.ATTACK_DBA:
+                            for index in range(0, helper.params['poisoning_per_batch']):
+                                if index >= len(batch[1]):
+                                    break
+                                batch[1][index] = helper.params['poison_label_swap']
+                                for j in range(0,len(trigger_names)):
+                                    name= trigger_names[j]
+                                    value= trigger_values[j]
+                                    batch[0][index][helper.feature_dict[name]] = value
+                                poison_data_count += 1
+                        elif helper.params['attack_methods'] == config.ATTACK_TLF:
+                            for index in range(0, len(batch[1])):
+                                # if batch[1][index] == helper.params['poison_label_swap']:
+                                #     batch[1][index] = 8 - helper.params['poison_label_swap']
+                                if batch[1][index] == helper.source_class:
+                                    batch[1][index] = helper.target_class
 
                         data, targets = helper.statehelper_dic[state_key].get_batch(poison_data, batch, False)
                         poison_optimizer.zero_grad()
@@ -117,7 +124,7 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                                (1 - helper.params['alpha_loss']) * distance_loss
                         loss.backward()
                         # get gradients
-                        if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+                        if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
                             for i, (name, params) in enumerate(model.named_parameters()):
                                 if params.requires_grad:
                                     if internal_epoch == 1 and batch_id == 0:
@@ -187,7 +194,7 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                         loss.backward()
 
                         # get gradients
-                        if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+                        if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
                             for i, (name, params) in enumerate(model.named_parameters()):
                                 if params.requires_grad:
                                     if internal_epoch == 1 and batch_id == 0:
@@ -254,7 +261,7 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                 local_model_update_dict[name] = (data - last_params_variables[name])
                 last_params_variables[name] = copy.deepcopy(data)
 
-            if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+            if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
                 epochs_local_update_list.append(client_grad)
             else:
                 epochs_local_update_list.append(local_model_update_dict)
