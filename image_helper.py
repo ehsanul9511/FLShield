@@ -544,7 +544,7 @@ class ImageHelper(Helper):
             for i in range(0,self.params['trigger_num']):
                 poison_patterns = poison_patterns+ self.params[str(i) + '_poison_pattern']
         else :
-            poison_patterns = self.params[str(adversarial_index) + '_poison_pattern']
+            poison_patterns = self.params[str(adversarial_index%4) + '_poison_pattern']
         if self.params['type'] == config.TYPE_CIFAR or self.params['type'] == config.TYPE_TINYIMAGENET:
             for i in range(0,len(poison_patterns)):
                 pos = poison_patterns[i]

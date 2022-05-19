@@ -158,7 +158,10 @@ if __name__ == '__main__':
             #             adversarial_name_keys.append(_name_keys)
             # else:  # must have advasarial if this epoch is in their poison epoch
             ongoing_epochs = list(range(epoch, epoch + helper.params['aggr_epoch_interval']))
-            for idx in range(0, len(helper.adversarial_namelist)):
+            adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
+            # for idx in range(0, len(helper.adversarial_namelist)):
+            for iidx in range(0, adv_num):
+                idx = random.sample(range(0, len(helper.adversarial_namelist)), 1)[0]
                 for ongoing_epoch in ongoing_epochs:
                     if ongoing_epoch in helper.poison_epochs_by_adversary[idx]:
                         if helper.adversarial_namelist[idx] not in adversarial_name_keys:

@@ -602,9 +602,12 @@ class Helper:
                     # no validation data exchange between malicious clients
                     # _, _, val_test_loader = train_loaders[epoch][val_idx]
                     # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
-                    if val_idx in self.adversarial_namelist:
-                        adv_list = np.array(self.adversarial_namelist)
-                        _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
+                    if self.params['attack_methods'] == config.ATTACK_TLF:
+                        if val_idx in self.adversarial_namelist:
+                            adv_list = np.array(self.adversarial_namelist)
+                            _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
+                        else:
+                            _, val_test_loader = self.train_data[val_idx]
                     else:
                         _, val_test_loader = self.train_data[val_idx]
                     if val_idx in self.adversarial_namelist:
@@ -863,8 +866,9 @@ class Helper:
                 params.grad = agg_grads[i].to(config.device)
         optimizer.step()
 
-        # noise_level = self.params['sigma'] * norm_median
-        # self.add_noise(noise_level=noise_level)
+        # if self.params['attack_methods'] == config.ATTACK_DBA:
+        noise_level = self.params['sigma'] * norm_median
+        self.add_noise(noise_level=noise_level)
         logger.info(f'Aggregation Done: Time {time.time() - t}')
         t = time.time()
         logger.info(f'wv: {wv}')
