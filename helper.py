@@ -71,6 +71,8 @@ class Helper:
             self.good_count = [0 for _ in range(self.params['number_of_total_participants'])]
             self.bad_count = [0 for _ in range(self.params['number_of_total_participants'])]
             self.prob_good_model = [0. for _ in range(self.params['number_of_total_participants'])]
+        elif self.params['aggregation_methods'] == config.AGGR_OURS and 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
+            self.prev_epoch_val_model_params = []
 
 
     def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
@@ -540,6 +542,9 @@ class Helper:
                     val_client_indice_tuples.append((i, v1))
                     val_client_indice_tuples.append((i, v2))
 
+            if 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
+                self.prev_epoch_val_model_params = []
+
             for idx, cluster in enumerate(clusters_agg):
                 if len(cluster) == 0:
                     continue
@@ -592,7 +597,16 @@ class Helper:
                         agg_grads[i]=agg_grads[i] * self.params["eta"]
                         if params.requires_grad:
                             params.grad = agg_grads[i].to(config.device)
-                    optimizer.step()           
+                    optimizer.step()
+                    
+                    if 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
+                        # agg_model_params = dict()
+
+                        # for name, param in agg_model.named_parameters():
+                        #     agg_model_params[name] = param.data.clone().detach().requires_grad_(False)
+
+                        # self.prev_epoch_val_model_params.append(agg_model_params)
+                        self.prev_epoch_val_model_params.append(self.flatten_gradient(agg_grads))           
                 else:
                     agg_model = self.local_models[cluster[0]]
 

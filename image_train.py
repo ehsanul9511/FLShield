@@ -8,6 +8,8 @@ import test
 import copy
 import config
 
+from sklearn.metrics.pairwise import cosine_distances
+import numpy as np
 
 def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_name_keys):
 
@@ -94,10 +96,24 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         output = model(data)
                         class_loss = nn.functional.cross_entropy(output, targets)
 
-                        distance_loss = helper.model_dist_norm_var(model, target_params_variables)
-                        # Lmodel = αLclass + (1 − α)Lano; alpha_loss =1 fixed
-                        loss = helper.params['alpha_loss'] * class_loss + \
+                        if helper.params['aggregation_methods'] == config.AGGR_OURS and 'adaptive_grad_attack' in helper.params.keys() and helper.params['adaptive_grad_attack']:
+                            if len(helper.prev_epoch_val_model_params) == 0 or (internal_epoch==1 and batch_id==0):
+                                distance_loss = 0
+                                loss = class_loss
+                            else:
+                                # main.logger.info(f'adaptive grad attack - prev_epoch_val_model_params: {helper.prev_epoch_val_model_params}')
+                                # distance_loss = sum([helper.model_dist_norm_var(model, agg_param_variables) for agg_param_variables / in helper.prev_epoch_val_model_params])/len(helper.prev_epoch_val_model_params)
+                                # main.logger.info(f'adaptive grad attack - distance_loss: {distance_loss}')
+                                flat_client_grad = helper.flatten_gradient(client_grad)
+                                distance_loss = np.mean(cosine_distances([flat_client_grad], helper.prev_epoch_val_model_params))
+                                loss = helper.params['alpha_loss'] * class_loss + \
                                (1 - helper.params['alpha_loss']) * distance_loss
+                        else:
+                            distance_loss = helper.model_dist_norm_var(model, target_params_variables)
+                            # Lmodel = αLclass + (1 − α)Lano; alpha_loss =1 fixed
+                            loss = helper.params['alpha_loss'] * class_loss + \
+                               (1 - helper.params['alpha_loss']) * distance_loss
+                        # main.logger.info(f'adaptive grad attack - distance_loss: {distance_loss}, class_loss: {class_loss}, loss: {loss}')
                         loss.backward()
 
                         # get gradients

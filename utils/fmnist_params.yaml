@@ -48,6 +48,9 @@ random_adversary_for_label_flip: true
 number_of_adversary_dba: 30
 number_of_adversary_targeted_label_flip: 40
 skip_iteration_in_tlf: false
+adaptive_grad_attack: False
+save_data: 1
+
 
 afa_alpha_0: 3
 afa_beta_0: 3

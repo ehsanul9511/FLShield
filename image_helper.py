@@ -295,6 +295,10 @@ class ImageHelper(Helper):
 
         return server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label
 
+    def load_saved_data(self, file_name):
+        return
+
+
     def load_data(self):
         logger.info('Loading data')
         dataPath = './data'
@@ -394,6 +398,13 @@ class ImageHelper(Helper):
 
         logger.info('train loaders done')
         self.train_data = train_loaders
+
+        if 'save_data' in self.params.keys():
+            os.mkdir(f'./saved_data/{self.params["save_data"]}')
+            for i, td in self.train_data:
+                torch.save(td, f'./saved_data/{self.params["save_data"]}/train_data_{i}.pt')
+
+            logger.info('saving data done')
 
         # if self.params['noniid'] or self.params['sampling_dirichlet']:
         if self.params['noniid']:
