@@ -2,6 +2,7 @@ from re import I
 from shutil import copyfile
 
 import math
+import shutil
 import torch
 
 from torch.autograd import Variable
@@ -63,12 +64,15 @@ class Helper:
 
         self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
-        self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/exp{self.params["load_data"]}_{current_time}'
+        self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/distrib_var_{self.params["load_data"]}'
         # try:
         #     os.mkdir(self.folder_path)
         # except FileExistsError:
         #     logger.info('Folder already exists')
         if not os.path.exists(self.folder_path):
+            os.makedirs(self.folder_path)
+        else:
+            shutil.rmtree(self.folder_path)
             os.makedirs(self.folder_path)
         logger.addHandler(logging.FileHandler(filename=f'{self.folder_path}/log.txt'))
         logger.addHandler(logging.StreamHandler())
