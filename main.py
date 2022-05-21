@@ -252,6 +252,14 @@ if __name__ == '__main__':
                                                                                         model=helper.target_model,
                                                                                         is_poison=True,
                                                                                         visualize=False,
+                                                                                        agent_name_key="global",
+                                                                                        get_recall=True)
+                csv_record.recall_result.append(["global", temp_global_epoch, epoch_acc_p, epoch_corret, epoch_total])
+                epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
+                                                                                        epoch=temp_global_epoch,
+                                                                                        model=helper.target_model,
+                                                                                        is_poison=True,
+                                                                                        visualize=False,
                                                                                         agent_name_key="global")
 
             csv_record.posiontest_result.append(

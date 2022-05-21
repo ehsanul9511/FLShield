@@ -1,4 +1,5 @@
 from collections import defaultdict
+import shutil
 from typing import OrderedDict
 import matplotlib.pyplot as plt
 from prometheus_client import Counter
@@ -295,130 +296,205 @@ class ImageHelper(Helper):
 
         return server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label
 
-    def load_saved_data(self, file_name):
-        return
+    def get_group_sizes(self, num_labels=10):
+        if self.params['type'] in config.random_group_size_dict.keys():
+            if 'save_data' in self.params.keys():
+                which_data_dist = self.params['save_data']
+            else:
+                which_data_dist = random.sample(range(1,4), 1)[0]
+            group_sizes = config.random_group_size_dict[self.params['type']][which_data_dist]
+        else:
+            group_sizes = [10 for _ in range(10)]
+        return group_sizes
 
+    def assign_data_nonuniform(self, train_data, bias, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
+        server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label = self.assign_data(train_data, bias, num_labels, 10, server_pc, p, server_case2_cls, dataset, seed, flt_aggr)
+        ewd = [[] for _ in range(num_workers)]
+        ewl = [[] for _ in range(num_workers)]
+        # group_sizes = [np.random.randint(5, 16) for i in range(9)]
+        # group_sizes.append(num_workers-sum(group_sizes))
+        # if group_sizes[-1] < 5 or group_sizes[-1] > 15:
+        #     avg_last_2 = (group_sizes[-1] + group_sizes[-2])/2
+
+        group_sizes = self.get_group_sizes()
+            
+        copylist = []
+        for i, group_size in enumerate(group_sizes):
+            for _ in range(group_size):
+                copylist.append(i)
+
+        for i in range(len(each_worker_data)):
+            group_size = group_sizes[i]
+            group_frac = 1./group_size
+            label_data = np.array(each_worker_label[i])
+            i_indices = np.where(label_data==i)[0].tolist()
+            not_i_indices = np.where(label_data!=i)[0].tolist()
+            split_map_for_i = []
+            split_map_for_i.append(0)
+            split_map_for_not_i = [0]
+            for ii in range(1, group_size):
+                split_ratio_for_i = np.random.normal(ii*group_frac, group_frac/10)
+                split_ratio_for_not_i = ii*group_frac*2 - split_ratio_for_i
+                split_map_for_i.append(int(split_ratio_for_i*len(i_indices)))
+                split_map_for_not_i.append(int(split_ratio_for_not_i*len(not_i_indices)))
+            split_map_for_i.append(len(i_indices))
+            split_map_for_not_i.append(len(not_i_indices))
+            i_indices_list = [i_indices[split_map_for_i[ii]:split_map_for_i[ii+1]] for ii in range(group_size)]
+            not_i_indices_list = [not_i_indices[split_map_for_not_i[ii]:split_map_for_not_i[ii+1]] for ii in range(group_size)]
+            indice_map = [0]*len(each_worker_data[i])
+            for ii in range(group_size):
+                for iii in i_indices_list[ii]:
+                    indice_map[iii] = ii 
+                for iii in not_i_indices_list[ii]:
+                    indice_map[iii] = ii 
+            size_of_group = int(len(each_worker_data[i])/10)
+            stop_val = 10 * size_of_group
+            for idx in range(len(each_worker_data[i])):
+                ewd[sum(group_sizes[:i]) + indice_map[idx]].append(each_worker_data[i][idx])
+                ewl[sum(group_sizes[:i]) + indice_map[idx]].append(each_worker_label[i][idx])
+        return server_data, server_label, ewd, ewl, server_add_data, server_add_label
+
+    def load_saved_data(self):
+        train_loaders=[]
+        for i in range(self.params['number_of_total_participants']):
+            train_loaders.append(torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/train_data_{i}.pt'))
+
+        self.train_data = [(i, train_loader) for i, train_loader in enumerate(train_loaders)]
+        self.test_data = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data.pt')
+        self.test_data_poison = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data_poison.pt')
+        self.test_targetlabel_data = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_targetlabel_data.pt')
+        logger.info(f'Loaded data')
 
     def load_data(self):
         logger.info('Loading data')
-        dataPath = './data'
-        if self.params['type'] == config.TYPE_CIFAR:
-            ### data load
-            transform_train = transforms.Compose([
-                transforms.ToTensor(),
-            ])
-
-            transform_test = transforms.Compose([
-                transforms.ToTensor(),
-            ])
-
-            self.train_dataset = datasets.CIFAR10(dataPath, train=True, download=True,
-                                             transform=transform_train)
-
-            self.test_dataset = datasets.CIFAR10(dataPath, train=False, transform=transform_test)
-
-        elif self.params['type'] == config.TYPE_MNIST:
-
-            self.train_dataset = datasets.MNIST('./data', train=True, download=True,
-                               transform=transforms.Compose([
-                                   transforms.ToTensor(),
-                                   # transforms.Normalize((0.1307,), (0.3081,))
-                               ]))
-            self.test_dataset = datasets.MNIST('./data', train=False, transform=transforms.Compose([
+        if 'load_data' in self.params:
+            self.load_saved_data()
+        else:
+            dataPath = './data'
+            if self.params['type'] == config.TYPE_CIFAR:
+                ### data load
+                transform_train = transforms.Compose([
                     transforms.ToTensor(),
-                    # transforms.Normalize((0.1307,), (0.3081,))
-                ]))
-        elif self.params['type'] == config.TYPE_FMNIST:
-            self.train_dataset = datasets.FashionMNIST('./data', train=True, download=True,
-                               transform=transforms.Compose([
-                                   transforms.ToTensor(),
-                                   # transforms.Normalize((0.1307,), (0.3081,))
-                               ]))
-            self.test_dataset = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([
-                    transforms.ToTensor(),
-                    # transforms.Normalize((0.1307,), (0.3081,))
-                ]))
-        elif self.params['type'] == config.TYPE_TINYIMAGENET:
+                ])
 
-            _data_transforms = {
-                'train': transforms.Compose([
-                    # transforms.Resize(224),
-                    transforms.RandomHorizontalFlip(),
+                transform_test = transforms.Compose([
                     transforms.ToTensor(),
-                ]),
-                'val': transforms.Compose([
-                    # transforms.Resize(224),
-                    transforms.ToTensor(),
-                ]),
-            }
-            _data_dir = './data/tiny-imagenet-200/'
-            self.train_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'train'),
-                                                    _data_transforms['train'])
-            self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
-                                                   _data_transforms['val'])
-            logger.info('reading data done')
+                ])
 
+                self.train_dataset = datasets.CIFAR10(dataPath, train=True, download=True,
+                                                transform=transform_train)
+
+                self.test_dataset = datasets.CIFAR10(dataPath, train=False, transform=transform_test)
+
+            elif self.params['type'] == config.TYPE_MNIST:
+
+                self.train_dataset = datasets.MNIST('./data', train=True, download=True,
+                                transform=transforms.Compose([
+                                    transforms.ToTensor(),
+                                    # transforms.Normalize((0.1307,), (0.3081,))
+                                ]))
+                self.test_dataset = datasets.MNIST('./data', train=False, transform=transforms.Compose([
+                        transforms.ToTensor(),
+                        # transforms.Normalize((0.1307,), (0.3081,))
+                    ]))
+            elif self.params['type'] == config.TYPE_FMNIST:
+                self.train_dataset = datasets.FashionMNIST('./data', train=True, download=True,
+                                transform=transforms.Compose([
+                                    transforms.ToTensor(),
+                                    # transforms.Normalize((0.1307,), (0.3081,))
+                                ]))
+                self.test_dataset = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([
+                        transforms.ToTensor(),
+                        # transforms.Normalize((0.1307,), (0.3081,))
+                    ]))
+            elif self.params['type'] == config.TYPE_TINYIMAGENET:
+
+                _data_transforms = {
+                    'train': transforms.Compose([
+                        # transforms.Resize(224),
+                        transforms.RandomHorizontalFlip(),
+                        transforms.ToTensor(),
+                    ]),
+                    'val': transforms.Compose([
+                        # transforms.Resize(224),
+                        transforms.ToTensor(),
+                    ]),
+                }
+                _data_dir = './data/tiny-imagenet-200/'
+                self.train_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'train'),
+                                                        _data_transforms['train'])
+                self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
+                                                    _data_transforms['val'])
+                logger.info('reading data done')
+
+            if self.params['noniid']:
+                sd, sl, ewd, ewl, sad, sal = self.assign_data_nonuniform(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1, num_workers=self.params['number_of_total_participants'])
+                if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+                    ewd.append(sd)
+                    ewl.append(sl)
+
+                train_loaders = []
+                for id_worker in range(len(ewd)):
+                    dataset_per_worker=[]
+                    for idx in range(len(ewd[id_worker])):
+                        dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
+                    if len(dataset_per_worker) != 0:
+                        train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
+                        train_loaders.append((id_worker, train_loader))
+            elif self.params['sampling_dirichlet']:
+                ## sample indices for participants using Dirichlet distribution
+                indices_per_participant = self.sample_dirichlet_train_data(
+                    self.params['number_of_total_participants'], #100
+                    alpha=self.params['dirichlet_alpha'])
+                self.indices_per_participant = indices_per_participant
+                train_loaders = [(pos, self.get_train(indices)) for pos, indices in
+                                indices_per_participant.items()]
+            else:
+                ## sample indices for participants that are equally
+                all_range = list(range(len(self.train_dataset)))
+                random.shuffle(all_range)
+                train_loaders = [(pos, self.get_train_old(all_range, pos))
+                                for pos in range(self.params['number_of_total_participants'])]
+
+            logger.info('train loaders done')
+            self.train_data = train_loaders
+
+            self.test_data = self.get_test()
+            self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
+
+            if 'save_data' in self.params.keys():
+                if not os.path.isdir(f'./saved_data/{self.params["type"]}'):
+                    os.mkdir(f'./saved_data/{self.params["type"]}')
+                if os.path.isdir(f'./saved_data/{self.params["type"]}/{self.params["save_data"]}'):
+                    shutil.rmtree(f'./saved_data/{self.params["type"]}/{self.params["save_data"]}')
+                os.mkdir(f'./saved_data/{self.params["type"]}/{self.params["save_data"]}')
+                for i, td in self.train_data:
+                    torch.save(td, f'./saved_data/{self.params["type"]}/{self.params["save_data"]}/train_data_{i}.pt')
+
+                torch.save(self.test_data, f'./saved_data/{self.params["type"]}/{self.params["save_data"]}/test_data.pt')
+                torch.save(self.test_data_poison, f'./saved_data/{self.params["type"]}/{self.params["save_data"]}/test_data_poison.pt')
+                torch.save(self.test_targetlabel_data, f'./saved_data/{self.params["type"]}/{self.params["save_data"]}/test_targetlabel_data.pt')
+                logger.info('saving data done')
+
+            self.classes_dict = self.build_classes_dict()
+            logger.info('build_classes_dict done')
         if self.params['attack_methods'] == config.ATTACK_TLF:
             target_class_test_data=[]
-            for _, (x, y) in enumerate(self.test_dataset):
+            for _, (x, y) in enumerate(self.test_data.dataset):
                 if y==self.source_class:
                     target_class_test_data.append((x, y))
             self.target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=self.params['test_batch_size'], shuffle=True)
-
-        self.classes_dict = self.build_classes_dict()
-        logger.info('build_classes_dict done')
-        if self.params['noniid']:
-            sd, sl, ewd, ewl, sad, sal = self.assign_data(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1, num_workers=self.params['number_of_total_participants'])
-            if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-                ewd.append(sd)
-                ewl.append(sl)
-
-            train_loaders = []
-            for id_worker in range(len(ewd)):
-                dataset_per_worker=[]
-                for idx in range(len(ewd[id_worker])):
-                    dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
-                if len(dataset_per_worker) != 0:
-                    train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
-                    train_loaders.append((id_worker, train_loader))
-        elif self.params['sampling_dirichlet']:
-            ## sample indices for participants using Dirichlet distribution
-            indices_per_participant = self.sample_dirichlet_train_data(
-                self.params['number_of_total_participants'], #100
-                alpha=self.params['dirichlet_alpha'])
-            self.indices_per_participant = indices_per_participant
-            train_loaders = [(pos, self.get_train(indices)) for pos, indices in
-                             indices_per_participant.items()]
-        else:
-            ## sample indices for participants that are equally
-            all_range = list(range(len(self.train_dataset)))
-            random.shuffle(all_range)
-            train_loaders = [(pos, self.get_train_old(all_range, pos))
-                             for pos in range(self.params['number_of_total_participants'])]
-
-        logger.info('train loaders done')
-        self.train_data = train_loaders
-
-        if 'save_data' in self.params.keys():
-            os.mkdir(f'./saved_data/{self.params["save_data"]}')
-            for i, td in self.train_data:
-                torch.save(td, f'./saved_data/{self.params["save_data"]}/train_data_{i}.pt')
-
-            logger.info('saving data done')
 
         # if self.params['noniid'] or self.params['sampling_dirichlet']:
         if self.params['noniid']:
             self.lsrs = []
 
-            for id in tqdm(range(len(train_loaders))):
-                (_, train_loader) = train_loaders[id]
+            for id in tqdm(range(len(self.train_data))):
+                (_, train_loader) = self.train_data[id]
                 lsr = self.get_label_skew_ratios(train_loader.dataset, id)
                 self.lsrs.append(lsr)
 
             logger.info(f'lsrs ready: {self.lsrs}')
-
-        self.test_data = self.get_test()
-        self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
 
 
         if self.params['is_random_namelist'] == False:
@@ -430,7 +506,18 @@ class ImageHelper(Helper):
         self.poison_epochs_by_adversary = {}
         # if self.params['random_adversary_for_label_flip']:
         if self.params['is_random_adversary']:
-            self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+            if self.params['attack_methods'] == config.ATTACK_TLF:
+                if 'num_of_attackers_in_target_group' in self.params.keys():
+                    self.num_of_attackers_in_target_group = self.params['num_of_attackers_in_target_group']
+                else:
+                    self.num_of_attackers_in_target_group = 4
+            group_sizes = self.get_group_sizes()
+            cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
+            target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
+            logger.info(f'Target group indices: {target_group_indices}')
+            self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.num_of_attackers_in_target_group)
+            self.adversarial_namelist = self.target_group_attackers + random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.num_of_attackers_in_target_group)
+            # self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
         else:
             self.adversarial_namelist = self.params['adversary_list']
         for idx, id in enumerate(self.adversarial_namelist):

@@ -7,6 +7,7 @@ test_fileHeader = ["model", "epoch", "average_loss", "accuracy", "correct_data",
 train_result = []  # train_fileHeader
 test_result = []  # test_fileHeader
 posiontest_result = []  # test_fileHeader
+recall_result = []
 
 triggertest_fileHeader = ["model", "trigger_name", "trigger_value", "epoch", "average_loss", "accuracy", "correct_data",
                           "total_data"]
@@ -50,6 +51,12 @@ def save_result_csv(epoch, is_posion,folder_path):
         test_writer = csv.writer(test_csvFile)
         test_writer.writerow(test_fileHeader)
         test_writer.writerows(posiontest_result)
+        test_csvFile.close()
+
+        test_csvFile = open(f'{folder_path}/recall_result.csv', "w")
+        test_writer = csv.writer(test_csvFile)
+        test_writer.writerow(test_fileHeader)
+        test_writer.writerows(recall_result)
         test_csvFile.close()
 
         test_csvFile = open(f'{folder_path}/poisontriggertest_result.csv', "w")

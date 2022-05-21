@@ -42,12 +42,34 @@ class Helper:
         self.params = params
         self.name = name
         self.best_loss = math.inf
+
+        if self.params['attack_methods'] == config.ATTACK_TLF:
+            if self.params['type'] in config.target_class_dict.keys():
+                self.source_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][0]
+                self.target_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][1]
+            else:
+                self.source_class = int(self.params['tlf_label'])
+                self.target_class = 9 - self.source_class
+        else:
+            self.source_class = int(self.params['poison_label_swap'])
+        if self.params['attack_methods'] == config.ATTACK_TLF:
+            self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_TLF}']
+        else:
+            self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_DBA}']
+        if 'src_grp_mal' in self.params.keys():
+            self.src_grp_mal = self.params['src_grp_mal']
+        else:
+            self.src_grp_mal = 4
+
         self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
-        try:
-            os.mkdir(self.folder_path)
-        except FileExistsError:
-            logger.info('Folder already exists')
+        self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/exp{self.params["load_data"]}_{current_time}'
+        # try:
+        #     os.mkdir(self.folder_path)
+        # except FileExistsError:
+        #     logger.info('Folder already exists')
+        if not os.path.exists(self.folder_path):
+            os.makedirs(self.folder_path)
         logger.addHandler(logging.FileHandler(filename=f'{self.folder_path}/log.txt'))
         logger.addHandler(logging.StreamHandler())
         logger.setLevel(logging.DEBUG)
@@ -58,14 +80,6 @@ class Helper:
         self.params['current_time'] = self.current_time
         self.params['folder_path'] = self.folder_path
         self.fg= FoolsGold(use_memory=self.params['fg_use_memory'])
-
-        if self.params['attack_methods'] == config.ATTACK_TLF:
-            if self.params['type'] in config.target_class_dict.keys():
-                self.source_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][0]
-                self.target_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][1]
-            else:
-                self.source_class = int(self.params['tlf_label'])
-                self.target_class = 9 - self.source_class
 
         if self.params['aggregation_methods'] == config.AGGR_AFA:
             self.good_count = [0 for _ in range(self.params['number_of_total_participants'])]
