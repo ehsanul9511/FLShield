@@ -1047,7 +1047,8 @@ class Helper:
             names.append(name)
 
         # good_set = set(self.adversarial_namelist + self.benign_namelist)
-        good_set = set(np.arange(self.params['no_models']))
+        # good_set = set(np.arange(self.params['no_models']))
+        good_set = set(np.arange(len(names)))
         bad_set = set()
         r_set = set([-1])
         epsilon = self.params['afa_epsilon']
