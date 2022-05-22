@@ -64,7 +64,10 @@ class Helper:
 
         self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
-        self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/distrib_var_{self.params["load_data"]}'
+        if 'load_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
+            self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/distrib_var_{self.params["load_data"]}'
+        else:
+            self.folder_path = f'saved_models/model_{self.name}_{current_time}'
         # try:
         #     os.mkdir(self.folder_path)
         # except FileExistsError:
@@ -91,6 +94,18 @@ class Helper:
             self.prob_good_model = [0. for _ in range(self.params['number_of_total_participants'])]
         elif self.params['aggregation_methods'] == config.AGGR_OURS and 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
             self.prev_epoch_val_model_params = []
+
+    def color_print_wv(self, wv, names):
+        wv_print_str= '['
+        for idx, w in enumerate(wv):
+            wv_print_str += ' '
+            if names[idx] in self.adversarial_namelist:
+                wv_print_str += colored(str(w), 'blue')
+            else:
+                wv_print_str += str(w)
+        wv_print_str += ']'
+        print(f'wv: {wv_print_str}')
+
 
 
     def save_checkpoint(self, state, is_best, filename='checkpoint.pth.tar'):
@@ -810,10 +825,11 @@ class Helper:
                     prev_val_score = self.all_val_score[client_id]
                     if prev_val_score < 50.:
                         prev_val_grp_no = self.all_val_score_min_grp[client_id]
-                        current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
-                        if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
-                            all_val_score[client_id] = prev_val_score/2
-                            all_val_score_min_grp[client_id] = prev_val_grp_no
+                        if prev_val_grp_no in all_val_score_by_group_dict[client_id].keys():
+                            current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
+                            if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
+                                all_val_score[client_id] = prev_val_score/2
+                                all_val_score_min_grp[client_id] = prev_val_grp_no
             
             for name in all_val_score.keys():
                 self.all_val_score[name] = all_val_score[name]
@@ -1015,6 +1031,7 @@ class Helper:
         wv = np.array(alphas)/np.sum(alphas)
         logger.info(f'alphas: {alphas}')
         logger.info(f'wv: {wv}')
+        self.color_print_wv(wv, names)
         agg_grads = []
         # Iterate through each layer
         for i in range(len(client_grads[0])):

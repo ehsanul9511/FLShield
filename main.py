@@ -145,10 +145,14 @@ if __name__ == '__main__':
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
         if helper.params['attack_methods'] == config.ATTACK_TLF:
-            adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
-            adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
-            random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
-            agent_name_keys = adversarial_name_keys + random_agent_name_keys
+            # adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
+            # adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
+            # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
+            # agent_name_keys = adversarial_name_keys + random_agent_name_keys
+            agent_name_keys = random.sample(helper.participants_list, helper.params['no_models'])
+            adversarial_name_keys = [x for x in helper.adversarial_namelist if x in agent_name_keys]
+            random_agent_name_keys = [x for x in helper.benign_namelist if x in agent_name_keys]
+            # agent_name_keys = adversarial_name_keys + random_agent_name_keys
         # elif helper.params['is_random_namelist']:
         else:
             # if helper.params['is_random_adversary'] or helper.params['random_adversary_for_label_flip']:  # random choose , maybe don't have advasarial
