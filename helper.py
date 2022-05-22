@@ -261,13 +261,21 @@ class Helper:
                 num_samples=num_samples_dict[state_keys[i]]
 
                 for name, data in local_model_update_list[0].items():
+                    if not torch.is_tensor(data):
+                        # logger.info(f'name: {name}, data: {data}')
+                        data = torch.FloatTensor(data)
                     update[name] = torch.zeros_like(data)
 
                 for j in range(0, len(local_model_update_list)):
                     local_model_update_dict= local_model_update_list[j]
                     for name, data in local_model_update_dict.items():
-                        weight_accumulator[name].add_(local_model_update_dict[name])
-                        update[name].add_(local_model_update_dict[name])
+                        if not torch.is_tensor(data):
+                            # logger.info(f'name: {name}, data: {data}')
+                            data = torch.FloatTensor(data)
+                        # weight_accumulator[name].add_(local_model_update_dict[name])
+                        # update[name].add_(local_model_update_dict[name])
+                        weight_accumulator[name].add_(data)
+                        update[name].add_(data)
                         detached_data= data.cpu().detach().numpy()
                         # print(detached_data.shape)
                         detached_data=detached_data.tolist()
