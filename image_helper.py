@@ -494,7 +494,7 @@ class ImageHelper(Helper):
                 lsr = self.get_label_skew_ratios(train_loader.dataset, id)
                 self.lsrs.append(lsr)
 
-            logger.info(f'lsrs ready: {self.lsrs}')
+            # logger.info(f'lsrs ready: {self.lsrs}')
 
 
         if self.params['is_random_namelist'] == False:
@@ -506,17 +506,19 @@ class ImageHelper(Helper):
         self.poison_epochs_by_adversary = {}
         # if self.params['random_adversary_for_label_flip']:
         if self.params['is_random_adversary']:
-            if self.params['attack_methods'] == config.ATTACK_TLF:
-                if 'num_of_attackers_in_target_group' in self.params.keys():
-                    self.num_of_attackers_in_target_group = self.params['num_of_attackers_in_target_group']
-                else:
-                    self.num_of_attackers_in_target_group = 4
+            # if self.params['attack_methods'] == config.ATTACK_TLF:
+            #     if 'num_of_attackers_in_target_group' in self.params.keys():
+            #         self.num_of_attackers_in_target_group = self.params['num_of_attackers_in_target_group']
+            #     else:
+            #         self.num_of_attackers_in_target_group = 4
             group_sizes = self.get_group_sizes()
             cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
             target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
             logger.info(f'Target group indices: {target_group_indices}')
-            self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.num_of_attackers_in_target_group)
-            self.adversarial_namelist = self.target_group_attackers + random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.num_of_attackers_in_target_group)
+            self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
+            other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
+            other_group_participants = [self.participants_list[i] for i in other_group_indices]
+            self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
             # self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
         else:
             self.adversarial_namelist = self.params['adversary_list']
@@ -531,6 +533,8 @@ class ImageHelper(Helper):
                 self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs']
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
+        logger.info(f'adversarial_namelist: {self.adversarial_namelist}')
+        logger.info(f'benign_namelist: {self.benign_namelist}')
 
     def get_train(self, indices):
         """
