@@ -430,8 +430,10 @@ class ImageHelper(Helper):
             if self.params['noniid']:
                 sd, sl, ewd, ewl, sad, sal = self.assign_data_nonuniform(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1, num_workers=self.params['number_of_total_participants'])
                 if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-                    ewd.append(sd)
-                    ewl.append(sl)
+                    # ewd.append(sd)
+                    # ewl.append(sl)
+                    ewd[-1] = sd
+                    ewl[-1] = sl
 
                 train_loaders = []
                 for id_worker in range(len(ewd)):
@@ -518,6 +520,7 @@ class ImageHelper(Helper):
             self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
             other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
             other_group_participants = [self.participants_list[i] for i in other_group_indices]
+            other_group_participants = other_group_participants[:-1]
             self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
             # self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
         else:
