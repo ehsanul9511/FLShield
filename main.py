@@ -150,7 +150,7 @@ if __name__ == '__main__':
             # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
             # agent_name_keys = adversarial_name_keys + random_agent_name_keys
             if helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
-                agent_name_keys = random.sample(helper.participants_list[:-1], helper.params['no_models']) + helper.participants_list[-1:]
+                agent_name_keys = random.sample(helper.participants_list[:-1], helper.params['no_models']-1) + helper.participants_list[-1:]
             else:
                 agent_name_keys = random.sample(helper.participants_list, helper.params['no_models'])
             adversarial_name_keys = [x for x in helper.adversarial_namelist if x in agent_name_keys]

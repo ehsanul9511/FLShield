@@ -358,7 +358,9 @@ class ImageHelper(Helper):
         train_loaders=[]
         for i in range(self.params['number_of_total_participants']):
             train_loaders.append(torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/train_data_{i}.pt'))
-
+        if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+            train_loaders[-1] = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/train_data_{self.params["number_of_total_participants"]}.pt')
+        
         self.train_data = [(i, train_loader) for i, train_loader in enumerate(train_loaders)]
         self.test_data = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data.pt')
         self.test_data_poison = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data_poison.pt')
