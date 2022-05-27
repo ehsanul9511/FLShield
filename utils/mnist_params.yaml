@@ -19,7 +19,7 @@ attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 100
+no_models: 25
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: false

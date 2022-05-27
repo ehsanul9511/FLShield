@@ -13,3 +13,4 @@ outputs/
 batch_script*
 .DS_Store
 saved_data/
+workspace*
