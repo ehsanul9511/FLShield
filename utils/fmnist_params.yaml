@@ -54,7 +54,7 @@ src_grp_mal: 4
 skip_iteration_in_tlf: false
 adaptive_grad_attack: False
 load_data: 1
-new_adaptive_attack: false
+new_adaptive_attack: true
 
 
 afa_alpha_0: 3

@@ -11,6 +11,8 @@ import config
 from sklearn.metrics.pairwise import cosine_distances
 import numpy as np
 
+from random import shuffle
+
 def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_name_keys):
 
     def main_logger_info(info):
@@ -72,7 +74,9 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     # for (x, y) in data_iterator.dataset:
                     #     count_by_class_dict[y] += 1
                     # min_samples_in_a_class = min(count_by_class_dict.values())
-                    for (x, y) in data_iterator.dataset:
+                    full_dataset = data_iterator.dataset
+                    shuffle(full_dataset)
+                    for (x, y) in full_dataset:
                         # if balanced_data_dict[y] < 10 and y != helper.source_class:
                         if balanced_data_dict[y] < 10:
                             # if balanced_data_dict[y] < min_samples_in_a_class:
