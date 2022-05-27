@@ -44,7 +44,7 @@ class Helper:
         self.name = name
         self.best_loss = math.inf
 
-        if self.params['attack_methods'] == config.ATTACK_TLF:
+        if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
             if self.params['type'] in config.target_class_dict.keys():
                 self.source_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][0]
                 self.target_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][1]
@@ -53,10 +53,11 @@ class Helper:
                 self.target_class = 9 - self.source_class
         else:
             self.source_class = int(self.params['poison_label_swap'])
-        if self.params['attack_methods'] == config.ATTACK_TLF:
-            self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_TLF}']
-        else:
-            self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_DBA}']
+        # if self.params['attack_methods'] == config.ATTACK_TLF:
+        #     self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_TLF}']
+        # else:
+        #     self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_DBA}']
+        self.num_of_adv = self.params[f'number_of_adversary_{self.params["attack_methods"]}']
         if 'src_grp_mal' in self.params.keys():
             self.src_grp_mal = self.params['src_grp_mal']
         else:
@@ -659,7 +660,7 @@ class Helper:
                     # no validation data exchange between malicious clients
                     # _, _, val_test_loader = train_loaders[epoch][val_idx]
                     # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
-                    if self.params['attack_methods'] == config.ATTACK_TLF:
+                    if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
                         if val_idx in self.adversarial_namelist:
                             adv_list = np.array(self.adversarial_namelist)
                             _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
@@ -964,6 +965,9 @@ class Helper:
         all_cos_sims = cos_sims
         cos_sims = cos_sims[:-1]
         logger.info(f'cos_sims: {cos_sims}')
+        logger.info(f'adversarial cos_sims: {[self.print_util(names[iidx], cos_sims[iidx]) for iidx in range(len(cos_sims)) if names[iidx] in self.adversarial_namelist]}')
+        logger.info(f'benign cos_sims: {[self.print_util(names[iidx], cos_sims[iidx]) for iidx in range(len(cos_sims)) if names[iidx] in self.benign_namelist]}')
+        
 
         # cos_sims = np.maximum(np.array(cos_sims), 0)
         # norm_weights = cos_sims/(np.sum(cos_sims)+1e-9)
@@ -998,6 +1002,10 @@ class Helper:
                 # temp += wv[c]
             temp = temp / sum_trust_scores
             agg_grads.append(temp)
+
+        wv = [wv[c] * clipping_coeffs[c]/sum_trust_scores for c in range(len(wv))]
+        logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
+        logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
 
 
         target_model.train()

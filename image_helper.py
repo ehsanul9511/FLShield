@@ -363,8 +363,10 @@ class ImageHelper(Helper):
         
         self.train_data = [(i, train_loader) for i, train_loader in enumerate(train_loaders)]
         self.test_data = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data.pt')
-        self.test_data_poison = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data_poison.pt')
-        self.test_targetlabel_data = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_targetlabel_data.pt')
+        # self.test_data_poison = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_data_poison.pt')
+        # self.test_targetlabel_data = torch.load(f'./saved_data/{self.params["type"]}/{self.params["load_data"]}/test_targetlabel_data.pt')
+        self.test_dataset = self.test_data.dataset
+        self.test_data_poison, self.test_targetlabel_data = self.poison_test_dataset()
         logger.info(f'Loaded data')
 
     def load_data(self):
@@ -482,7 +484,7 @@ class ImageHelper(Helper):
 
             self.classes_dict = self.build_classes_dict()
             logger.info('build_classes_dict done')
-        if self.params['attack_methods'] == config.ATTACK_TLF:
+        if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
             target_class_test_data=[]
             for _, (x, y) in enumerate(self.test_data.dataset):
                 if y==self.source_class:
@@ -528,7 +530,7 @@ class ImageHelper(Helper):
         else:
             self.adversarial_namelist = self.params['adversary_list']
         for idx, id in enumerate(self.adversarial_namelist):
-            if self.params['attack_methods'] == config.ATTACK_TLF:
+            if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
                 if self.params['skip_iteration_in_tlf']:
                     self.poison_epochs_by_adversary[idx] = [2*i+1 for i in range(self.params['epochs']//2)]
                 else:

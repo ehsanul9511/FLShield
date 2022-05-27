@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
-        if helper.params['attack_methods'] == config.ATTACK_TLF:
+        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
             # adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
             # adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
             # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
@@ -253,7 +253,7 @@ if __name__ == '__main__':
                                                                                         is_poison=True,
                                                                                         visualize=True,
                                                                                         agent_name_key="global")
-            elif helper.params['attack_methods'] == config.ATTACK_TLF:
+            elif helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
                                                                                         epoch=temp_global_epoch,
                                                                                         model=helper.target_model,

@@ -14,7 +14,7 @@ poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold', 'our_aggr', 'afa']
 aggregation_methods: 'mean'
-# attack_methods Allowed values are: ['targeted_label_flip', 'dba' ]
+# attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
 attack_methods: 'dba'
 geom_median_maxiter: 10
 fg_use_memory: true
@@ -49,10 +49,11 @@ poison_label_swap: 2
 random_adversary_for_label_flip: true
 number_of_adversary_dba: 40
 number_of_adversary_targeted_label_flip: 40
+number_of_adversary_server_imitation_attack: 40
 src_grp_mal: 4
 skip_iteration_in_tlf: false
 adaptive_grad_attack: False
-load_data: 1
+load_data: 2
 
 
 afa_alpha_0: 3
