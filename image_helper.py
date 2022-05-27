@@ -498,7 +498,7 @@ class ImageHelper(Helper):
                 lsr = self.get_label_skew_ratios(train_loader.dataset, id)
                 self.lsrs.append(lsr)
 
-            # logger.info(f'lsrs ready: {self.lsrs}')
+            logger.info(f'lsrs ready: {self.lsrs}')
 
 
         if self.params['is_random_namelist'] == False:
