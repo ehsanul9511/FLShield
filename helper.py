@@ -67,6 +67,8 @@ class Helper:
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
         if 'load_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
             self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/distrib_var_{self.params["load_data"]}'
+            if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
+                self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/new_adaptive_attack_alpha_{self.params["alpha_loss"]}/distrib_var_{self.params["load_data"]}'
         else:
             self.folder_path = f'saved_models/model_{self.name}_{current_time}'
         # try:
@@ -866,11 +868,12 @@ class Helper:
         for cluster_id, cluster in enumerate(self.clusters_agg):
             cluster_avg_wvs.append(np.median([wv[client_id] for client_id in cluster]))
         # min_cluster_avg_wvs_index = np.argmin(cluster_avg_wvs)
-        zscore_by_clusters = stats.zscore(cluster_avg_wvs)
+        zscore_by_clusters_v1 = stats.zscore(cluster_avg_wvs)
 
         zscore_by_clients = stats.zscore(wv)
-        zscore_by_clusters = [np.median([zscore_by_clients[client_id] for client_id in cluster]) for cluster in self.clusters_agg]
+        zscore_by_clusters_v2 = [np.median([zscore_by_clients[client_id] for client_id in cluster]) for cluster in self.clusters_agg]
 
+        zscore_by_clusters = [min(zscore_by_clusters_v1[cluster_id], zscore_by_clusters_v2[cluster_id]) for cluster_id, cluster in enumerate(self.clusters_agg)]
         # for client_id in self.clusters_agg[min_cluster_avg_wvs_index]:
         #     wv[client_id] = 0
 
@@ -881,8 +884,8 @@ class Helper:
                     mal_count += 1
             mal_count = mal_count/len(cluster)
 
-            logger.info(f'{clusters_agg[cl_num]}, {mal_count}, {zscore_by_clusters[cl_num]}')
-            if zscore_by_clusters[cl_num] < -1:
+            logger.info(f'{clusters_agg[cl_num]}, {mal_count}, {zscore_by_clusters[cl_num]}, {zscore_by_clusters_v1[cl_num]}, {zscore_by_clusters_v2[cl_num]}')
+            if zscore_by_clusters[cl_num] <= -1:
                 for client_id in cluster:
                     wv[client_id] = 0
 

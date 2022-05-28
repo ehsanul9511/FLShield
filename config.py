@@ -21,12 +21,12 @@ TYPE_FMNIST='fmnist'
 TYPE_TINYIMAGENET='tiny-imagenet-200'
 
 target_class_dict = {
-    TYPE_FMNIST : {
+    TYPE_CIFAR : {
         'easy': [0, 2],
         'medium': [1, 9],
         'hard': [5, 3]
     },
-    TYPE_CIFAR : {
+    TYPE_FMNIST : {
         'easy': [1, 3],
         'medium': [4, 6],
         'hard': [6, 0]
@@ -40,9 +40,9 @@ target_class_dict = {
 
 random_group_size_dict = {
     TYPE_FMNIST : {
-        1: [13, 10, 11, 11, 7, 9, 8, 6, 12, 13],
-        2: [10, 13, 8, 14, 6, 10, 11, 6, 12, 10],
-        3: [14, 11, 12, 6, 6, 14, 6, 10, 10, 11],
+        1: [13, 10, 11, 7, 11, 8, 9, 6, 12, 13],
+        2: [10, 13, 8, 6, 10, 14, 11, 6, 12, 10],
+        3: [14, 11, 6, 6, 12, 6, 14, 10, 10, 11],
     },
     TYPE_MNIST : {
         1: [13, 10, 11, 11, 7, 9, 8, 6, 12, 13],

@@ -15,11 +15,11 @@ aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold', 'our_aggr', 'afa']
 aggregation_methods: 'mean'
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
-attack_methods: 'server_imitation_attack'
+attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 25
+no_models: 100
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: true
@@ -54,7 +54,7 @@ src_grp_mal: 4
 skip_iteration_in_tlf: false
 adaptive_grad_attack: False
 load_data: 1
-new_adaptive_attack: true
+new_adaptive_attack: false
 
 
 afa_alpha_0: 3
