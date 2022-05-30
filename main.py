@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
-        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA, config.ATTACK_DBA]:
             # adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
             # adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
             # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
@@ -245,7 +245,7 @@ if __name__ == '__main__':
         if len(csv_record.scale_temp_one_row)>0:
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
 
-        if helper.params['is_poison']:
+        if helper.params['is_poison'] or True:
             if helper.params['attack_methods'] == config.ATTACK_DBA:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
                                                                                         epoch=temp_global_epoch,

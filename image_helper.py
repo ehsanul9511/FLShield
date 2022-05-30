@@ -466,7 +466,7 @@ class ImageHelper(Helper):
             self.test_data = self.get_test()
             self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
 
-            if 'save_data' in self.params.keys():
+            if 'save_data' in self.params.keys() and False:
                 if not os.path.isdir(f'./saved_data/{self.params["type"]}'):
                     os.mkdir(f'./saved_data/{self.params["type"]}')
                 if os.path.isdir(f'./saved_data/{self.params["type"]}/{self.params["save_data"]}'):

@@ -46,7 +46,7 @@ def save_result_csv(epoch, is_posion,folder_path):
         _writer.writerows(scale_result)
         _csvFile.close()
 
-    if is_posion:
+    if is_posion or True:
         test_csvFile = open(f'{folder_path}/posiontest_result.csv', "w")
         test_writer = csv.writer(test_csvFile)
         test_writer.writerow(test_fileHeader)

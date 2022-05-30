@@ -65,10 +65,17 @@ class Helper:
 
         self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
-        if 'load_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
-            self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/distrib_var_{self.params["load_data"]}'
-            if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
-                self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/new_adaptive_attack_alpha_{self.params["alpha_loss"]}/distrib_var_{self.params["load_data"]}'
+        if 'save_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
+            # self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
+            # if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
+            #     self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/new_adaptive_attack_alpha_{self.params["alpha_loss"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
+            if self.params['is_poison']:
+                self.folder_path = f'outputs/{self.name}_{self.params["attack_methods"]}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
+                if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
+                    self.folder_path = f'outputs/{self.name}_{self.params["attack_methods"]}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
+            else:
+                self.folder_path = f'outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
+
         else:
             self.folder_path = f'saved_models/model_{self.name}_{current_time}'
         # try:
@@ -76,7 +83,7 @@ class Helper:
         # except FileExistsError:
         #     logger.info('Folder already exists')
         if not os.path.exists(self.folder_path):
-            os.makedirs(self.folder_path)
+            os.mkdir(self.folder_path)
         else:
             shutil.rmtree(self.folder_path)
             os.makedirs(self.folder_path)
