@@ -53,8 +53,13 @@ number_of_adversary_server_imitation_attack: 40
 src_grp_mal: 1
 skip_iteration_in_tlf: false
 adaptive_grad_attack: False
+<<<<<<< HEAD
 save_data: 1
 new_adaptive_attack: false
+=======
+load_data: 1
+new_adaptive_attack: true
+>>>>>>> 60b7524630acbfd5cffed60dc3712e85588155a7
 
 
 afa_alpha_0: 3
