@@ -1,3 +1,4 @@
+from sympy import evaluate
 import utils.csv_record as csv_record
 import torch
 import torch.nn as nn
@@ -30,6 +31,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
 
     for model_id in range(helper.params['no_models']):
         epochs_local_update_list = []
+        epochs_local_update_list_for_accumulator = []
         last_local_model = dict()
         client_grad = [] # only works for aggr_epoch_interval=1
 
@@ -150,7 +152,10 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         train_data_iterator = data_iterator
                     for batch_id, batch in enumerate(train_data_iterator):
                         if helper.params['attack_methods'] == config.ATTACK_DBA:
-                            data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
+                            if 'scaling_attack' in helper.params.keys() and helper.params['scaling_attack']:
+                                data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=-1, evaluation=False)
+                            else:
+                                data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
                         elif helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
                             data, targets, poison_num = helper.get_poison_batch_for_targeted_label_flip(batch)
                         poison_optimizer.zero_grad()
@@ -294,6 +299,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                             [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                     clip_rate = helper.params['scale_weights_poison']
+                    if 'scaling_attack' in helper.params.keys() and helper.params['scaling_attack']:
+                        clip_rate = helper.clip_rate
                     main_logger_info(f"Scaling by  {clip_rate}")
                     for key, value in model.state_dict().items():
                         target_value  = last_local_model[key]
@@ -353,7 +360,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         pred = output.data.max(1)[1]  # get the index of the max log-probability
                         correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
 
-                        if helper.params["vis_train_batch_loss"]:
+                        if helper.params["vis_train_batch_loss"] and False:
                             cur_loss = loss.data
                             temp_data_len = len(data_iterator)
                             model.train_batch_vis(vis=main.vis,
@@ -363,7 +370,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                                   loss=cur_loss,
                                                   eid=helper.params['environment_name'],
                                                   name=str(agent_name_key) , win='train_batch_loss', is_poisoned=False)
-                        if helper.params["batch_track_distance"]:
+                        if helper.params["batch_track_distance"] and False:
                             # we can calculate distance to this model now
                             temp_data_len = len(data_iterator)
                             distance_to_global_model = helper.model_dist_norm(model, target_params_variables)
@@ -384,13 +391,13 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     csv_record.train_result.append([agent_name_key, temp_local_epoch,
                                                     epoch, internal_epoch, total_l.item(), acc, correct, dataset_size])
 
-                    if helper.params['vis_train']:
+                    if helper.params['vis_train'] and False:
                         model.train_vis(main.vis, temp_local_epoch,
                                         acc, loss=total_l, eid=helper.params['environment_name'], is_poisoned=False,
                                         name=str(agent_name_key))
                     num_samples_dict[agent_name_key] = dataset_size
 
-                    if helper.params["batch_track_distance"]:
+                    if helper.params["batch_track_distance"] and False:
                         main_logger_info(
                             f'MODEL {model_id}. P-norm is {helper.model_global_norm(model):.4f}. '
                             f'Distance to the global model: {dis2global_list}. ')
@@ -422,7 +429,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                 #  test on local triggers
-                if agent_name_key in helper.adversarial_namelist:
+                if agent_name_key in helper.adversarial_namelist and False:
                     if helper.params['vis_trigger_split_test']:
                         model.trigger_agent_test_vis(vis=main.vis, epoch=epoch, acc=epoch_acc, loss=None,
                                                      eid=helper.params['environment_name'],
@@ -446,13 +453,15 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 last_local_model[name] = copy.deepcopy(data)
 
             # if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
-            if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
-                epochs_local_update_list.append(client_grad)
-            else:
-                epochs_local_update_list.append(local_model_update_dict)
+            # if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+            #     epochs_local_update_list.append(client_grad)
+            # else:
+            #     epochs_local_update_list.append(local_model_update_dict)
+            epochs_local_update_list.append(client_grad)
+            epochs_local_update_list_for_accumulator.append(local_model_update_dict)
         
         helper.local_models[agent_name_key] = model
         # main.logger.info(f'{agent_name_key} model updated.')
-        epochs_submit_update_dict[agent_name_key] = epochs_local_update_list
+        epochs_submit_update_dict[agent_name_key] = (epochs_local_update_list, epochs_local_update_list_for_accumulator)
 
     return epochs_submit_update_dict, num_samples_dict

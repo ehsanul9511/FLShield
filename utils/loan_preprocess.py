@@ -53,19 +53,26 @@ for i in range(len(columns)):
             list_1.append(columns[i])
 state_set = list(set(df.loc[:,'addr_state']))
 
-save_dirs = '../data/loan/'
+indices = []
+ls_vals = df['loan_status'].unique().tolist()
+for i in range(len(ls_vals)):
+    indices.append(df.index[df['loan_status'] == ls_vals[i]])
 
-import os
-if not os.path.exists(save_dirs):
-    os.makedirs(save_dirs)
+print(indices)
 
-for j in range(len(state_set)):
-    print('saving: ', state_set[j])
-    data_new = df.loc[df['addr_state']== state_set[j]].drop(['addr_state'], axis=1)
-    with open(save_dirs+'/loan_'+ str(state_set[j]) + '.csv', 'w', newline='',encoding='utf-8') as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(data_new.columns)
-        for i in range(data_new.shape[0]):
-            csv_writer.writerow(data_new.iloc[[i][0]])
+# save_dirs = '../data/loan/'
 
-print('done')
+# import os
+# if not os.path.exists(save_dirs):
+#     os.makedirs(save_dirs)
+
+# for j in range(len(state_set)):
+#     print('saving: ', state_set[j])
+#     data_new = df.loc[df['addr_state']== state_set[j]].drop(['addr_state'], axis=1)
+#     with open(save_dirs+'/loan_'+ str(state_set[j]) + '.csv', 'w', newline='',encoding='utf-8') as csv_file:
+#         csv_writer = csv.writer(csv_file)
+#         csv_writer.writerow(data_new.columns)
+#         for i in range(data_new.shape[0]):
+#             csv_writer.writerow(data_new.iloc[[i][0]])
+
+# print('done')

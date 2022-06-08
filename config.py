@@ -36,6 +36,11 @@ target_class_dict = {
         'medium': [5, 3],
         'hard': [5, 3]
     },
+    TYPE_LOAN : {
+        'easy': [1, 2],
+        'medium': [1, 0],
+        'hard': [5, 1]
+    },
 }
 
 random_group_size_dict = {

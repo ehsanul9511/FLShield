@@ -7,7 +7,7 @@ poison_lr: 0.05
 momentum: 0.9
 decay: 0.0005
 batch_size: 64
-epochs: 300
+epochs: 1000
 internal_epochs: 2
 internal_poison_epochs: 6
 internal_poison_clean_epochs: 0
@@ -22,12 +22,12 @@ no_models: 10
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: false # fix adversary in their poison epochs
-is_poison: true
+is_poison: false
 
 baseline: false
 scale_weights_poison: 100
 eta: 0.1
-sampling_dirichlet: true
+sampling_dirichlet: false
 dirichlet_alpha: 0.5
 poison_label_swap: 2
 # distributed attackers: (training img num : 526 - 527 - 496 - 546)
@@ -62,11 +62,12 @@ trigger_num: 4
 environment_name: cifar # visdom environment for visualization
 
 save_model: false
-save_on_epochs: [250,300,350,450,550,600]
+# save_on_epochs: [200,250,300,350,450,550,600]
+save_on_epochs: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
 # pretrained clean model:
 resumed_model: true
-resumed_model_name: cifar_pretrain/model_last.pt.tar.epoch_200
+resumed_model_name: pre-trained/cifar.model_last.pt.tar.epoch_100
 
 vis_train: false
 vis_train_batch_loss: false

@@ -45,7 +45,7 @@ def Mytest(helper, epoch,
                      'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
                                                         total_l, correct, dataset_size,
                                                         acc))
-    if visualize: # loss =total_l
+    if visualize and False: # loss =total_l
         model.test_vis(vis=main.vis, epoch=epoch, acc=acc, loss=None,
                        eid=helper.params['environment_name'],
                        agent_name_key=str(agent_name_key))
@@ -81,7 +81,9 @@ def Mytest_poison_label_flip(helper, epoch,
             state_helper = helper.allStateHelperList[i]
             data_iterator = state_helper.get_testloader()
             for batch_id, batch in enumerate(data_iterator):
-                if get_recall:
+                # target_class_indices = np.where(targets.cpu().data.numpy()==helper.source_class)
+                target_class_indices = np.where(batch[1].cpu().data.numpy()==helper.source_class)
+                if not get_recall:
                     for index in range(0, len(batch[1])):
                         # if batch[1][index] == helper.params['poison_label_swap']:
                         #     batch[1][index] = 8 - helper.params['poison_label_swap']
@@ -93,7 +95,6 @@ def Mytest_poison_label_flip(helper, epoch,
                                                           reduction='sum').item()  # sum up batch loss
                 pred = output.data.max(1)[1]  # get the index of the max log-probability
                 # checking attack success rate
-                target_class_indices = np.where(targets.cpu().data.numpy()==helper.target_class)
                 dataset_size += len(target_class_indices[0])
                 correct += pred.eq(targets.data.view_as(pred)).cpu().data.numpy()[target_class_indices].sum()
                 # print(target_class_indices)

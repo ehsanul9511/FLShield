@@ -4,6 +4,7 @@ from shutil import copyfile
 import math
 import shutil
 import torch
+import torch.nn as nn
 
 from torch.autograd import Variable
 import logging
@@ -28,6 +29,7 @@ from sklearn.metrics import silhouette_score
 from scipy.stats import stats
 from tqdm import tqdm
 from termcolor import colored
+from random import shuffle
 
 class Helper:
     def __init__(self, current_time, params, name):
@@ -73,6 +75,8 @@ class Helper:
                 self.folder_path = f'outputs/{self.name}_{self.params["attack_methods"]}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
                 if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
                     self.folder_path = f'outputs/{self.name}_{self.params["attack_methods"]}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
+                elif self.params['attack_methods'] == config.ATTACK_DBA and 'scaling_attack' in self.params.keys() and self.params['scaling_attack']:
+                    self.folder_path = f'outputs/{self.name}_scaling_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
             else:
                 self.folder_path = f'outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
 
@@ -275,15 +279,39 @@ class Helper:
         if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
             updates = dict()
             for i in range(0, len(state_keys)):
-                local_model_gradients = epochs_submit_update_dict[state_keys[i]][0] # agg 1 interval
+                local_model_gradients = epochs_submit_update_dict[state_keys[i]][0][0] # agg 1 interval
                 num_samples = num_samples_dict[state_keys[i]]
-                updates[state_keys[i]] = (num_samples, copy.deepcopy(local_model_gradients))
-            return None, updates
+                local_model_update_list = epochs_submit_update_dict[state_keys[i]][1]
+                update= dict()
+
+                for name, data in local_model_update_list[0].items():
+                    if not torch.is_tensor(data):
+                        # logger.info(f'name: {name}, data: {data}')
+                        data = torch.FloatTensor(data)
+                    update[name] = torch.zeros_like(data)
+
+                for j in range(0, len(local_model_update_list)):
+                    local_model_update_dict= local_model_update_list[j]
+                    for name, data in local_model_update_dict.items():
+                        if not torch.is_tensor(data):
+                            # logger.info(f'name: {name}, data: {data}')
+                            data = torch.FloatTensor(data)
+                        # weight_accumulator[name].add_(local_model_update_dict[name])
+                        # update[name].add_(local_model_update_dict[name])
+                        weight_accumulator[name].add_(data)
+                        update[name].add_(data)
+                        detached_data= data.cpu().detach().numpy()
+                        # print(detached_data.shape)
+                        detached_data=detached_data.tolist()
+                        # print(detached_data)
+                        local_model_update_dict[name]=detached_data # from gpu to cpu
+                updates[state_keys[i]] = (num_samples, copy.deepcopy(local_model_gradients), update)
+            return weight_accumulator, updates
 
         else:
             updates = dict()
             for i in range(0, len(state_keys)):
-                local_model_update_list = epochs_submit_update_dict[state_keys[i]]
+                local_model_update_list = epochs_submit_update_dict[state_keys[i]][1]
                 update= dict()
                 num_samples=num_samples_dict[state_keys[i]]
 
@@ -336,7 +364,10 @@ class Helper:
             if self.params['diff_privacy']:
                 update_per_layer.add_(self.dp_noise(data, self.params['sigma']))
 
-            data.add_(update_per_layer)
+            try:
+                data.add_(update_per_layer)
+            except:
+                data.add_(update_per_layer.to(data.dtype))
         return True
 
     def add_noise(self, noise_level):
@@ -346,8 +377,10 @@ class Helper:
         for name, data in self.target_model.state_dict().items():
             if self.params.get('tied', False) and name == 'decoder.weight':
                 continue
-
-            data.add_(self.dp_noise(data, noise_level))
+            try:
+                data.add_(self.dp_noise(data, noise_level))
+            except:
+                data.add_(0)
         return True
 
     def cos_calc_btn_grads(self, l1, l2):
@@ -391,7 +424,7 @@ class Helper:
         # return np.sum(euclidean_distances(cluster, [candidate]))/(len(cluster)-1)
         return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
     
-    def get_optimal_k_for_clustering(self, grads):
+    def get_optimal_k_for_clustering(self, grads, clustering_params='grads'):
         coses = []
         nets = grads
         # nets = [grad.numpy() for grad in grads]
@@ -407,14 +440,18 @@ class Helper:
         # logger.info(f'coses: {coses}')
         
         sil= []
-        for k in range(2, min(len(nets), 15)+1):
+        if clustering_params=='grads':
+            minval = 2
+        else:
+            minval = 9
+        for k in range(minval, min(len(nets), 15)):
             clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
             labels = clustering.labels_
-            print(labels)
+            # print(labels)
             sil.append(silhouette_score(coses, labels, metric='precomputed'))
         # print(sil)
-        logger.info(f'Silhouette scores: {sil}')
-        return sil.index(max(sil))+2, coses
+        # logger.info(f'Silhouette scores: {sil}')
+        return sil.index(max(sil))+minval, coses
 
     def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
         # nets = [grad.numpy() for grad in grads]
@@ -426,6 +463,9 @@ class Helper:
             X = nets
 
         if clustering_method == 'Spectral':
+            k, coses = self.get_optimal_k_for_clustering(X, clustering_params)
+            if self.params['type'] != config.TYPE_LOAN:
+                k = 10
             clustering = SpectralClustering(n_clusters=k, affinity='cosine').fit(X)
         elif clustering_method == 'Agglomerative':
             k, coses = self.get_optimal_k_for_clustering(grads)
@@ -466,6 +506,45 @@ class Helper:
             print('clusters ', clusters)
 
         return clustering.labels_, clusters
+
+    def validation_test_for_loan(self, network, test_loader, is_poisonous=False, adv_index=-1, tqdm_disable=True):
+        network.eval()
+        correct = 0
+        correct_by_class = {}
+
+        dataset_size_by_classes = {}
+        for cl in range(9):
+            dataset_size_by_classes[cl] = 0
+            correct_by_class[cl] = 0
+
+        with torch.no_grad():
+            for batch_id, batch in enumerate(test_loader):
+                if is_poisonous:
+                    for index in range(0, len(batch[1])):
+                        if batch[1][index] == self.source_class:
+                            batch[1][index] = self.target_class
+                data, targets = self.allStateHelperList[adv_index].get_batch(test_loader, batch, evaluation=True)
+                output = network(data)
+                # total_loss += nn.functional.cross_entropy(output, targets,
+                #                                           reduction='sum').item()  # sum up batch loss
+                pred = output.data.max(1)[1]  # get the index of the max log-probability
+                correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
+                # checking attack success rate
+                for cl in range(9):
+                    class_indices = np.where(targets.cpu().data.numpy()==cl)
+                    dataset_size_by_classes[cl] += len(class_indices[0])
+                    correct_by_class[cl] += pred.eq(targets.data.view_as(pred)).cpu().data.numpy()[class_indices].sum()
+
+            for cl in range(9):
+                if dataset_size_by_classes[cl] == 0:
+                    correct_by_class[cl] = 100. * correct
+
+            for class_label in dataset_size_by_classes.keys():
+                if dataset_size_by_classes[class_label] != 0:
+                    correct_by_class[class_label] = 100. * correct_by_class[class_label]/ dataset_size_by_classes[class_label]
+                    correct_by_class[class_label] = correct_by_class[class_label].item()
+            # print(correct_by_class)
+        return 100. * correct / len(test_loader.dataset), correct_by_class        
 
     def validation_test(self, network, test_loader, is_poisonous=False, adv_index=-1, tqdm_disable=True):
         network.eval()
@@ -516,17 +595,318 @@ class Helper:
 
     def print_util(self, a, b):
         return str(a) + ': ' + str(b)
-    
-    def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
+
+    def balanced_validation_test(self, model, data_iterator, is_poisonous):
+        if self.params['type'] == config.TYPE_LOAN:
+            num_of_classes = 9
+        else:
+            num_of_classes = 10
+        model.eval()
+        balanced_data = []
+        balanced_data_dict = {}
+        correct_by_class = []
+        correct = 0.
+        loss = 0.
+        # count_by_class_dict = {}
+        for i in range(num_of_classes):
+            balanced_data_dict[i] = 0
+            correct_by_class.append(0)
+        full_dataset = data_iterator.dataset
+        shuffle(full_dataset)
+        full_dataset = full_dataset[:100]
+        for (x, y) in full_dataset:
+            # if balanced_data_dict[y] < 10 and y != helper.source_class:
+            # if balanced_data_dict[y] < 10:
+            # if balanced_data_dict[y] < min_samples_in_a_class:
+            balanced_data_dict[y] += 1
+            balanced_data.append((x, y))
+        balanced_data_iterator = torch.utils.data.DataLoader(balanced_data, batch_size=100, shuffle=True)
+
+        with torch.no_grad():
+            for data, target in balanced_data_iterator:
+                class_indices = []
+                for cl in range(num_of_classes):
+                    class_indices.append(np.where(target.cpu().data.numpy()==cl))
+                if is_poisonous:
+                    data, target, poison_num = self.get_poison_batch((data, target), -1)
+                else:
+                    data, target = self.get_batch(None, (data, target))
+                output = model(data)
+                # loss_func=torch.nn.CrossEntropyLoss()
+                loss += torch.nn.functional.cross_entropy(output, target, reduction='sum').item()  # sum up batch loss
+                pred = output.data.max(1, keepdim=True)[1]
+                correct += pred.eq(target.data.view_as(pred)).sum()
+
+                for cl in range(num_of_classes):
+                    correct_by_class[cl] += pred.eq(target.data.view_as(pred)).cpu().data.numpy()[class_indices[cl]].sum()
+
+
+            for class_label in balanced_data_dict.keys():
+                if balanced_data_dict[class_label] != 0:
+                    correct_by_class[class_label] = correct_by_class[class_label]/ balanced_data_dict[class_label]
+                    correct_by_class[class_label] = correct_by_class[class_label].item()
+                else:
+                    correct_by_class[class_label] = correct/100.
+        return correct, correct_by_class, loss
+
+
+    def combined_clustering_guided_aggregation_v2(self, target_model, updates, epoch):
+        start_epoch = self.start_epoch
+        if epoch < start_epoch:
+            self.fedavg(target_model, updates)
+            return
         start_time = time.time()
         t = time.time()
         logger.info(f'Started clustering guided aggregation')
         client_grads = []
         alphas = []
         names = []
+        delta_models = []
         for name, data in updates.items():
             client_grads.append(data[1])  # gradient
             alphas.append(data[0])  # num_samples
+            delta_models.append(data[2])
+            names.append(name)
+        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
+
+        if self.params['no_models'] < 10:
+            self.clusters_agg = [[i] for i in range(self.params['no_models'])]
+        else:
+            _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
+        
+        logger.info(f'Agglomerative Clustering: Time: {time.time() - t}')
+        t = time.time()
+
+        clusters_agg = []
+        for clstr in self.clusters_agg:
+            clstr = [names[c] for c in clstr]
+            clusters_agg.append(clstr)
+
+        val_scores_by_cluster = []
+        loss_by_cluster = []
+
+        for idx, cluster in enumerate(clusters_agg):
+            if len(cluster) == 0:
+                continue
+            if len(cluster) != 1:
+                agg_model = self.new_model()
+                agg_model.copy_params(self.target_model.state_dict())
+
+                cluster_grads = []
+                for iidx, name in enumerate(names):
+                    if name in cluster:
+                        cluster_grads.append(client_grads[iidx])
+                
+                wv = 1/len(cluster)
+                logger.info(f'wv: {wv}')
+
+                agg_grads = []
+                # Iterate through each layer
+                for i in range(len(cluster_grads[0])):
+                    # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+                    temp = wv * cluster_grads[0][i].cpu().clone()
+                    # Aggregate gradients for a layer
+                    for c, client_grad in enumerate(cluster_grads):
+                        if c == 0:
+                            continue
+                        temp += wv * client_grad[i].cpu()
+                    agg_grads.append(temp)
+
+                agg_model.train()
+                # train and update
+                optimizer = torch.optim.SGD(agg_model.parameters(), lr=1,
+                                            momentum=self.params['momentum'],
+                                            weight_decay=self.params['decay'])
+
+                optimizer.zero_grad()
+                for i, (name, params) in enumerate(agg_model.named_parameters()):
+                    agg_grads[i]=agg_grads[i] * self.params["eta"]
+                    if params.requires_grad:
+                        params.grad = agg_grads[i].to(config.device)
+                optimizer.step()
+            else:
+                agg_model = self.local_models[cluster[0]]
+
+            validators = np.random.choice(np.arange(len(self.participants_list)), 15)
+
+            val_vectors = []
+            losses = []
+
+            for val_idx in validators:
+                if self.params['attack_methods'] == config.ATTACK_SIA:
+                    if val_idx in self.adversarial_namelist:
+                        adv_list = np.array(self.adversarial_namelist)
+                        if self.params['type'] == config.TYPE_LOAN:
+                            val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
+                        else:
+                            _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
+                    else:
+                        if self.params['type'] == config.TYPE_LOAN:
+                            val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
+                        else:
+                            _, val_test_loader = self.train_data[val_idx]
+                else:
+                    if self.params['type'] == config.TYPE_LOAN:
+                        val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+                    else:
+                        _, val_test_loader = self.train_data[val_idx]
+                if self.participants_list[val_idx] in self.adversarial_namelist:
+                    is_poisonous_validator = False
+                else:
+                    is_poisonous_validator = True
+                if self.params['type'] == config.TYPE_LOAN:
+                    val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
+                else:
+                    val_acc, val_acc_by_class, loss = self.balanced_validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator)
+                    
+                val_vectors.append(val_acc_by_class)
+                losses.append(loss)
+
+            # logger.info(f'Validation scores for cluster {idx}: {val_vectors}')
+            # logger.info(f'Loss for cluster {idx}: {losses}')
+
+            val_vector = np.median(val_vectors, axis=0)
+
+            # mal_count = 0
+            
+            # for client_id in cluster:
+            #     if names[client_id] in self.adversarial_namelist:
+            #         mal_count += 1
+            # mal_count = mal_count/len(cluster)
+
+            # logger.info(f'{clusters_agg[idx]}, {mal_count}, {val_vector}')
+
+            val_scores_by_cluster.append(val_vector)
+            loss_by_cluster.append(losses)
+
+        variation_by_classes = np.std(val_scores_by_cluster, axis=0)
+        attack_classes = np.argsort(variation_by_classes)[-3:]
+        logger.info(f'Attack class: {attack_classes}')
+
+        for v in range(len(val_scores_by_cluster)):
+            for cl in range(len(variation_by_classes)):
+                val_scores_by_cluster[v][cl] = val_scores_by_cluster[v][cl] * variation_by_classes[cl]
+            
+        
+        wv = np.ones(len(names), dtype=np.float32)
+
+        summed_val_score = np.sum(val_scores_by_cluster, axis=1)
+        # max_loss_score = np.max(loss_by_cluster, axis=1)
+        loss_by_cluster = [np.sort(loss) for loss in loss_by_cluster]
+        loss_by_cluster = [loss[int(len(loss)/3):] for loss in loss_by_cluster]
+        max_loss_score = np.median(loss_by_cluster, axis=1)
+        median_loss_score = np.median(max_loss_score)
+        max_loss_score = max_loss_score / median_loss_score
+        
+        
+        zscore_by_clusters = stats.zscore(max_loss_score, axis=0)
+        zscore_by_clusters[np.isnan(zscore_by_clusters)] = 0
+
+        for cl_num, cluster in enumerate(self.clusters_agg):
+            mal_count = 0
+            for client_id in cluster:
+                if names[client_id] in self.adversarial_namelist:
+                    mal_count += 1
+            mal_count = mal_count/len(cluster)
+
+            logger.info(f'Report for cluster {cl_num}: Mal_percnt: {mal_count}, Zscore: {np.mean(zscore_by_clusters[cl_num])}, Loss: {max_loss_score[cl_num]}')
+            # logger.info(f'val vector: {val_scores_by_cluster[cl_num]}, sum: {summed_val_score[cl_num]}')
+            if np.mean(zscore_by_clusters[cl_num]) >= 1:
+                for client_id in cluster:
+                    wv[client_id] = 0
+            else:
+                for client_id in cluster:
+                    wv[client_id] = median_loss_score/max_loss_score[cl_num]
+
+        norms = [np.linalg.norm(grad) for grad in grads]
+        norm_median = np.median(norms)
+        clipping_weights = [min(norm_median/norm, 1) for norm in norms]
+        alphas = alphas/np.sum(alphas)
+        wv = [w*c*a for w,c,a in zip(wv, clipping_weights, alphas)]
+        if np.sum(wv) == 0:
+            wv = np.ones(len(wv))
+        wv = wv/np.sum(wv)
+
+        # logger.info(f'clipping_weights: {clipping_weights}')
+        # logger.info(f'adversarial clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.adversarial_namelist]}')
+        # logger.info(f'benign clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.benign_namelist]}')
+        # wv_print_str= '['
+        # for idx, w in enumerate(wv):
+        #     wv_print_str += ' '
+        #     if names[idx] in self.adversarial_namelist:
+        #         wv_print_str += colored(str(w), 'blue')
+        #     else:
+        #         wv_print_str += str(w)
+        # wv_print_str += ']'
+        # print(f'wv: {wv_print_str}')
+
+        # agg_grads = []
+        # # Iterate through each layer
+        # for i in range(len(client_grads[0])):
+        #     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+        #     temp = wv[0] * client_grads[0][i].cpu().clone()
+        #     # Aggregate gradients for a layer
+        #     for c, client_grad in enumerate(client_grads):
+        #         if c == 0:
+        #             continue
+        #         temp += wv[c] * client_grad[i].cpu()
+        #     # temp = temp / len(client_grads)
+        #     agg_grads.append(temp)
+
+        # target_model.train()
+        # # train and update
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+        #                             momentum=self.params['momentum'],
+        #                             weight_decay=self.params['decay'])
+
+        # optimizer.zero_grad()
+        # for i, (name, params) in enumerate(target_model.named_parameters()):
+        #     agg_grads[i]=agg_grads[i]
+        #     if params.requires_grad:
+        #         params.grad = agg_grads[i].to(config.device)
+        # optimizer.step()
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+
+        for name, data in target_model.state_dict().items():
+            update_per_layer = aggregate_weights[name] * (self.params["eta"])
+            try:
+                data.add_(update_per_layer)
+            except:
+                # logger.info(f'layer name: {name}')
+                # logger.info(f'data: {data}')
+                # logger.info(f'update_per_layer: {update_per_layer}')
+                data.add_(update_per_layer.to(data.dtype))
+                # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
+
+        if self.params['type'] != config.TYPE_LOAN:
+            noise_level = self.params['sigma'] * norm_median
+            self.add_noise(noise_level=noise_level)
+        logger.info(f'Aggregation Done: Time {time.time() - t}')
+        t = time.time()
+        # logger.info(f'wv: {wv}')
+        # logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
+        # logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
+        
+        return
+
+    
+    def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
+        start_epoch = self.start_epoch
+        if epoch < start_epoch:
+            self.fedavg(target_model, updates)
+            return
+        start_time = time.time()
+        t = time.time()
+        logger.info(f'Started clustering guided aggregation')
+        client_grads = []
+        alphas = []
+        names = []
+        delta_models = []
+        for name, data in updates.items():
+            client_grads.append(data[1])  # gradient
+            alphas.append(data[0])  # num_samples
+            delta_models.append(data[2])
             names.append(name)
 
         # grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
@@ -535,7 +915,7 @@ class Helper:
         t = time.time()
         # grads = client_grads
         print(names)
-        if epoch==1:
+        if epoch==start_epoch:
             self.validator_trust_scores = [1. for _ in range(self.params['number_of_total_participants'])]
             _, clusters = self.cluster_grads(grads, clustering_params='lsrs')
             self.clusters = clusters
@@ -577,7 +957,7 @@ class Helper:
             for clstr in self.clusters_agg:
                 clstr = [names[c] for c in clstr]
                 clusters_agg.append(clstr)
-            print(clusters_agg)
+
             nets = self.local_models
             all_val_acc_list_dict = {}
             print(f'Validating all clients at epoch {epoch}')
@@ -669,22 +1049,40 @@ class Helper:
                     # no validation data exchange between malicious clients
                     # _, _, val_test_loader = train_loaders[epoch][val_idx]
                     # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
-                    if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+                    # if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+                    if self.params['attack_methods'] == config.ATTACK_SIA:
                         if val_idx in self.adversarial_namelist:
                             adv_list = np.array(self.adversarial_namelist)
-                            _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
+                            if self.params['type'] == config.TYPE_LOAN:
+                                # val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+                                val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
+                            else:
+                                _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
+                        else:
+                            if self.params['type'] == config.TYPE_LOAN:
+                                # val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+                                val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
+                            else:
+                                _, val_test_loader = self.train_data[val_idx]
+                    else:
+                        if self.params['type'] == config.TYPE_LOAN:
+                            val_test_loader = self.allStateHelperList[val_idx].get_testloader()
                         else:
                             _, val_test_loader = self.train_data[val_idx]
-                    else:
-                        _, val_test_loader = self.train_data[val_idx]
                     if val_idx in self.adversarial_namelist:
                         is_poisonous_validator = True
                     else:
                         is_poisonous_validator = False
-                    val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
+                    if self.params['type'] == config.TYPE_LOAN:
+                        val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
+                    else:
+                        val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
                     # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}')
                     # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}, val_acc_by_class: {val_acc_by_class}')
-                    val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
+                    if self.params['type'] == config.TYPE_LOAN:
+                        val_acc_list.append((val_idx, -1, val_acc, val_acc_by_class))
+                    else:
+                        val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
                 
                 for client in cluster:
                     all_val_acc_list_dict[client] = val_acc_list
@@ -735,8 +1133,15 @@ class Helper:
 
             new_val_score_by_group_dict = {}
             for grp_no in all_grp_nos:
+                if len(all_grp_nos) == 1:
+                    new_val_score_by_group_dict[grp_no] = (val_score_by_group_dict[grp_no][0][0] + val_score_by_group_dict[grp_no][1][0])/2
+                    break
                 mean_by_class = {}
-                for c in range(10):
+                if self.params['type'] == config.TYPE_LOAN:
+                    cl_count = 9
+                else:
+                    cl_count = 10
+                for c in range(cl_count):
                     mean_by_class[c] = 0.
                     for group_no in val_score_by_group_dict.keys():
                         if group_no != grp_no:
@@ -744,13 +1149,8 @@ class Helper:
                                 mean_by_class[c] += val_score_by_group_dict[group_no][grp_mm][1][c]
                     mean_by_class[c] /= ((len(val_score_by_group_dict.keys())-1) * 2)
 
-                # total_acc = 0.
-                # for group_no in all_grp_nos:
-                #     for (val_acc, val_acc_report) in val_score_by_group_dict[group_no]:
-                #         total_acc += val_acc_report[target_class]
-
-                min_diff_by_class = [0. for c in range(10)]
-                for c in range(10):
+                min_diff_by_class = [0. for c in range(cl_count)]
+                for c in range(cl_count):
                     min_diff_by_class[c] = np.min([np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][0][1][c]), np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][1][1][c])])
                 
                 target_class = np.argmax(min_diff_by_class)
@@ -795,7 +1195,7 @@ class Helper:
         if epoch<1:
             self.global_net.set_param_to_zero()
             self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
-        elif epoch == 1:
+        elif epoch == start_epoch:
 
             self.all_val_score = all_val_score
             self.all_val_score_min_grp = all_val_score_min_grp
@@ -896,6 +1296,15 @@ class Helper:
                 for client_id in cluster:
                     wv[client_id] = 0
 
+        
+        # norms = [torch.linalg.norm(grad).item() for grad in grads]
+        # norms = [np.linalg.norm(grad) for grad in grads]
+        # norm_median = np.median(norms)
+        # clipping_weights = [min(norm_median/norm, 1) for norm in norms]
+        # alphas = alphas/np.sum(alphas)
+        # wv = [w*c*a for w,c,a in zip(wv, clipping_weights, alphas)]
+        wv = wv/np.sum(wv)
+
         logger.info(f'clipping_weights: {clipping_weights}')
         logger.info(f'adversarial clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.adversarial_namelist]}')
         logger.info(f'benign clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.benign_namelist]}')
@@ -909,35 +1318,49 @@ class Helper:
         wv_print_str += ']'
         print(f'wv: {wv_print_str}')
 
-        agg_grads = []
-        # Iterate through each layer
-        for i in range(len(client_grads[0])):
-            # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * client_grads[0][i].cpu().clone()
-            # Aggregate gradients for a layer
-            for c, client_grad in enumerate(client_grads):
-                if c == 0:
-                    continue
-                temp += wv[c] * client_grad[i].cpu()
-            # temp = temp / len(client_grads)
-            agg_grads.append(temp)
+        # agg_grads = []
+        # # Iterate through each layer
+        # for i in range(len(client_grads[0])):
+        #     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+        #     temp = wv[0] * client_grads[0][i].cpu().clone()
+        #     # Aggregate gradients for a layer
+        #     for c, client_grad in enumerate(client_grads):
+        #         if c == 0:
+        #             continue
+        #         temp += wv[c] * client_grad[i].cpu()
+        #     # temp = temp / len(client_grads)
+        #     agg_grads.append(temp)
 
-        target_model.train()
-        # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-                                    momentum=self.params['momentum'],
-                                    weight_decay=self.params['decay'])
+        # logger.info(f'agg_grads: {self.flatten_gradient(agg_grads)}')
 
-        optimizer.zero_grad()
-        for i, (name, params) in enumerate(target_model.named_parameters()):
-            agg_grads[i]=agg_grads[i] * self.params["eta"]
-            if params.requires_grad:
-                params.grad = agg_grads[i].to(config.device)
-        optimizer.step()
+        # target_model.train()
+        # # train and update
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+        #                             momentum=self.params['momentum'],
+        #                             weight_decay=self.params['decay'])
 
-        # if self.params['attack_methods'] == config.ATTACK_DBA:
-        noise_level = self.params['sigma'] * norm_median
-        self.add_noise(noise_level=noise_level)
+        # optimizer.zero_grad()
+        # for i, (name, params) in enumerate(target_model.named_parameters()):
+        #     agg_grads[i]=agg_grads[i]
+        #     if params.requires_grad:
+        #         params.grad = agg_grads[i].to(config.device)
+        # optimizer.step()
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+
+        for name, data in target_model.state_dict().items():
+            update_per_layer = aggregate_weights[name] * (self.params["eta"])
+            try:
+                data.add_(update_per_layer)
+            except:
+                # logger.info(f'layer name: {name}')
+                # logger.info(f'data: {data}')
+                # logger.info(f'update_per_layer: {update_per_layer}')
+                data.add_(update_per_layer.to(data.dtype))
+                # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
+
+        # if self.params['type'] != config.TYPE_LOAN:
+        #     noise_level = self.params['sigma'] * norm_median
+        #     self.add_noise(noise_level=noise_level)
         logger.info(f'Aggregation Done: Time {time.time() - t}')
         t = time.time()
         logger.info(f'wv: {wv}')
@@ -962,9 +1385,11 @@ class Helper:
         client_grads = []
         alphas = []
         names = []
+        delta_models = []
         for name, data in updates.items():
             client_grads.append(data[1])  # gradient
             alphas.append(data[0])  # num_samples
+            delta_models.append(data[2])
             names.append(name)
 
         grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
@@ -999,86 +1424,115 @@ class Helper:
         logger.info(f'wv: {wv}')
         logger.info(f'wv: {wv/sum_trust_scores}')
 
-        agg_grads = []
-        # Iterate through each layer
-        for i in range(len(client_grads[0])):
-            temp = wv[0] * clipping_coeffs[0] * client_grads[0][i].cpu().clone()
-            # Aggregate gradients for a layer
-            for c, client_grad in enumerate(client_grads[:-1]):
-                if c == 0:
-                    continue
-                temp += wv[c] * clipping_coeffs[c] * client_grad[i].cpu()
-                # print(temp)
-                # temp += wv[c]
-            temp = temp / sum_trust_scores
-            agg_grads.append(temp)
+        # agg_grads = []
+        # # Iterate through each layer
+        # for i in range(len(client_grads[0])):
+        #     temp = wv[0] * clipping_coeffs[0] * client_grads[0][i].cpu().clone()
+        #     # Aggregate gradients for a layer
+        #     for c, client_grad in enumerate(client_grads[:-1]):
+        #         if c == 0:
+        #             continue
+        #         temp += wv[c] * clipping_coeffs[c] * client_grad[i].cpu()
+        #         # print(temp)
+        #         # temp += wv[c]
+        #     temp = temp / sum_trust_scores
+        #     agg_grads.append(temp)
+
+        # logger.info(f'agg_grads: {self.flatten_gradient(agg_grads)}')
 
         wv = [wv[c] * clipping_coeffs[c]/sum_trust_scores for c in range(len(wv))]
         logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
         logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
 
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
 
-        target_model.train()
-        # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-                                    momentum=self.params['momentum'],
-                                    weight_decay=self.params['decay'])
+        for name, data in target_model.state_dict().items():
+            update_per_layer = aggregate_weights[name] * (self.params["eta"])
+            try:
+                data.add_(update_per_layer)
+            except:
+                logger.info(f'layer name: {name}')
+                logger.info(f'data: {data}')
+                logger.info(f'update_per_layer: {update_per_layer}')
+                data.add_(update_per_layer.to(data.dtype))
+                logger.info(f'after update: {update_per_layer.to(data.dtype)}')
 
-        optimizer.zero_grad()
-        # print(client_grads[0])        
-        for i, (name, params) in enumerate(target_model.named_parameters()):
-            agg_grads[i]=agg_grads[i] * self.params["eta"]
-            if params.requires_grad:
-                params.grad = agg_grads[i].to(config.device)
-        optimizer.step()
+        # target_model.train()
+        # # train and update
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+        #                             momentum=self.params['momentum'],
+        #                             weight_decay=self.params['decay'])
+
+        # optimizer.zero_grad()
+        # for i, (name, params) in enumerate(target_model.named_parameters()):
+        #     agg_grads[i]=agg_grads[i] * self.params["eta"]
+        #     if params.requires_grad:
+        #         params.grad = agg_grads[i].to(config.device)
+        # optimizer.step()
         # noise_level = self.params['sigma']
         # self.add_noise(noise_level=noise_level)
         # utils.csv_record.add_weight_result(names, wv, alpha)
         return True, names, all_cos_sims
 
     def calc_prob_for_AFA(self, participant_no):
+        if isinstance(participant_no, str):
+            participant_no = self.participants_list.index(participant_no)
         return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)
 
     def fedavg(self, target_model, updates):
         client_grads = []
         alphas = []
         names = []
+        delta_models = []
         for name, data in updates.items():
-            client_grads.append(data[1])
+            client_grads.append(data[1])  # gradient
             alphas.append(data[0])  # num_samples
+            delta_models.append(data[2])
             names.append(name)
 
         wv = np.array(alphas)/np.sum(alphas)
         logger.info(f'alphas: {alphas}')
         logger.info(f'wv: {wv}')
         self.color_print_wv(wv, names)
-        agg_grads = []
-        # Iterate through each layer
-        for i in range(len(client_grads[0])):
-            # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * client_grads[0][i].cpu().clone()
-            # Aggregate gradients for a layer
-            for c, client_grad in enumerate(client_grads):
-                if c == 0:
-                    continue
-                temp += wv[c] * client_grad[i].cpu()
-            # temp = temp / len(wv)
-            agg_grads.append(temp)
+        # agg_grads = []
+        # # Iterate through each layer
+        # for i in range(len(client_grads[0])):
+        #     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+        #     temp = wv[0] * client_grads[0][i].cpu().clone()
+        #     # Aggregate gradients for a layer
+        #     for c, client_grad in enumerate(client_grads):
+        #         if c == 0:
+        #             continue
+        #         temp += wv[c] * client_grad[i].cpu()
+        #     # temp = temp / len(wv)
+        #     agg_grads.append(temp)
 
-        target_model.train()
-        # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-                                    momentum=self.params['momentum'],
-                                    weight_decay=self.params['decay'])
+        # target_model.train()
+        # # train and update
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+        #                             momentum=self.params['momentum'],
+        #                             weight_decay=self.params['decay'])
 
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
 
-        for i, (name, params) in enumerate(target_model.named_parameters()):
-            agg_grads[i]=agg_grads[i] * self.params["eta"]
-            if params.requires_grad:
-                params.grad = agg_grads[i].to(config.device)
-        # print(self.convert_model_to_param_list(grad_state_dict))
-        optimizer.step()
+        # for i, (name, params) in enumerate(target_model.named_parameters()):
+        #     agg_grads[i]=agg_grads[i] * self.params["eta"]
+        #     if params.requires_grad:
+        #         params.grad = agg_grads[i].to(config.device)
+        # # print(self.convert_model_to_param_list(grad_state_dict))
+        # optimizer.step()
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+
+        for name, data in target_model.state_dict().items():
+            update_per_layer = aggregate_weights[name] * (self.params["eta"])
+            try:
+                data.add_(update_per_layer)
+            except:
+                # logger.info(f'layer name: {name}')
+                # logger.info(f'data: {data}')
+                # logger.info(f'update_per_layer: {update_per_layer}')
+                data.add_(update_per_layer.to(data.dtype))
+                # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
 
         return True
 
@@ -1086,10 +1540,15 @@ class Helper:
         client_grads = []
         alphas = []
         names = []
+        delta_models = []
         for name, data in updates.items():
             client_grads.append(data[1])  # gradient
             alphas.append(data[0])  # num_samples
+            delta_models.append(data[2])
             names.append(name)
+
+        names = [self.participants_list.index(name) for name in names]
+        logger.info(names)
 
         # good_set = set(self.adversarial_namelist + self.benign_namelist)
         # good_set = set(np.arange(self.params['no_models']))
@@ -1149,33 +1608,46 @@ class Helper:
         wv = [self.calc_prob_for_AFA(names[m_id]) for m_id in good_set]
         good_alphas=[alphas[m_id] for m_id in good_set]
         good_alphas = np.array(good_alphas)/np.sum(good_alphas)
-        agg_grads = []
-        # Iterate through each layer
-        for i in range(len(client_grads[0])):
-            # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            temp = wv[0] * good_alphas[0] * client_grads[0][i].cpu().clone()
-            # Aggregate gradients for a layer
-            for c, cl_id in enumerate(good_set):
-                if c == 0:
-                    continue
-                temp += wv[c] * good_alphas[c] * client_grads[cl_id][i].cpu()
-            # temp = temp / len(wv)
-            agg_grads.append(temp)
+        # agg_grads = []
+        # # Iterate through each layer
+        # for i in range(len(client_grads[0])):
+        #     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+        #     temp = wv[0] * good_alphas[0] * client_grads[0][i].cpu().clone()
+        #     # Aggregate gradients for a layer
+        #     for c, cl_id in enumerate(good_set):
+        #         if c == 0:
+        #             continue
+        #         temp += wv[c] * good_alphas[c] * client_grads[cl_id][i].cpu()
+        #     # temp = temp / len(wv)
+        #     agg_grads.append(temp)
 
-        target_model.train()
-        # train and update
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-                                    momentum=self.params['momentum'],
-                                    weight_decay=self.params['decay'])
+        # target_model.train()
+        # # train and update
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+        #                             momentum=self.params['momentum'],
+        #                             weight_decay=self.params['decay'])
 
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
 
-        for i, (name, params) in enumerate(target_model.named_parameters()):
-            agg_grads[i]=agg_grads[i] * self.params["eta"]
-            if params.requires_grad:
-                params.grad = agg_grads[i].to(config.device)
-        # print(self.convert_model_to_param_list(grad_state_dict))
-        optimizer.step()
+        # for i, (name, params) in enumerate(target_model.named_parameters()):
+        #     agg_grads[i]=agg_grads[i] * self.params["eta"]
+        #     if params.requires_grad:
+        #         params.grad = agg_grads[i].to(config.device)
+        # # print(self.convert_model_to_param_list(grad_state_dict))
+        # optimizer.step()
+
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+
+        for name, data in target_model.state_dict().items():
+            update_per_layer = aggregate_weights[name] * (self.params["eta"])
+            try:
+                data.add_(update_per_layer)
+            except:
+                # logger.info(f'layer name: {name}')
+                # logger.info(f'data: {data}')
+                # logger.info(f'update_per_layer: {update_per_layer}')
+                data.add_(update_per_layer.to(data.dtype))
+
 
         for cl_id in bad_set:
             self.bad_count[names[cl_id]] += 1
@@ -1188,9 +1660,11 @@ class Helper:
         client_grads = []
         alphas = []
         names = []
+        delta_models = []
         for name, data in updates.items():
             client_grads.append(data[1])  # gradient
             alphas.append(data[0])  # num_samples
+            delta_models.append(data[2])
             names.append(name)
         
         adver_ratio = 0
@@ -1203,25 +1677,39 @@ class Helper:
         logger.info(f'[foolsgold agg] training data poison_ratio: {adver_ratio}  data num: {alphas}')
         logger.info(f'[foolsgold agg] considering poison per batch poison_fraction: {poison_fraction}')
 
-        target_model.train()
-        # train and update
-        # probably need to apply a global learning rate
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=1,
-                                    momentum=self.params['momentum'],
-                                    weight_decay=self.params['decay'])
+        # target_model.train()
+        # # train and update
+        # # probably need to apply a global learning rate
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=1,
+        #                             momentum=self.params['momentum'],
+        #                             weight_decay=self.params['decay'])
 
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
         # print(client_grads[0])
         agg_grads, wv,alpha = self.fg.aggregate_gradients(client_grads,names)
-        grad_state_dict = {}
-        for i, (name, params) in enumerate(target_model.named_parameters()):
-            grad_state_dict[name] = agg_grads[i]
-            agg_grads[i]=agg_grads[i] * self.params["eta"]
-            if params.requires_grad:
-                params.grad = agg_grads[i].to(config.device)
-        # print(self.convert_model_to_param_list(grad_state_dict))
-        optimizer.step()
-        wv=wv.tolist()
+
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+
+        for name, data in target_model.state_dict().items():
+            update_per_layer = aggregate_weights[name] * (self.params["eta"])
+            try:
+                data.add_(update_per_layer)
+            except:
+                # logger.info(f'layer name: {name}')
+                # logger.info(f'data: {data}')
+                # logger.info(f'update_per_layer: {update_per_layer}')
+                data.add_(update_per_layer.to(data.dtype))
+                # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
+
+        # grad_state_dict = {}
+        # for i, (name, params) in enumerate(target_model.named_parameters()):
+        #     grad_state_dict[name] = agg_grads[i]
+        #     agg_grads[i]=agg_grads[i] * self.params["eta"]
+        #     if params.requires_grad:
+        #         params.grad = agg_grads[i].to(config.device)
+        # # print(self.convert_model_to_param_list(grad_state_dict))
+        # optimizer.step()
+        # wv=wv.tolist()
         utils.csv_record.add_weight_result(names, wv, alpha)
         return True, names, wv, alpha
 
@@ -1276,13 +1764,13 @@ class Helper:
                          (prev_obj_val - obj_val) / obj_val,
                          Helper.l2dist(median, prev_median)]
             logs.append(log_entry)
+            logger.info(f'[rfa agg] iter:  {i}, prev_obj_val: {prev_obj_val}, obj_val: {obj_val}, abs dis: { abs(prev_obj_val - obj_val)}')
+            logger.info(f'[rfa agg] iter:  {i}, weight: {weights}')
+            wv=copy.deepcopy(weights)
             if verbose:
                 logger.info(log_entry)
             if abs(prev_obj_val - obj_val) < ftol * obj_val:
                 break
-            logger.info(f'[rfa agg] iter:  {i}, prev_obj_val: {prev_obj_val}, obj_val: {obj_val}, abs dis: { abs(prev_obj_val - obj_val)}')
-            logger.info(f'[rfa agg] iter:  {i}, weight: {weights}')
-            wv=copy.deepcopy(weights)
         alphas = [Helper.l2dist(median, p) for p in points]
 
         update_norm = 0
@@ -1295,7 +1783,15 @@ class Helper:
                 update_per_layer = median[name] * (self.params["eta"])
                 if self.params['diff_privacy']:
                     update_per_layer.add_(self.dp_noise(data, self.params['sigma']))
-                data.add_(update_per_layer)
+                try:
+                    data.add_(update_per_layer)
+                except:
+                    logger.info(f'layer name: {name}')
+                    logger.info(f'data: {data}')
+                    logger.info(f'update_per_layer: {update_per_layer}')
+                    data.add_(update_per_layer.to(data.dtype))
+                    logger.info(f'after update: {update_per_layer.to(data.dtype)}')
+                # data.add_(update_per_layer)
             is_updated = True
         else:
             logger.info('\t\t\tUpdate norm = {} is too large. Update rejected'.format(update_norm))

@@ -10,22 +10,23 @@ batch_size: 64
 internal_epochs: 1
 aggr_epoch_interval: 1
 
-epochs: 70
+epochs: 200
 internal_poison_epochs: 10 #  multishot: 5 ; singleshot: 10
 poisoning_per_batch: 10
-baseline: false
+baseline: true
 eta: 0.1
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold']
-aggregation_methods: 'mean'
+aggregation_methods: 'fltrust'
 scale_weights_poison: 30
-adversary_list: [CT,MO,TN]
+# adversary_list: [CT,MO,TN]
+adversary_list: [FL, IL, NJ, PA, OH, GA, VA, NC, MI, MD, AZ, CT, MO, TN]
 #adversary_list: [MO]
 trigger_num: 3
 ##0_poison_epochs: [15]
 
-0_poison_epochs: [11]
-1_poison_epochs: [13]
-2_poison_epochs: [15]
+# 0_poison_epochs: [11]
+# 1_poison_epochs: [13]
+# 2_poison_epochs: [15]
 
 # low importance trigger
 0_poison_trigger_names: ['num_tl_120dpd_2m', 'num_tl_90g_dpd_24m']
@@ -45,10 +46,10 @@ trigger_num: 3
 #2_poison_trigger_values: [10, 30]
 
 
-#0_poison_epochs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
-#1_poison_epochs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
-#2_poison_epochs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
-#3_poison_epochs: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+0_poison_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+1_poison_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+2_poison_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
+3_poison_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99]
 
 
 geom_median_maxiter: 10
@@ -56,16 +57,16 @@ fg_use_memory: true
 #participants_namelist: [CA, NY, TX, FL, IL, NJ, PA, OH, GA, VA, NC, MI, MD, AZ]
 participants_namelist: [NJ, IL, PA, WA, CA, TX, CO, GA, VA, NY]
 #participants_namelist: [ME,RI,AK]
-no_models: 10
-number_of_total_participants: 50
+no_models: 51
+number_of_total_participants: 51
 is_random_namelist: true
-is_random_adversary: false
+is_random_adversary: true
 
 is_poison: true
 centralized_test_trigger: True
 poison_epochs: [1]
 poison_label_swap: 7
-tlf_label: 7
+tlf_label: 'medium'
 alpha_loss: 1
 s_norm: 1000000
 
@@ -118,6 +119,15 @@ poison_step_lr: true
 results_json: true
 
 attack_methods: 'targeted_label_flip'
-random_adversary_for_label_flip: false
+random_adversary_for_label_flip: True
+number_of_adversary_targeted_label_flip: 20
 speed_boost: true
+
+save_data: 1
+
+
+afa_alpha_0: 3
+afa_beta_0: 3
+afa_epsilon: 2
+afa_del_epsilon: 0.5
 

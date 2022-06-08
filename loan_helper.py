@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import Counter, OrderedDict, defaultdict
 import config
 import torch
 import torch.utils.data
@@ -82,6 +82,12 @@ class LoanHelper(Helper):
     def poison(self):
         return
 
+    def new_model(self):
+        model = LoanNet(name='Local',
+                               created_time=self.params['current_time'])
+        model=model.to(config.device)
+        return model
+
     def create_model(self):
         local_model = LoanNet(name='Local',
                                created_time=self.params['current_time'])
@@ -121,8 +127,11 @@ class LoanHelper(Helper):
         for j in range(0,len(all_userfilename_list)):
             user_filename = all_userfilename_list[j]
             state_name = user_filename[5:7]
+            self.participants_list.append(state_name)
             helper = StateHelper(params=params_loaded)
             file_path = filepath_prefix+ user_filename
+            if self.params['aggregation_methods'] == config.AGGR_FLTRUST and j == len(all_userfilename_list)-1:
+                file_path = f'{os.getcwd()}/data/loan_dump/loan_root_copy2.csv'
             helper.load_data(file_path)
             self.allStateHelperList.append(helper)
             helper.name = state_name
@@ -131,22 +140,66 @@ class LoanHelper(Helper):
                 for k in range(0,len(helper.all_dataset.data_column_name)):
                     self.feature_dict[helper.all_dataset.data_column_name[k]]=k
 
-        for j in range(0, params_loaded['number_of_total_participants']):
-            if j >= len(all_userfilename_list):
-                break
-            user_filename = all_userfilename_list[j]
-            state_name = user_filename[5:7]
-            if state_name not in self.adversarial_namelist:
-                self.benign_namelist.append(state_name)
+        if self.params['is_random_adversary']:
+            np.random.seed(42)
+            self.adversarial_namelist = np.random.choice(self.participants_list[:-1], self.params[f'number_of_adversary_{self.params["attack_methods"]}']).tolist()
 
-        if params_loaded['is_random_namelist']==False:
-            self.participants_list = params_loaded['participants_namelist']
-        else:
-            self.participants_list= self.benign_namelist+ self.adversarial_namelist
+        # logger.info(f'Participants list: {self.participants_list}')
+        # logger.info(f'Adversarial list: {self.adversarial_namelist}')
+        # for j in range(0, params_loaded['number_of_total_participants']):
+        #     if j >= len(all_userfilename_list):
+        #         break
+        #     user_filename = all_userfilename_list[j]
+        #     state_name = user_filename[5:7]
+        #     if state_name not in self.adversarial_namelist:
+        #         self.benign_namelist.append(state_name)
+        self.benign_namelist = [x for x in self.participants_list if x not in self.adversarial_namelist]
+
+        # if params_loaded['is_random_namelist']==False:
+        #     self.participants_list = params_loaded['participants_namelist']
+        # else:
+        #     self.participants_list= self.benign_namelist+ self.adversarial_namelist
 
         self.poison_epochs_by_adversary = {}
         for idx, id in enumerate(self.adversarial_namelist):
-            self.poison_epochs_by_adversary[idx] = self.params[f'{idx}_poison_epochs']
+            self.poison_epochs_by_adversary[idx] = self.params[f'{idx%3}_poison_epochs']
+
+        self.lsrs = []
+
+        for id in range(len(self.allStateHelperList)):
+            stateHelper = self.allStateHelperList[id]
+            lsr = self.get_label_skew_ratios(stateHelper.all_dataset.train_labels, id)
+            self.lsrs.append(lsr)
+
+        logger.info(f'lsrs ready: {self.lsrs}')
+
+    def get_label_skew_ratios(self, y_labels, id, num_of_classes=9):
+        dataset_classes = {}
+        # for ind, x in enumerate(dataset):
+        #     _, label = x
+        #     #if ind in self.params['poison_images'] or ind in self.params['poison_images_test']:
+        #     #    continue
+        #     if label in dataset_classes:
+        #         dataset_classes[label] += 1
+        #     else:
+        #         dataset_classes[label] = 1
+        # for key in dataset_classes.keys():
+        #     # dataset_classes[key] = dataset_classes[key] 
+
+        #     dataset_classes[key] = float("{:.2f}".format(dataset_classes[key]/len(dataset)))
+
+        dataset_dict = OrderedDict(Counter(y_labels))
+        for y in range(num_of_classes):
+            if y not in dataset_dict.keys():
+                dataset_dict[y] = 0
+        dataset_dict = OrderedDict(sorted(dataset_dict.items()))
+        # for c in range(num_of_classes):
+        #     dataset_classes.append(dataset_dict[c])
+        # dataset_classes = np.array(dataset_classes)
+        # print(dataset_classes)
+        dataset_classes = np.array(list(dataset_dict.values()))
+        dataset_classes = dataset_classes/np.sum(dataset_classes)
+        return dataset_classes
 
 
 class LoanDataset(data.Dataset):
@@ -161,6 +214,7 @@ class LoanDataset(data.Dataset):
             csv_file (string): Path to the csv file with annotations.
         """
         self.train = True
+        logger.info(f'Loading data from {csv_file}')
         self.df = pd.read_csv(csv_file)
         self.train_data = []
         self.train_labels = []

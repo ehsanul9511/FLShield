@@ -24,6 +24,7 @@ class LoanNet(SimpleNet):
         x = self.layer2(x)
         x = self.layer3(x)
         if np.isnan(np.sum(x.data.cpu().numpy())):
+            print(x)
             raise ValueError()
         return x
 

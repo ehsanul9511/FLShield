@@ -14,6 +14,8 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
     num_samples_dict=dict()
     current_number_of_adversaries = len(helper.params['adversary_list'])
 
+    helper.local_models = {}
+
     for model_id in range(helper.params['no_models']):
         epochs_local_update_list = []
         last_params_variables = dict()
@@ -37,7 +39,7 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
         if is_poison and state_key in helper.params['adversary_list']:
             for adver_index in range(0, len(helper.params['adversary_list'])):
                 if state_key == helper.params['adversary_list'][adver_index]:
-                    localmodel_poison_epochs = helper.params[str(adver_index) + '_poison_epochs']
+                    localmodel_poison_epochs = helper.params[str(adver_index%3) + '_poison_epochs']
                     adversarial_index= adver_index
                     main.logger.info(f'poison local model {state_key} will poison epochs: {localmodel_poison_epochs}')
                     break
@@ -53,8 +55,8 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                 for value in helper.params[str(j) + '_poison_trigger_values']:
                     trigger_values.append(value)
         else:
-            trigger_names = helper.params[str(adversarial_index) + '_poison_trigger_names']
-            trigger_values = helper.params[str(adversarial_index) + '_poison_trigger_values']
+            trigger_names = helper.params[str(adversarial_index%3) + '_poison_trigger_names']
+            trigger_values = helper.params[str(adversarial_index%3) + '_poison_trigger_values']
 
         for epoch in range(start_epoch, start_epoch + helper.params['aggr_epoch_interval']):
             ### This is for calculating distances
@@ -63,16 +65,16 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                 target_params_variables[name] = last_params_variables[name].clone().detach().requires_grad_(False)
 
             if is_poison and state_key in helper.params['adversary_list'] and (epoch in localmodel_poison_epochs):
-                main.logger.info('poison_now')
-                _, acc_p, _, _ = test.Mytest_poison(helper=helper, epoch=epoch,
-                                               model=model, is_poison=True, visualize=False, agent_name_key=state_key)
-                main.logger.info(acc_p)
+                # main.logger.info('poison_now')
+                # _, acc_p, _, _ = test.Mytest_poison(helper=helper, epoch=epoch,
+                #                                model=model, is_poison=True, visualize=False, agent_name_key=state_key)
+                # main.logger.info(acc_p)
                 poison_lr = helper.params['poison_lr']
-                if not helper.params['baseline']:
-                    if acc_p > 20:
-                        poison_lr /= 5
-                    if acc_p > 60:
-                        poison_lr /= 10
+                # if not helper.params['baseline']:
+                #     if acc_p > 20:
+                #         poison_lr /= 5
+                #     if acc_p > 60:
+                #         poison_lr /= 10
 
                 internal_epoch_num = helper.params['internal_poison_epochs']
                 step_lr = helper.params['poison_step_lr']
@@ -118,9 +120,12 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                         dataset_size += len(data)
                         output = model(data)
                         class_loss = nn.functional.cross_entropy(output, targets)
-                        distance_loss = helper.model_dist_norm_var(model, target_params_variables)
+                        if helper.params['alpha_loss'] == 1:
+                            loss = class_loss
+                        else:
+                            distance_loss = helper.model_dist_norm_var(model, target_params_variables)
 
-                        loss = helper.params['alpha_loss'] * class_loss + \
+                            loss = helper.params['alpha_loss'] * class_loss + \
                                (1 - helper.params['alpha_loss']) * distance_loss
                         loss.backward()
                         # get gradients
@@ -240,7 +245,7 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                     csv_record.posiontest_result.append([state_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                 #  test on local triggers
-                if  state_key in helper.params['adversary_list']:
+                if  state_key in helper.params['adversary_list'] and False:
                     if helper.params['vis_trigger_split_test']:
                         model.trigger_agent_test_vis(vis=main.vis, epoch=epoch, acc=epoch_acc, loss=None,
                                                      eid=helper.params['environment_name'],
@@ -265,7 +270,7 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                 epochs_local_update_list.append(client_grad)
             else:
                 epochs_local_update_list.append(local_model_update_dict)
-
+        helper.local_models[state_key] = model
         epochs_submit_update_dict[state_key] = epochs_local_update_list
 
     return epochs_submit_update_dict, num_samples_dict
