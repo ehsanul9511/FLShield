@@ -149,7 +149,8 @@ if __name__ == '__main__':
 
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
-        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA, config.ATTACK_DBA]:
+        # if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA, config.ATTACK_DBA]:
+        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_DBA]:
             # adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
             # adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
             # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
@@ -176,12 +177,13 @@ if __name__ == '__main__':
             ongoing_epochs = list(range(epoch, epoch + helper.params['aggr_epoch_interval']))
             adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
             # for idx in range(0, len(helper.adversarial_namelist)):
-            for iidx in range(0, adv_num):
-                idx = random.sample(range(0, len(helper.adversarial_namelist)), 1)[0]
-                for ongoing_epoch in ongoing_epochs:
-                    if ongoing_epoch in helper.poison_epochs_by_adversary[idx]:
-                        if helper.adversarial_namelist[idx] not in adversarial_name_keys:
-                            adversarial_name_keys.append(helper.adversarial_namelist[idx])
+            # for iidx in range(0, adv_num):
+            #     idx = random.sample(range(0, len(helper.adversarial_namelist)), 1)[0]
+            #     for ongoing_epoch in ongoing_epochs:
+            #         if ongoing_epoch in helper.poison_epochs_by_adversary[idx]:
+            #             if helper.adversarial_namelist[idx] not in adversarial_name_keys:
+            #                 adversarial_name_keys.append(helper.adversarial_namelist[idx])
+            adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
 
             nonattacker=[]
             # for adv in helper.adversarial_namelist:
@@ -211,6 +213,14 @@ if __name__ == '__main__':
         logger.info(f'state_name_keys: {agent_name_keys}')
         weight_accumulator, updates = helper.accumulate_weight(weight_accumulator, epochs_submit_update_dict,
                                                                agent_name_keys, num_samples_dict)
+
+        try:
+            if helper.amnesia_attack:
+                logger.info(f'performing amnesia attack')
+                for i in range(adv_num):
+                    updates[i] = helper.prev_epoch_updates[i]
+        except:
+            pass
         is_updated = True
         if helper.params['aggregation_methods'] == config.AGGR_OURS:
             helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
@@ -281,6 +291,10 @@ if __name__ == '__main__':
 
             csv_record.posiontest_result.append(
                 ["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
+
+            if epoch_acc_p > 50. and False:
+                helper.amnesia_attack = True
+                helper.prev_epoch_updates = updates
 
 
             # test on local triggers

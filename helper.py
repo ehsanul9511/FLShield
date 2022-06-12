@@ -1410,7 +1410,8 @@ class Helper:
         #     norm_weights[i] = norm_weights[i] * np.linalg.norm(clean_server_grad) / (np.linalg.norm(grads[i]))
         trust_scores = np.zeros(cos_sims.shape)
         for i in range(len(cos_sims)):
-            trust_scores[i] = abs(cos_sims[i]/np.linalg.norm(grads[i])/np.linalg.norm(clean_server_grad))
+            trust_scores[i] = cos_sims[i]/np.linalg.norm(grads[i])/np.linalg.norm(clean_server_grad)
+            trust_scores[i] = max(trust_scores[i], 0)
 
         clipping_coeffs = np.ones(len(trust_scores))
         for i in range(len(trust_scores)):
