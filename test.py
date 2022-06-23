@@ -6,7 +6,7 @@ import numpy as np
 import main
 
 def Mytest(helper, epoch,
-           model, is_poison=False, visualize=True, agent_name_key=""):
+           model, is_poison=False, visualize=True, agent_name_key="", one_batch_only=False, print_flag=True):
     model.eval()
     total_loss = 0
     correct = 0
@@ -30,6 +30,8 @@ def Mytest(helper, epoch,
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.test_data
         for batch_id, batch in enumerate(data_iterator):
+            if batch_id > 0 and one_batch_only:
+                break
             data, targets = helper.get_batch(data_iterator, batch, evaluation=True)
             dataset_size += len(data)
             output = model(data)
@@ -41,7 +43,8 @@ def Mytest(helper, epoch,
     acc = 100.0 * (float(correct) / float(dataset_size))  if dataset_size!=0 else 0
     total_l = total_loss / dataset_size if dataset_size!=0 else 0
 
-    main.logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
+    if print_flag:
+        main.logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
                      'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
                                                         total_l, correct, dataset_size,
                                                         acc))

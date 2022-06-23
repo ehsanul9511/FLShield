@@ -587,6 +587,25 @@ class ImageHelper(Helper):
             target.requires_grad_(False)
         return data, target
 
+    def get_poison_batch_for_label_flip(self, bptt, target_class=-1):
+
+        images, targets = bptt
+
+        poison_count= 0
+        new_images=images
+        new_targets=targets
+
+        if target_class==-1:
+            target_class = self.source_class
+
+        for index in range(0, len(images)):
+            new_targets[index] = 9 - targets[index]
+            new_images[index] = images[index]
+
+        new_images = new_images.to(device)
+        new_targets = new_targets.to(device).long()
+        return new_images,new_targets,poison_count        
+
     def get_poison_batch_for_targeted_label_flip(self, bptt, target_class=-1):
 
         images, targets = bptt
@@ -608,7 +627,7 @@ class ImageHelper(Helper):
                 new_targets[index]= targets[index]
             # new_targets[index] = self.params['targeted_label_flip_class']
             # new_images[index] = images[index]
-            # poison_count+=1
+            poison_count+=1
 
         new_images = new_images.to(device)
         new_targets = new_targets.to(device).long()
