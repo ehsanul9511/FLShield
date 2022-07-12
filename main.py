@@ -215,8 +215,8 @@ if __name__ == '__main__':
 
         is_updated = True
         if helper.params['aggregation_methods'] == config.AGGR_OURS:
-            # helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
-            helper.combined_clustering_guided_aggregation_v2(helper.target_model, updates, epoch, weight_accumulator)
+            helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
+            # helper.combined_clustering_guided_aggregation_v2(helper.target_model, updates, epoch, weight_accumulator)
         elif helper.params['aggregation_methods'] == config.AGGR_AFA:
             is_updated, names, weights = helper.afa_method(helper.target_model, updates)
         elif helper.params['aggregation_methods'] == config.AGGR_FLTRUST:

@@ -453,6 +453,22 @@ class Helper:
         # logger.info(f'Silhouette scores: {sil}')
         return sil.index(max(sil))+minval, coses
 
+    def recalculate_val_trust_scores(self, grads):
+        clusters = self.clusters
+        X=grads
+        grads_for_clusters = []       
+        for cluster in clusters:
+            grads = [X[i] for i in cluster]
+            grads_for_clusters.append(grads)
+
+        for i, cluster in enumerate(clusters):
+            cluster.sort(key = lambda x: self.get_average_distance(X[x], grads_for_clusters[i]))
+            # clusters[i] = cluster[:5]
+            for idx, cluster_elem in enumerate(clusters[i]):
+                if idx>=5:
+                    self.validator_trust_scores[cluster_elem] = min(self.validator_trust_scores[cluster_elem], 1/idx)
+        return
+
     def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
         # nets = [grad.numpy() for grad in grads]
         # nets = [np.array(grad) for grad in grads]
@@ -843,6 +859,8 @@ class Helper:
             print(f'Validating all clients at epoch {epoch}')
             print(f'{self.clusters_agg}_{clusters_agg}')
             val_client_indice_tuples=[]
+            self.recalculate_val_trust_scores(grads)
+            all_validators = []
             for i, val_cluster in enumerate(self.clusters):
                 val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
                 # if np.max(val_trust_scores) < 0.01:
@@ -852,6 +870,7 @@ class Helper:
                     # v1, v2 = random.sample(val_cluster, 2)
                     val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
                     v1, v2 = np.random.choice(val_cluster, 2, replace=False, p=val_trust_scores)
+                    all_validators += [v1, v2]
                     val_client_indice_tuples.append((i, v1))
                     val_client_indice_tuples.append((i, v2))
 
@@ -1244,6 +1263,11 @@ class Helper:
         logger.info(f'Aggregation Done: Time {time.time() - t}')
         t = time.time()
         logger.info(f'wv: {wv}')
+        try:
+            logger.info(f'adversarial validators: {[validator for validator in all_validators if validator in self.adversarial_namelist]}')
+            logger.info(f'benign validators: {[validator for validator in all_validators if validator in self.benign_namelist]}')
+        except:
+            pass
         logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
         logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
         logger.info(f'all_val_score: {self.all_val_score}')
