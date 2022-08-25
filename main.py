@@ -160,10 +160,6 @@ if __name__ == '__main__':
                 agent_name_keys = random.sample(helper.participants_list, helper.params['no_models'])
             adversarial_name_keys = [x for x in helper.adversarial_namelist if x in agent_name_keys]
             random_agent_name_keys = [x for x in helper.benign_namelist if x in agent_name_keys]
-            if len(adversarial_name_keys) == 0:
-                helper.clip_rate = 1
-            else:
-                helper.clip_rate = len(agent_name_keys)/len(adversarial_name_keys)
             # agent_name_keys = adversarial_name_keys + random_agent_name_keys
         # elif helper.params['is_random_namelist']:
         else:

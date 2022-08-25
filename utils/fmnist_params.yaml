@@ -13,13 +13,13 @@ internal_poison_epochs: 1
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold', 'our_aggr', 'afa']
-aggregation_methods: 'fltrust'
+aggregation_methods: 'mean'
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
 attack_methods: 'dba'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 100
+no_models: 10
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: true

@@ -2465,7 +2465,7 @@ class Helper:
         grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
         # wv = modHDBSCAN(grads)
 
-        save_grads = True
+        save_grads = False
         if save_grads and epoch<20:
             if self.params['noniid']:
                 np.save(f'utils/temp_grads/grads_{epoch}.npy', grads)

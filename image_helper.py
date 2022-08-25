@@ -235,7 +235,7 @@ class ImageHelper(Helper):
         #     y_labels = y_labels[indices]
         dataset_dict = OrderedDict(Counter(y_labels))
         dataset_dict = OrderedDict(sorted(dataset_dict.items()))
-        for ky in range(10):
+        for ky in range(num_of_classes):
             if ky not in dataset_dict.keys():
                 dataset_dict[ky] = 0
         # for c in range(num_of_classes):

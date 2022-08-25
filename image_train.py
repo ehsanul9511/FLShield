@@ -10,7 +10,6 @@ import test
 import copy
 import config
 
-from sklearn.metrics.pairwise import cosine_distances
 import numpy as np
 
 from random import shuffle
@@ -35,12 +34,6 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
             current_number_of_adversaries+=1
 
     helper.local_models = {}
-
-    avg_benign_test_acc = 0
-    avg_mal_test_acc = 0
-    benign_model_count = 0
-    mal_model_count = 0
-
     for model_id in range(helper.params['no_models']):
         if psuedo_train_mode:
             target_model = base_model[helper.validation_assignments[model_id]]
@@ -74,15 +67,6 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 adversarial_index = -1  # the global pattern
 
             adversarial_index = helper.adversarial_namelist.index(int(agent_name_key))
-            # main.logger.info(f'poison local model {agent_name_key} index {adversarial_index} ')
-
-            # if helper.params['attack_methods'] == config.ATTACK_SIA:
-            #     gs = helper.get_group_sizes()
-            #     all_client_group_by_classes = [[i]*gs[i] for i in range(len(gs))]
-            #     all_client_group_by_classes = [item for sublist in all_client_group_by_classes for item in sublist]
-            #     helper.source_class = all_client_group_by_classes[agent_name_key]
-            #     helper.target_class = 9 - helper.source_class
-
 
         for epoch in range(start_epoch, start_epoch + helper.params['aggr_epoch_interval']):
 
@@ -91,71 +75,6 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 target_params_variables[name] = last_local_model[name].clone().detach().requires_grad_(False)
 
             if is_poison and agent_name_key in helper.adversarial_namelist and (epoch in localmodel_poison_epochs):
-                if helper.params['attack_methods'] == config.ATTACK_SIA or ('new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']):
-                    _, data_iterator = helper.train_data[agent_name_key]
-                    balanced_data = []
-                    remaining_data = []
-                    balanced_data_dict = {}
-                    # count_by_class_dict = {}
-                    for i in range(10):
-                        balanced_data_dict[i] = 0
-                        # count_by_class_dict[i] = 0
-                    # for (x, y) in data_iterator.dataset:
-                    #     count_by_class_dict[y] += 1
-                    # min_samples_in_a_class = min(count_by_class_dict.values())
-                    full_dataset = data_iterator.dataset
-                    shuffle(full_dataset)
-                    for (x, y) in full_dataset:
-                        # if balanced_data_dict[y] < 10 and y != helper.source_class:
-                        if balanced_data_dict[y] < 10:
-                            # if balanced_data_dict[y] < min_samples_in_a_class:
-                            balanced_data_dict[y] += 1
-                            balanced_data.append((x, y))
-                        else:
-                            remaining_data.append((x, y))
-                    balanced_data_iterator = torch.utils.data.DataLoader(balanced_data, batch_size=helper.params['batch_size'], shuffle=True)
-                    remaining_data_iterator = torch.utils.data.DataLoader(remaining_data, batch_size=helper.params['batch_size'], shuffle=True)
-                if 'new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']:
-                    ref_client_grad = []
-                    ref_model = helper.new_model()
-                    ref_model.copy_params(target_model.state_dict())
-                    ref_optimizer = torch.optim.SGD(ref_model.parameters(), lr=helper.params['lr'],
-                                    momentum=helper.params['momentum'],
-                                    weight_decay=helper.params['decay'])
-                    total_loss = 0.
-                    correct = 0
-                    dataset_size = 0
-                    dis2global_list = []
-                    for batch_id, batch in enumerate(balanced_data_iterator):
-
-                        ref_optimizer.zero_grad()
-                        data, targets = helper.get_batch(data_iterator, batch,evaluation=False)
-
-                        dataset_size += len(data)
-                        output = ref_model(data)
-                        loss = nn.functional.cross_entropy(output, targets)
-                        loss.backward()
-
-                        for i, (name, params) in enumerate(ref_model.named_parameters()):
-                            if params.requires_grad:
-                                if batch_id == 0:
-                                    ref_client_grad.append(params.grad.clone())
-                                else:
-                                    ref_client_grad[i] += params.grad.clone()
-
-                        ref_optimizer.step()
-
-                    # for key, value in ref_model.state_dict().items():
-                    #     base_value  = last_local_model[key]
-                    #     new_value = value - base_value
-                    #     ref_model.state_dict()[key].copy_(new_value)
-
-                    ref_model_update_dict = dict()
-                    for name, data in ref_model.state_dict().items():
-                        ref_model_update_dict[name] = torch.zeros_like(data)
-                        ref_model_update_dict[name] = (data - last_local_model[name])
-
-
                 main_logger_info('poison_now')
 
                 poison_lr = helper.params['poison_lr']
@@ -174,79 +93,27 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
                     main_logger_info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
                     _, data_iterator = helper.train_data[agent_name_key]
-
-
-                    if 'ablation_study' in helper.params.keys() and 'fltrust_privacy_missing' in helper.params['ablation_study'] and epoch < helper.params['fltrust_privacy_attack']:
-                        balanced_data = []
-                        remaining_data = []
-                        full_dataset = data_iterator.dataset
-                        shuffle(full_dataset)
-                        for (x, y) in full_dataset:
-                            if y != helper.source_class:
-                                balanced_data.append((x, y))
-                        balanced_data_iterator = torch.utils.data.DataLoader(balanced_data, batch_size=helper.params['batch_size'], shuffle=True)
-                        data_iterator = balanced_data_iterator
                     poison_data_count = 0
                     total_loss = 0.
                     correct = 0
                     dataset_size = 0
                     dis2global_list=[]
-                    # if 'new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']:
-                    if helper.params['attack_methods'] == config.ATTACK_SIA:
-                        if 'new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']:
-                            train_data_iterator = remaining_data_iterator
-                        else:
-                            train_data_iterator = balanced_data_iterator
-                    else:
-                        train_data_iterator = data_iterator
-                    for batch_id, batch in enumerate(train_data_iterator):
+                    for batch_id, batch in enumerate(data_iterator):
                         if helper.params['attack_methods'] == config.ATTACK_DBA:
-                            if 'scaling_attack' in helper.params.keys() and helper.params['scaling_attack']:
-                                data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index, evaluation=False)
-                            else:
-                                data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
+                            #will set adversarial_index to -1 for centralized attack
+                            data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
                         elif helper.params['attack_methods'] == config.ATTACK_TLF:
                             data, targets, poison_num = helper.get_poison_batch_for_targeted_label_flip(batch)
-                        elif helper.params['attack_methods'] == config.ATTACK_SIA:
-                            data, targets, poison_num = helper.get_poison_batch_for_label_flip(batch)
                         poison_optimizer.zero_grad()
                         dataset_size += len(data)
                         poison_data_count += poison_num
 
                         output = model(data)
                         class_loss = nn.functional.cross_entropy(output, targets)
-
-                        if 'new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']:
-                            # if helper.params['attack_methods'] == config.ATTACK_SIA or ('new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']):
-                            if (internal_epoch==1 and batch_id==0):
-                                distance_loss = 0
-                                loss = class_loss
-                            else:
-                                # main.logger.info(f'adaptive grad attack - prev_epoch_val_model_params: {helper.prev_epoch_val_model_params}')
-                                # distance_loss = sum([helper.model_dist_norm_var(model, agg_param_variables) for agg_param_variables / in helper.prev_epoch_val_model_params])/len(helper.prev_epoch_val_model_params)
-                                # main.logger.info(f'adaptive grad attack - distance_loss: {distance_loss}')
-                                flat_client_grad = helper.flatten_gradient(client_grad)
-                                distance_loss = cosine_distances([flat_client_grad], [helper.flatten_gradient(ref_client_grad)])[0][0]
-                                # main.logger.info(f'distance_loss: {distance_loss}, class_loss: {class_loss}, loss: {loss}')
-                                loss = helper.params['alpha_loss'] * class_loss + \
-                               (1 - helper.params['alpha_loss']) * distance_loss                            
-                        elif helper.params['aggregation_methods'] == config.AGGR_OURS and 'adaptive_grad_attack' in helper.params.keys() and helper.params['adaptive_grad_attack']:
-                            if len(helper.prev_epoch_val_model_params) == 0 or (internal_epoch==1 and batch_id==0):
-                                distance_loss = 0
-                                loss = class_loss
-                            else:
-                                # main.logger.info(f'adaptive grad attack - prev_epoch_val_model_params: {helper.prev_epoch_val_model_params}')
-                                # distance_loss = sum([helper.model_dist_norm_var(model, agg_param_variables) for agg_param_variables / in helper.prev_epoch_val_model_params])/len(helper.prev_epoch_val_model_params)
-                                # main.logger.info(f'adaptive grad attack - distance_loss: {distance_loss}')
-                                flat_client_grad = helper.flatten_gradient(client_grad)
-                                distance_loss = np.mean(cosine_distances([flat_client_grad], helper.prev_epoch_val_model_params))
-                                loss = helper.params['alpha_loss'] * class_loss + \
-                               (1 - helper.params['alpha_loss']) * distance_loss
-                        else:
-                            distance_loss = helper.model_dist_norm_var(model, target_params_variables)
-                            # Lmodel = αLclass + (1 − α)Lano; alpha_loss =1 fixed
-                            loss = helper.params['alpha_loss'] * class_loss + \
-                               (1 - helper.params['alpha_loss']) * distance_loss
+                        distance_loss = helper.model_dist_norm_var(model, target_params_variables)
+                        # Lmodel = αLclass + (1 − α)Lano; alpha_loss =1 fixed
+                        loss = helper.params['alpha_loss'] * class_loss + \
+                            (1 - helper.params['alpha_loss']) * distance_loss
                         # main.logger.info(f'distance_loss: {distance_loss}, class_loss: {class_loss}, loss: {loss}')
                         loss.backward()
 
@@ -305,44 +172,6 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 main_logger_info(f'Global model norm: {helper.model_global_norm(target_model)}.')
                 main_logger_info(f'Norm before scaling: {helper.model_global_norm(model)}. '
                                  f'Distance: {helper.model_dist_norm(model, target_params_variables)}')
-                if helper.params['attack_methods'] == config.ATTACK_SIA:
-                    for layer_num in range(len(client_grad)):
-                        # main.logger.info(f'Layer {layer_num}: {client_grad[layer_num]}')
-                        if layer_num%2==0:
-                            client_grad[layer_num] = ref_client_grad[layer_num]
-                        else:
-                            client_grad[layer_num] = ref_client_grad[layer_num].mul(-1)
-                    model = local_model
-                    for layer_num, (name, data) in enumerate(model.state_dict().items()):
-                        if layer_num != -1: 
-                            update_per_layer = ref_model_update_dict[name]
-                        else:
-                            update_per_layer = -ref_model_update_dict[name]
-                        try:
-                            data.add_(update_per_layer)
-                        except:
-                            data.add_(update_per_layer.to(data.dtype))
-                    model = ref_model
-                # if 'new_adaptive_attack' in helper.params.keys() and helper.params['new_adaptive_attack']:
-                    # main.logger.info(f'client grad: {helper.flatten_gradient(client_grad)}')
-                    # main.logger.info(f'ref client grad: {helper.flatten_gradient(ref_client_grad)}')
-                    # main.logger.info(f'Distance: {cosine_distances([helper.flatten_gradient(client_grad)], [helper.flatten_gradient(ref_client_grad)])}')
-                    # main.logger.info(f'Model dist: {helper.model_dist_norm(model, target_params_variables)}')
-                    # main.logger.info(f'Model dist: {helper.model_dist_norm(ref_model, target_params_variables)}')
-                    # client_grad = [client_grad[i].mul_(1) for i in range(len(client_grad))]
-                    # ref_client_grad = [ref_client_grad[i].mul_(0) for i in range(len(ref_client_grad))]
-                    # client_grad = [client_grad[i].add(ref_client_grad[i]) for i in range(len(client_grad))]
-                    # epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
-                    #                                                                             epoch=epoch,
-                    #                                                                             model=model,
-                    #                                                                             is_poison=True,
-                    #                                                                             visualize=False,
-                    #                                                                             agent_name_key=agent_name_key)
-                # epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest(helper=helper, epoch=epoch,
-                #                                                                 model=model, is_poison=True, visualize=True,
-                #                                                                 agent_name_key=agent_name_key, one_batch_only=True, print_flag=False)
-                # avg_mal_test_acc += epoch_acc
-                # mal_model_count += 1
 
                 if not helper.params['baseline']:
                     main_logger_info(f'will scale.')
@@ -373,8 +202,6 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                             [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
                     clip_rate = helper.params['scale_weights_poison']
-                    if 'scaling_attack' in helper.params.keys() and helper.params['scaling_attack']:
-                        clip_rate = helper.clip_rate
                     main_logger_info(f"Scaling by  {clip_rate}")
                     for key, value in model.state_dict().items():
                         target_value  = last_local_model[key]
@@ -409,43 +236,6 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
 
                     _, data_iterator = helper.train_data[agent_name_key]
-                    # helper.calculate_lsr(data_iterator.dataset, agent_name_key)
-
-                    if 'ablation_study' in helper.params.keys() and 'fltrust_privacy_missing' in helper.params['ablation_study']:
-                        if agent_name_key in helper.adversarial_namelist:
-                            main.logger.info(f'withholding data of client {agent_name_key}')
-                            _, data_iterator = helper.train_data[helper.adversarial_namelist[0]]
-
-                    if 'ablation_study' in helper.params.keys() and 'fltrust_privacy_attack' in helper.params['ablation_study']:
-                        attack_epoch = helper.params['fltrust_privacy_attack']
-                        if epoch >= attack_epoch and agent_name_keys[model_id] == 99:
-                            balanced_data = []
-                            remaining_data = []
-                            balanced_data_dict = {}
-                            # count_by_class_dict = {}
-                            for i in range(10):
-                                balanced_data_dict[i] = 0
-                                # count_by_class_dict[i] = 0
-                            # for (x, y) in data_iterator.dataset:
-                            #     count_by_class_dict[y] += 1
-                            # min_samples_in_a_class = min(count_by_class_dict.values())
-                            full_dataset = data_iterator.dataset
-                            shuffle(full_dataset)
-                            s_count = 0
-                            for (x, y) in full_dataset:
-                                # if balanced_data_dict[y] < 10 and y != helper.source_class:
-                                # if y != helper.source_class and balanced_data_dict[y] < 10:
-                                # if y == helper.source_class or balanced_data_dict[y] < 10:
-                                if y != helper.source_class:
-                                    # if balanced_data_dict[y] < min_samples_in_a_class:
-                                    s_count += 1
-                                    balanced_data_dict[y] += 1
-                                    balanced_data.append((x, y))
-                                else:
-                                    remaining_data.append((x, y))
-                            balanced_data_iterator = torch.utils.data.DataLoader(balanced_data, batch_size=helper.params['batch_size'], shuffle=True)
-                            data_iterator = balanced_data_iterator
-                            main.logger.info(f's_count {s_count}')
 
                     total_loss = 0.
                     correct = 0
@@ -536,7 +326,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                                                                             is_poison=True,
                                                                                             visualize=True,
                                                                                             agent_name_key=agent_name_key)
-                    elif helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+                    elif helper.params['attack_methods'] == config.ATTACK_TLF:
                         epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
                                                                                             epoch=epoch,
                                                                                             model=model,
