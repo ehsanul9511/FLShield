@@ -61,9 +61,11 @@ class ImageHelper(Helper):
         target_model=target_model.to(device)
         if self.params['resumed_model']:
             if torch.cuda.is_available() :
-                loaded_params = torch.load(f"saved_models/{self.params['resumed_model_name']}")
+                # loaded_params = torch.load(f"saved_models/{self.params['resumed_model_name']}")
+                loaded_params = torch.load(f"{self.params['resumed_model_name']}")
             else:
-                loaded_params = torch.load(f"saved_models/{self.params['resumed_model_name']}",map_location='cpu')
+                # loaded_params = torch.load(f"saved_models/{self.params['resumed_model_name']}",map_location='cpu')
+                loaded_params = torch.load(f"{self.params['resumed_model_name']}",map_location='cpu')
             target_model.load_state_dict(loaded_params['state_dict'])
             self.start_epoch = loaded_params['epoch']+1
             self.params['lr'] = loaded_params.get('lr', self.params['lr'])
@@ -123,12 +125,18 @@ class ImageHelper(Helper):
                 np.array(no_participants * [alpha]))
             for user in range(no_participants):
                 no_imgs = int(round(sampled_probabilities[user]))
+                if self.params['aggregation_methods'] == config.AGGR_FLTRUST and user==0:
+                    no_imgs = 10
                 sampled_list = cifar_classes[n][:min(len(cifar_classes[n]), no_imgs)]
                 image_num.append(len(sampled_list))
-                per_participant_list[user].extend(sampled_list)
+                if self.params['aggregation_methods'] == config.AGGR_FLTRUST and user in [0, no_participants-1]:
+                    per_participant_list[no_participants-1-user].extend(sampled_list)
+                else:
+                    per_participant_list[user].extend(sampled_list)
                 cifar_classes[n] = cifar_classes[n][min(len(cifar_classes[n]), no_imgs):]
             image_nums.append(image_num)
         # self.draw_dirichlet_plot(no_classes,no_participants,image_nums,alpha)
+        logger.info(f"Per participant list length is {[len(x) for x in per_participant_list.values()]}")
         return per_participant_list
 
     def draw_dirichlet_plot(self,no_classes,no_participants,image_nums,alpha):
@@ -193,6 +201,15 @@ class ImageHelper(Helper):
                                             sampler=torch.utils.data.sampler.SubsetRandomSampler(
                                                 poison_label_inds))
 
+    def calculate_lsr(self, dataset,id):
+        y_labels = []
+        for x, y in dataset:
+            y_labels.append(y)
+        dataset_dict = OrderedDict(Counter(y_labels))
+        dataset_dict = OrderedDict(sorted(dataset_dict.items()))
+        logger.info(f'id: {id}, dataset_dict: {dataset_dict}')
+
+
     def get_label_skew_ratios(self, dataset, id, num_of_classes=10):
         dataset_classes = {}
         # for ind, x in enumerate(dataset):
@@ -207,17 +224,20 @@ class ImageHelper(Helper):
         #     # dataset_classes[key] = dataset_classes[key] 
 
         #     dataset_classes[key] = float("{:.2f}".format(dataset_classes[key]/len(dataset)))
-        if self.params['noniid']:
-            y_labels = []
-            for x, y in dataset:
-                y_labels.append(y)
-        else:
-            y_labels=[t.item() for t in dataset.targets]
-            indices = self.indices_per_participant[id]
-            y_labels = np.array(y_labels)
-            y_labels = y_labels[indices]
+        # if self.params['noniid']:
+        y_labels = []
+        for x, y in dataset:
+            y_labels.append(y)
+        # else:
+        #     y_labels=[t.item() for t in dataset.targets]
+        #     indices = self.indices_per_participant[id]
+        #     y_labels = np.array(y_labels)
+        #     y_labels = y_labels[indices]
         dataset_dict = OrderedDict(Counter(y_labels))
         dataset_dict = OrderedDict(sorted(dataset_dict.items()))
+        for ky in range(10):
+            if ky not in dataset_dict.keys():
+                dataset_dict[ky] = 0
         # for c in range(num_of_classes):
         #     dataset_classes.append(dataset_dict[c])
         # dataset_classes = np.array(dataset_classes)
@@ -236,6 +256,13 @@ class ImageHelper(Helper):
         each_worker_label = [[] for _ in range(num_workers)]   
         server_data = []
         server_label = []
+
+        if 'ablation_study' in self.params.keys() and 'fltrust_privacy' in self.params['ablation_study']:
+            server_pc = 500
+
+            if 'missing' in self.params['ablation_study']:
+                server_case2_cls = self.source_class
+                p = 0
         
         # compute the labels needed for each class
         real_dis = [1. / num_labels for _ in range(num_labels)]
@@ -254,6 +281,8 @@ class ImageHelper(Helper):
                 samp_dis[other_num] += 1
                 sum_res -= 1
         samp_dis[num_labels - 1] = server_pc - np.sum(samp_dis[:num_labels - 1])
+
+        logger.info('samp_dis: {}'.format(samp_dis))
 
         # privacy experiment only
         server_additional_label_0_samples_counter = 0    
@@ -445,14 +474,26 @@ class ImageHelper(Helper):
                     if len(dataset_per_worker) != 0:
                         train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
                         train_loaders.append((id_worker, train_loader))
+                train_loaders[-2] = train_loaders[-1] 
             elif self.params['sampling_dirichlet']:
                 ## sample indices for participants using Dirichlet distribution
+                self.classes_dict = self.build_classes_dict()
                 indices_per_participant = self.sample_dirichlet_train_data(
                     self.params['number_of_total_participants'], #100
                     alpha=self.params['dirichlet_alpha'])
+                logger.info(f'indices_per_participant: {[len(indices_per_participant[i]) for i in range(len(indices_per_participant))]}')
                 self.indices_per_participant = indices_per_participant
-                train_loaders = [(pos, self.get_train(indices)) for pos, indices in
-                                indices_per_participant.items()]
+                # train_loaders = [(pos, self.get_train_alt(indices)) for pos, indices in
+                #                 indices_per_participant.items()]
+                ewd, ewl = self.get_train_alt([indices_per_participant[i] for i in range(len(indices_per_participant))])
+                train_loaders = []
+                for id_worker in range(len(ewd)):
+                    dataset_per_worker=[]
+                    for idx in range(len(ewd[id_worker])):
+                        dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
+                    if len(dataset_per_worker) != 0:
+                        train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
+                        train_loaders.append((id_worker, train_loader))
             else:
                 ## sample indices for participants that are equally
                 all_range = list(range(len(self.train_dataset)))
@@ -480,7 +521,7 @@ class ImageHelper(Helper):
                 torch.save(self.test_targetlabel_data, f'./saved_data/{self.params["type"]}/{self.params["save_data"]}/test_targetlabel_data.pt')
                 logger.info('saving data done')
 
-            self.classes_dict = self.build_classes_dict()
+            # self.classes_dict = self.build_classes_dict()
             logger.info('build_classes_dict done')
         if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
             target_class_test_data=[]
@@ -490,15 +531,15 @@ class ImageHelper(Helper):
             self.target_class_test_loader = torch.utils.data.DataLoader(target_class_test_data, batch_size=self.params['test_batch_size'], shuffle=True)
 
         # if self.params['noniid'] or self.params['sampling_dirichlet']:
-        if self.params['noniid']:
-            self.lsrs = []
+        # if self.params['noniid']:
+        self.lsrs = []
 
-            for id in tqdm(range(len(self.train_data))):
-                (_, train_loader) = self.train_data[id]
-                lsr = self.get_label_skew_ratios(train_loader.dataset, id)
-                self.lsrs.append(lsr)
+        for id in tqdm(range(len(self.train_data))):
+            (_, train_loader) = self.train_data[id]
+            lsr = self.get_label_skew_ratios(train_loader.dataset, id)
+            self.lsrs.append(lsr)
 
-            logger.info(f'lsrs ready: {self.lsrs}')
+        logger.info(f'lsrs ready: {self.lsrs}')
 
 
         if self.params['is_random_namelist'] == False:
@@ -538,6 +579,12 @@ class ImageHelper(Helper):
                 self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs']
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
+
+        if 'ablation_study' in self.params.keys() and 'with_lsr' in self.params['ablation_study']:
+            for idx, id in enumerate(self.adversarial_namelist):
+                self.lsrs[id] = self.lsrs[target_group_indices[0]]
+                # self.lsrs[id] = self.lsrs[0]
+
         logger.info(f'adversarial_namelist: {self.adversarial_namelist}')
         logger.info(f'benign_namelist: {self.benign_namelist}')
 
@@ -551,8 +598,49 @@ class ImageHelper(Helper):
         train_loader = torch.utils.data.DataLoader(self.train_dataset,
                                            batch_size=self.params['batch_size'],
                                            sampler=torch.utils.data.sampler.SubsetRandomSampler(
-                                               indices),pin_memory=True, num_workers=8)
+                                               indices),pin_memory=True)
         return train_loader
+
+    # def get_train_alt(self, indices):
+    #     # local_train_data = []
+    #     # local_train_labels = []
+    #     local_dataset = []
+    #     for idx, (x, y) in enumerate(self.train_dataset):
+    #         if idx in indices:
+    #             # local_train_data.append(x)
+    #             # local_train_labels.append(y)
+    #             local_dataset.append((x, y))
+
+    #     train_loader = torch.utils.data.DataLoader(local_dataset, batch_size=self.params['batch_size'], shuffle=True)
+    #     return train_loader
+
+    def get_train_alt(self, indices_per_client):
+        ewd = []
+        ewl = []
+        for _ in range(self.params['number_of_total_participants']):
+            ewd.append([])
+            ewl.append([])
+
+        for idx, (x, y) in enumerate(tqdm(self.train_dataset)):
+            for client_idx, indices in enumerate(indices_per_client):
+                # logger.info(f'client_idx: {client_idx}')
+                # logger.info(f'indices: {indices}')
+                if idx in indices:
+                    ewd[client_idx].append(x)
+                    ewl[client_idx].append(y)
+
+        # train_loaders = []
+        # for id_worker in range(len(ewd)):
+        #     dataset_per_worker=[]
+        #     for idx in range(len(ewd[id_worker])):
+        #         dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
+        #     if len(dataset_per_worker) != 0:
+        #         train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
+        #         train_loaders.append((id_worker, train_loader))
+
+        return ewd, ewl
+
+        
 
     def get_train_old(self, all_range, model_no):
         """
@@ -633,7 +721,9 @@ class ImageHelper(Helper):
         new_targets = new_targets.to(device).long()
         return new_images,new_targets,poison_count    
 
-    def get_poison_batch(self, bptt,adversarial_index=-1, evaluation=False):
+    def get_poison_batch(self, bptt,adversarial_index=-1, evaluation=False, special_attack=True):
+        if 'special_attack' in self.params and self.params['special_attack']:
+            special_attack = True
 
         images, targets = bptt
 
@@ -648,13 +738,23 @@ class ImageHelper(Helper):
                 poison_count+=1
 
             else: # poison part of data when training
-                if index < self.params['poisoning_per_batch']:
-                    new_targets[index] = self.params['poison_label_swap']
-                    new_images[index] = self.add_pixel_pattern(images[index],adversarial_index)
-                    poison_count += 1
+                if not special_attack:
+                    if index < self.params['poisoning_per_batch']:
+                        new_targets[index] = self.params['poison_label_swap']
+                        new_images[index] = self.add_pixel_pattern(images[index],adversarial_index)
+                        poison_count += 1
+                    else:
+                        new_images[index] = images[index]
+                        new_targets[index]= targets[index]
                 else:
-                    new_images[index] = images[index]
-                    new_targets[index]= targets[index]
+                    if targets[index]==(adversarial_index+1)%10 and poison_count<self.params['poisoning_per_batch']:
+                        # logger.info(f'poisoning index {index} with target {targets[index]}')
+                        new_targets[index] = self.params['poison_label_swap']
+                        new_images[index] = self.add_pixel_pattern(images[index],-1)
+                        poison_count+=1
+                    else:
+                        new_images[index] = images[index]
+                        new_targets[index]= targets[index]
 
         new_images = new_images.to(device)
         new_targets = new_targets.to(device).long()

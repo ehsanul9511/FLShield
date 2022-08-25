@@ -19,7 +19,14 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
     for model_id in range(helper.params['no_models']):
         epochs_local_update_list = []
         last_params_variables = dict()
-        client_grad = []  # fg  only works for aggr_epoch_interval=1
+
+        epochs_local_update_list = []
+        epochs_local_update_list_for_accumulator = []
+        last_local_model = dict()
+        client_grad = [] # only works for aggr_epoch_interval=1
+
+        for name, data in target_model.state_dict().items():
+            last_local_model[name] = target_model.state_dict()[name].clone()
 
         for name, param in target_model.named_parameters():
             last_params_variables[name] = target_model.state_dict()[name].clone()
@@ -260,17 +267,33 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
                                                      eid=helper.params['environment_name'],
                                                      name=state_key+"_trigger")
             # update the weight and bias
+            # local_model_update_dict = dict()
+            # for name, data in model.state_dict().items():
+            #     local_model_update_dict[name] = torch.zeros_like(data)
+            #     local_model_update_dict[name] = (data - last_params_variables[name])
+            #     last_params_variables[name] = copy.deepcopy(data)
+
+            # if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+            #     epochs_local_update_list.append(client_grad)
+            # else:
+            #     epochs_local_update_list.append(local_model_update_dict)            
             local_model_update_dict = dict()
             for name, data in model.state_dict().items():
                 local_model_update_dict[name] = torch.zeros_like(data)
-                local_model_update_dict[name] = (data - last_params_variables[name])
-                last_params_variables[name] = copy.deepcopy(data)
+                local_model_update_dict[name] = (data - last_local_model[name])
+                last_local_model[name] = copy.deepcopy(data)
 
-            if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
-                epochs_local_update_list.append(client_grad)
-            else:
-                epochs_local_update_list.append(local_model_update_dict)
+            # if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+            # if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+            #     epochs_local_update_list.append(client_grad)
+            # else:
+            #     epochs_local_update_list.append(local_model_update_dict)
+            epochs_local_update_list.append(client_grad)
+            epochs_local_update_list_for_accumulator.append(local_model_update_dict)
+            ref_model = None
+        
         helper.local_models[state_key] = model
-        epochs_submit_update_dict[state_key] = epochs_local_update_list
+        # main.logger.info(f'{agent_name_key} model updated.')
+        epochs_submit_update_dict[state_key] = (epochs_local_update_list, epochs_local_update_list_for_accumulator)
 
     return epochs_submit_update_dict, num_samples_dict

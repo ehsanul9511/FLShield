@@ -19,6 +19,11 @@ weight_result=[]
 scale_result=[]
 scale_temp_one_row=[]
 
+dynamic_dist_fileheader = []
+dynamic_dist_result = []
+validator_pcnt_fileheader = ["adv", "benign", "tp", "fp", "tn", "fn", "adjusted_adv", "adjusted_benign"]
+validator_pcnt_result = []
+
 def save_result_csv(epoch, is_posion,folder_path):
     train_csvFile = open(f'{folder_path}/train_result.csv', "w")
     train_writer = csv.writer(train_csvFile)
@@ -63,6 +68,19 @@ def save_result_csv(epoch, is_posion,folder_path):
         test_writer = csv.writer(test_csvFile)
         test_writer.writerow(triggertest_fileHeader)
         test_writer.writerows(poisontriggertest_result)
+        test_csvFile.close()
+
+        if len(dynamic_dist_fileheader) != 0:
+            test_csvFile = open(f'{folder_path}/dynamic_dist_result.csv', "w")
+            test_writer = csv.writer(test_csvFile)
+            test_writer.writerow(dynamic_dist_fileheader)
+            test_writer.writerows(dynamic_dist_result)
+            test_csvFile.close()
+
+        test_csvFile = open(f'{folder_path}/validator_pcnt.csv', "w")
+        test_writer = csv.writer(test_csvFile)
+        test_writer.writerow(validator_pcnt_fileheader)
+        test_writer.writerows(validator_pcnt_result)
         test_csvFile.close()
 
 def add_weight_result(name,weight,alpha):

@@ -1,3 +1,4 @@
+from asyncio.log import logger
 from sympy import evaluate
 import utils.csv_record as csv_record
 import torch
@@ -71,6 +72,9 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     break
             if len(helper.adversarial_namelist) == 1:
                 adversarial_index = -1  # the global pattern
+
+            adversarial_index = helper.adversarial_namelist.index(int(agent_name_key))
+            # main.logger.info(f'poison local model {agent_name_key} index {adversarial_index} ')
 
             # if helper.params['attack_methods'] == config.ATTACK_SIA:
             #     gs = helper.get_group_sizes()
@@ -170,6 +174,18 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
                     main_logger_info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
                     _, data_iterator = helper.train_data[agent_name_key]
+
+
+                    if 'ablation_study' in helper.params.keys() and 'fltrust_privacy_missing' in helper.params['ablation_study'] and epoch < helper.params['fltrust_privacy_attack']:
+                        balanced_data = []
+                        remaining_data = []
+                        full_dataset = data_iterator.dataset
+                        shuffle(full_dataset)
+                        for (x, y) in full_dataset:
+                            if y != helper.source_class:
+                                balanced_data.append((x, y))
+                        balanced_data_iterator = torch.utils.data.DataLoader(balanced_data, batch_size=helper.params['batch_size'], shuffle=True)
+                        data_iterator = balanced_data_iterator
                     poison_data_count = 0
                     total_loss = 0.
                     correct = 0
@@ -186,7 +202,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     for batch_id, batch in enumerate(train_data_iterator):
                         if helper.params['attack_methods'] == config.ATTACK_DBA:
                             if 'scaling_attack' in helper.params.keys() and helper.params['scaling_attack']:
-                                data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=-1, evaluation=False)
+                                data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index, evaluation=False)
                             else:
                                 data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
                         elif helper.params['attack_methods'] == config.ATTACK_TLF:
@@ -362,7 +378,11 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     main_logger_info(f"Scaling by  {clip_rate}")
                     for key, value in model.state_dict().items():
                         target_value  = last_local_model[key]
-                        new_value = target_value + (value - target_value) * clip_rate
+                        clip_down = True
+                        if clip_down:
+                            new_value = target_value + (value - target_value) * clip_rate
+                        else:
+                            new_value = value + (target_value - value) * clip_rate
                         model.state_dict()[key].copy_(new_value)
                     distance = helper.model_dist_norm(model, target_params_variables)
                     main_logger_info(
@@ -389,6 +409,44 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
 
                     _, data_iterator = helper.train_data[agent_name_key]
+                    # helper.calculate_lsr(data_iterator.dataset, agent_name_key)
+
+                    if 'ablation_study' in helper.params.keys() and 'fltrust_privacy_missing' in helper.params['ablation_study']:
+                        if agent_name_key in helper.adversarial_namelist:
+                            main.logger.info(f'withholding data of client {agent_name_key}')
+                            _, data_iterator = helper.train_data[helper.adversarial_namelist[0]]
+
+                    if 'ablation_study' in helper.params.keys() and 'fltrust_privacy_attack' in helper.params['ablation_study']:
+                        attack_epoch = helper.params['fltrust_privacy_attack']
+                        if epoch >= attack_epoch and agent_name_keys[model_id] == 99:
+                            balanced_data = []
+                            remaining_data = []
+                            balanced_data_dict = {}
+                            # count_by_class_dict = {}
+                            for i in range(10):
+                                balanced_data_dict[i] = 0
+                                # count_by_class_dict[i] = 0
+                            # for (x, y) in data_iterator.dataset:
+                            #     count_by_class_dict[y] += 1
+                            # min_samples_in_a_class = min(count_by_class_dict.values())
+                            full_dataset = data_iterator.dataset
+                            shuffle(full_dataset)
+                            s_count = 0
+                            for (x, y) in full_dataset:
+                                # if balanced_data_dict[y] < 10 and y != helper.source_class:
+                                # if y != helper.source_class and balanced_data_dict[y] < 10:
+                                # if y == helper.source_class or balanced_data_dict[y] < 10:
+                                if y != helper.source_class:
+                                    # if balanced_data_dict[y] < min_samples_in_a_class:
+                                    s_count += 1
+                                    balanced_data_dict[y] += 1
+                                    balanced_data.append((x, y))
+                                else:
+                                    remaining_data.append((x, y))
+                            balanced_data_iterator = torch.utils.data.DataLoader(balanced_data, batch_size=helper.params['batch_size'], shuffle=True)
+                            data_iterator = balanced_data_iterator
+                            main.logger.info(f's_count {s_count}')
+
                     total_loss = 0.
                     correct = 0
                     dataset_size = 0

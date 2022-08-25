@@ -14,3 +14,6 @@ batch_script*
 .DS_Store
 saved_data/
 workspace*
+ablation_study.py
+cmds.txt
+temp.csv

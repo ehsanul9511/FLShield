@@ -215,12 +215,13 @@ if __name__ == '__main__':
 
         is_updated = True
         if helper.params['aggregation_methods'] == config.AGGR_OURS:
-            helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
-            # helper.combined_clustering_guided_aggregation_v2(helper.target_model, updates, epoch, weight_accumulator)
+            # helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
+            # helper.combined_clustering_guided_aggregation_with_DP(helper.target_model, updates, epoch)
+            helper.combined_clustering_guided_aggregation_v2(helper.target_model, updates, epoch, weight_accumulator)
         elif helper.params['aggregation_methods'] == config.AGGR_AFA:
             is_updated, names, weights = helper.afa_method(helper.target_model, updates)
         elif helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
-            is_updated, names, weights = helper.fltrust(helper.target_model, updates)
+            is_updated, names, weights = helper.fltrust(helper.target_model, updates, epoch)
             # vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
         elif helper.params['aggregation_methods'] == config.AGGR_MEAN:
             # Average the models
@@ -228,7 +229,7 @@ if __name__ == '__main__':
             #                                           target_model=helper.target_model,
             #                                           epoch_interval=helper.params['aggr_epoch_interval'])
             # num_oracle_calls = 1
-            is_updated = helper.fedavg(helper.target_model, updates)
+            is_updated = helper.fedavg(helper.target_model, updates, epoch)
         elif helper.params['aggregation_methods'] == config.AGGR_GEO_MED:
             
             maxiter = helper.params['geom_median_maxiter']
@@ -237,7 +238,8 @@ if __name__ == '__main__':
             # vis_fg_alpha(helper, names, alphas, epoch, vis, adversarial_name_keys)
 
         elif helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
-            is_updated, names, weights, alphas = helper.foolsgold_update(helper.target_model, updates)
+            # is_updated, names, weights, alphas = helper.foolsgold_update(helper.target_model, updates)
+            helper.flame(helper.target_model, updates)
             # vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
             # vis_fg_alpha(helper,names,alphas,epoch,vis,adversarial_name_keys )
             num_oracle_calls = 1
