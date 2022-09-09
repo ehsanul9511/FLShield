@@ -3,6 +3,7 @@ data/
 models/__pycache__/
 saved_models/
 utils/__pycache__/
+utils/model_bank/
 plots/
 *.err
 *.out
