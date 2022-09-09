@@ -7,19 +7,19 @@ poison_step_lr: true
 momentum: 0.9
 decay: 0.0005
 batch_size: 64
-epochs: 150
+epochs: 300
 internal_epochs: 1
 internal_poison_epochs: 1
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
-# aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold', 'our_aggr', 'afa']
-aggregation_methods: 'mean'
+# aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'our_aggr', 'afa', 'foolsgold']
+aggregation_methods: 'flame'
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
 attack_methods: 'dba'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 10
+no_models: 100
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: true
@@ -28,9 +28,9 @@ is_poison: true
 camera_ready: false
 
 noniid: true
-bias: 0.5
+bias: 0.1
 sampling_dirichlet: true
-dirichlet_alpha: 0.9
+dirichlet_alpha: 0.5
 baseline: true # single-shot: false; multi-shot:true
 scale_weights_poison: 100
 #global lr:
@@ -107,11 +107,11 @@ trigger_num: 4
 environment_name: mnist_DBA
 
 save_model: false
-save_on_epochs: [10,16,17,18,19,20,21,22, 32, 42, 52, 62, 69]
+save_on_epochs: [10, 15, 20, 25, 30, 35]
 
-resumed_model: false
-resumed_model_name: mnist_pretrain/model_last.pt.tar.epoch_10
-resumed_model_path: mnist_pretrain/
+resumed_model: true
+resumed_model_name: utils/model_bank/fmnist/model_last.pt.tar.epoch_35
+resumed_model_path: utils/model_bank/fmnist
 
 minimize_logging: true
 speed_boost: true
@@ -121,7 +121,7 @@ vis_trigger_split_test: false
 track_distance: false
 batch_track_distance: false
 log_interval: 2
-poison_momentum: 0.9
+poison_momentum: 0.7
 poison_decay: 0.005
 results_json: true
 alpha_loss: 1
@@ -133,5 +133,5 @@ poison_epochs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 1
 # poison_epochs: [70]
 
 scaling_attack: false
-special_attack: true
+special_attack: false
 

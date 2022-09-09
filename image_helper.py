@@ -120,7 +120,9 @@ class ImageHelper(Helper):
         image_nums = []
         for n in range(no_classes):
             image_num = []
+            random.seed(42+n)
             random.shuffle(cifar_classes[n])
+            np.random.seed(42+n)
             sampled_probabilities = class_size * np.random.dirichlet(
                 np.array(no_participants * [alpha]))
             for user in range(no_participants):
@@ -291,13 +293,14 @@ class ImageHelper(Helper):
 
         # randomly assign the data points based on the labels
         server_counter = [0 for _ in range(num_labels)]
-        for _, (x, y) in enumerate(train_data):
+        for iidx, (x, y) in enumerate(train_data):
 
 
             upper_bound = y * (1. - bias) / (num_labels - 1) + bias
             lower_bound = y * (1. - bias) / (num_labels - 1)
 
             upper_bound_offset = 0
+            np.random.seed(42 + iidx)
             rd = np.random.random_sample()
 
 
@@ -318,6 +321,7 @@ class ImageHelper(Helper):
                 server_label.append(y)
                 server_counter[int(y)] += 1
             else:
+                np.random.seed(73 + iidx)
                 rd = np.random.random_sample()
                 selected_worker = int(worker_group * worker_per_group + int(np.floor(rd * worker_per_group)))
                 each_worker_data[selected_worker].append(x)
@@ -362,6 +366,7 @@ class ImageHelper(Helper):
             split_map_for_i.append(0)
             split_map_for_not_i = [0]
             for ii in range(1, group_size):
+                np.random.seed(42 + i)
                 split_ratio_for_i = np.random.normal(ii*group_frac, group_frac/10)
                 split_ratio_for_not_i = ii*group_frac*2 - split_ratio_for_i
                 split_map_for_i.append(int(split_ratio_for_i*len(i_indices)))
@@ -477,26 +482,33 @@ class ImageHelper(Helper):
                 train_loaders[-2] = train_loaders[-1] 
             elif self.params['sampling_dirichlet']:
                 ## sample indices for participants using Dirichlet distribution
-                self.classes_dict = self.build_classes_dict()
-                indices_per_participant = self.sample_dirichlet_train_data(
-                    self.params['number_of_total_participants'], #100
-                    alpha=self.params['dirichlet_alpha'])
-                logger.info(f'indices_per_participant: {[len(indices_per_participant[i]) for i in range(len(indices_per_participant))]}')
-                self.indices_per_participant = indices_per_participant
-                # train_loaders = [(pos, self.get_train_alt(indices)) for pos, indices in
-                #                 indices_per_participant.items()]
-                ewd, ewl = self.get_train_alt([indices_per_participant[i] for i in range(len(indices_per_participant))])
-                train_loaders = []
-                for id_worker in range(len(ewd)):
-                    dataset_per_worker=[]
-                    for idx in range(len(ewd[id_worker])):
-                        dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
-                    if len(dataset_per_worker) != 0:
-                        train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
-                        train_loaders.append((id_worker, train_loader))
+                preload_data = True
+                if preload_data:
+                    train_loaders=[]
+                    for i in range(self.params['number_of_total_participants']):
+                        train_loaders.append((i,torch.load(f'./saved_data/{self.params["type"]}/{self.params["save_data"]}/train_data_{i}.pt')))
+                else:
+                    self.classes_dict = self.build_classes_dict()
+                    indices_per_participant = self.sample_dirichlet_train_data(
+                        self.params['number_of_total_participants'], #100
+                        alpha=self.params['dirichlet_alpha'])
+                    logger.info(f'indices_per_participant: {[len(indices_per_participant[i]) for i in range(len(indices_per_participant))]}')
+                    self.indices_per_participant = indices_per_participant
+                    # train_loaders = [(pos, self.get_train_alt(indices)) for pos, indices in
+                    #                 indices_per_participant.items()]
+                    ewd, ewl = self.get_train_alt([indices_per_participant[i] for i in range(len(indices_per_participant))])
+                    train_loaders = []
+                    for id_worker in range(len(ewd)):
+                        dataset_per_worker=[]
+                        for idx in range(len(ewd[id_worker])):
+                            dataset_per_worker.append((ewd[id_worker][idx], ewl[id_worker][idx]))
+                        if len(dataset_per_worker) != 0:
+                            train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
+                            train_loaders.append((id_worker, train_loader))
             else:
                 ## sample indices for participants that are equally
                 all_range = list(range(len(self.train_dataset)))
+                random.seed(42)
                 random.shuffle(all_range)
                 train_loaders = [(pos, self.get_train_old(all_range, pos))
                                 for pos in range(self.params['number_of_total_participants'])]
@@ -548,6 +560,8 @@ class ImageHelper(Helper):
             self.participants_list = list(range(self.params['number_of_total_participants']))
         # random.shuffle(self.participants_list)
 
+        self.variable_poison_rates = [4, 8, 16, 24, 32] * 6
+
         self.poison_epochs_by_adversary = {}
         # if self.params['random_adversary_for_label_flip']:
         if self.params['is_random_adversary']:
@@ -560,23 +574,24 @@ class ImageHelper(Helper):
             cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
             target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
             logger.info(f'Target group indices: {target_group_indices}')
+            random.seed(42)
             self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
             other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
             other_group_participants = [self.participants_list[i] for i in other_group_indices]
             other_group_participants = other_group_participants[:-1]
+            random.seed(666)
             self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
             # self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
         else:
             self.adversarial_namelist = self.params['adversary_list']
         for idx, id in enumerate(self.adversarial_namelist):
             if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
-                if self.params['skip_iteration_in_tlf']:
-                    self.poison_epochs_by_adversary[idx] = [2*i+1 for i in range(self.params['epochs']//2)]
-                else:
-                    self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+                self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
             else:
                 mod_idx = idx%4
-                self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs']
+                self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs'][10:]
+
+        self.adversarial_namelist = [name for name in self.adversarial_namelist if self.lsrs[name][self.source_class] > 0]
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
@@ -721,15 +736,28 @@ class ImageHelper(Helper):
         new_targets = new_targets.to(device).long()
         return new_images,new_targets,poison_count    
 
-    def get_poison_batch(self, bptt,adversarial_index=-1, evaluation=False, special_attack=True):
+    def get_poison_batch(self, bptt,adversarial_index=-1, evaluation=False, special_attack=False):
         if 'special_attack' in self.params and self.params['special_attack']:
-            special_attack = True
+            special_attack = self.params['special_attack']
 
         images, targets = bptt
 
         poison_count= 0
         new_images=images
         new_targets=targets
+
+        adv_lsr = self.lsrs[self.adversarial_namelist[adversarial_index]]
+        adv_lsr = np.array(adv_lsr)
+        maj_ind = np.argmax(adv_lsr)
+        major_ind_list = [maj_ind]
+        if special_attack and False:
+            poisoning_per_batch = self.variable_poison_rates[adversarial_index]
+        else:
+            poisoning_per_batch = self.params['poisoning_per_batch']
+
+        while np.sum(adv_lsr[major_ind_list]) < poisoning_per_batch/self.params['batch_size']:
+            major_ind_list.append((major_ind_list[-1]+1)%(len(adv_lsr)-1))
+            # logger.info(f'poisoning_per_batch: {np.sum(adv_lsr[major_ind_list])}')
 
         for index in range(0, len(images)):
             if evaluation: # poison all data when testing
@@ -739,7 +767,7 @@ class ImageHelper(Helper):
 
             else: # poison part of data when training
                 if not special_attack:
-                    if index < self.params['poisoning_per_batch']:
+                    if index < poisoning_per_batch:
                         new_targets[index] = self.params['poison_label_swap']
                         new_images[index] = self.add_pixel_pattern(images[index],adversarial_index)
                         poison_count += 1
@@ -747,7 +775,7 @@ class ImageHelper(Helper):
                         new_images[index] = images[index]
                         new_targets[index]= targets[index]
                 else:
-                    if targets[index]==(adversarial_index+1)%10 and poison_count<self.params['poisoning_per_batch']:
+                    if targets[index] in major_ind_list and poison_count<poisoning_per_batch:
                         # logger.info(f'poisoning index {index} with target {targets[index]}')
                         new_targets[index] = self.params['poison_label_swap']
                         new_images[index] = self.add_pixel_pattern(images[index],-1)

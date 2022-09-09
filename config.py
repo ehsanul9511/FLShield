@@ -3,7 +3,7 @@ device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 AGGR_MEAN = 'mean'
 AGGR_GEO_MED = 'geom_median'
-AGGR_FOOLSGOLD='foolsgold'
+AGGR_FLAME='flame'
 AGGR_FLTRUST = 'fltrust'
 AGGR_OURS = 'our_aggr'
 AGGR_AFA = 'afa'

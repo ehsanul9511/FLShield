@@ -3,6 +3,7 @@ from shutil import copyfile
 
 import math
 import shutil
+from weakref import ref
 import torch
 import torch.nn as nn
 
@@ -27,7 +28,7 @@ from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering, KMeans
 from scipy.spatial import distance
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances, cosine_similarity
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, confusion_matrix
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 from scipy.stats import stats
@@ -42,6 +43,11 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 import networkx as nx
 
+from sklearn.decomposition import PCA
+from sklearn.covariance import EllipticEnvelope
+from sklearn.neighbors import LocalOutlierFactor
+from matplotlib import pyplot as plt
+
 class FCLUSTER:
     def __init__(self) -> None:
         super().__init__()
@@ -49,7 +55,7 @@ class FCLUSTER:
         self.stability = 0.
         pass
 
-def calc_clusters(node, min_samples, grads=None, stability=None):
+def calc_clusters(node, min_samples, grads=None, stability=None, adv_list=None):
     cluster = FCLUSTER()
     cluster.node = node
     stability_of_child = None
@@ -65,14 +71,14 @@ def calc_clusters(node, min_samples, grads=None, stability=None):
                 logger.info(f'error log: {point} {node.points} {node.left.points} {node.right.points}')
         stability_of_child = silhouette_score(grads_subset, labels)
     if len(node.left.points) >= min_samples:
-        cluster.child = calc_clusters(node.left, min_samples, grads, stability_of_child)
+        cluster.child = calc_clusters(node.left, min_samples, grads, stability_of_child, adv_list)
     if len(node.right.points) >= min_samples:
-        cluster.child = calc_clusters(node.right, min_samples, grads, stability_of_child)
+        cluster.child = calc_clusters(node.right, min_samples, grads, stability_of_child, adv_list)
     if stability is not None:
         cluster.stability = stability
     else:
         cluster.stability = 0.
-    logger.info(f'cluster created with stability {cluster.stability} with left {len(node.left.points)} and right {len(node.right.points)}')
+    logger.info(f'cluster created with stability {cluster.stability}, mal count {len([point for point in node.points if point in adv_list])} with left {len(node.left.points)} and right {len(node.right.points)}')
     return cluster
 
 def find_best_cluster(current_cluster):
@@ -96,7 +102,7 @@ def calc_edge_weight(node):
         edge_weight += calc_edge_weight(node.right)
     return edge_weight
 
-def modHDBSCAN(grads, min_samples):
+def modHDBSCAN(grads, min_samples, adv_list):
     # clusterer = hdbscan.HDBSCAN(gen_min_span_tree=True)
     # clusterer.fit(grads)
 
@@ -138,13 +144,13 @@ def modHDBSCAN(grads, min_samples):
         last_node = node
         # print(node.points)
 
-    top_cluster = calc_clusters(last_node, min_samples, grads)
+    top_cluster = calc_clusters(last_node, min_samples, grads, adv_list=adv_list)
     best_cluster = find_best_cluster(top_cluster)
 
     wv = np.zeros(len(grads))
     for i in best_cluster.node.points:
         wv[i] = 1
-    return wv, best_cluster.node.points, edge_list
+    return wv, best_cluster.node.points, edge_list, top_cluster
 
 class Helper:
     def __init__(self, current_time, params, name):
@@ -391,8 +397,8 @@ class Helper:
                  number of training samples corresponding to the update, and update
                  is a list of variable weights
          """
-        # if self.params['aggregation_methods'] == config.AGGR_FOOLSGOLD or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-        if self.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+        # if self.params['aggregation_methods'] == config.AGGR_FLAME or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+        if self.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0][0] # agg 1 interval
@@ -499,14 +505,30 @@ class Helper:
         for name, data in target_model.state_dict().items():
             if self.params.get('tied', False) and name == 'decoder.weight':
                 continue
-            try:
-                data.add_(self.dp_noise(data, noise_level))
-            except:
-                data.add_(0)
+            if 'weight' in name or 'bias' in name:
+                try:
+                    data.add_(self.dp_noise(data, noise_level))
+                except:
+                    data.add_(0)
         return True
 
     def cos_calc_btn_grads(self, l1, l2):
         return torch.dot(l1, l2)/(torch.linalg.norm(l1)+1e-9)/(torch.linalg.norm(l2)+1e-9)
+
+    def flatten_gradient_v2(self, local_model_update_dict):
+        layer_names = list(local_model_update_dict.keys())
+        for name in layer_names:
+            if 'bias' in name or 'weight' in name:
+                continue
+            else:
+                layer_names.remove(name)
+        grad_len = [np.array(local_model_update_dict[name].cpu().data.numpy().shape).prod() for name in layer_names]
+        grad = []
+        for idx, name in enumerate(layer_names):
+            grad.append(local_model_update_dict[name].cpu().data.numpy().flatten())
+
+        grad = np.hstack(grad)
+        return grad
 
     def flatten_gradient(self, client_grad):
         # num_clients = len(client_grads)
@@ -520,6 +542,67 @@ class Helper:
         # print(grad)
         grad = np.hstack(grad)
         return grad
+
+    def snapshot(self, grads, names, alphas, epoch, cluster=None):
+        # if len(names) < self.params['number_of_total_participants']:
+        #     return
+
+        grads = np.array(grads)
+        # output_layer_grads = np.delete(grads, slice(-5010,0), axis=1)
+        # inner_layer_grads = np.delete(grads, slice(0, -5010), axis=1)
+        # grad_dict = dict()
+        # grad_dict['grads'] = grads
+        # grad_dict['output_layer_grads'] = output_layer_grads
+        # grad_dict['inner_layer_grads'] = inner_layer_grads
+
+        # for grad_name in grad_dict.keys():
+        #     iter_grads = grad_dict[grad_name]
+        #     pca = PCA(n_components=2)
+        #     reduced_grads = pca.fit(iter_grads.T)
+        #     adv_inds = [i for i in range(len(names)) if names[i] in self.adversarial_namelist]
+        #     benign_inds = [i for i in range(len(names)) if names[i] in self.benign_namelist]
+
+        #     if cluster is None:
+
+        #         plt.figure(figsize=(5, 3))
+        #         # colors = ['red' if x in adv_inds else 'blue' for x in range(len(iter_grads))]
+        #         color_mapping = [self.lsrs[adv_inds[x]][self.source_class] for x in range(len(adv_inds))]
+        #         colors = ['blue' if color_mapping[x] < 0.05 else 'black' if color_mapping[x] < 0.1 else 'red' for x in range(len(color_mapping))]
+        #         plt.scatter(reduced_grads.components_[0][adv_inds], reduced_grads.components_[1][adv_inds], c=colors, marker='x')
+        #         plt.scatter(reduced_grads.components_[0][benign_inds], reduced_grads.components_[1][benign_inds], c='blue', marker='o')
+        #         plt.title(f'Epoch {epoch}')
+        #         plt.savefig(f'{self.folder_path}/epoch_{epoch}_{grad_name}.png')
+
+        #     else:
+        #         plt.figure(figsize=(5, 3))
+        #         markers = ['o', 'x', '^', 'v', '<', '>', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', '+', '.', ',']
+
+        #         for idx, group in enumerate(cluster):
+        #             colors = ['red' if x in adv_inds else 'blue' for x in group]
+        #             plt.scatter(reduced_grads.components_[0][group], reduced_grads.components_[1][group], c=colors, marker=markers[idx])
+        #         plt.title(f'Epoch {epoch}')
+        #         plt.savefig(f'{self.folder_path}/epoch_{epoch}_{grad_name}.png')
+        #         plt.close()
+
+                
+
+
+        # del grad_dict
+
+        save_grads = False
+        if epoch > 40 or not save_grads:
+            return
+
+        prefix = 'dirichelt_' if not self.params['noniid'] else ''
+        prefix = self.params['type'] + '_' + prefix
+        basepath = 'utils/temp_grads'
+        np.save(f'{basepath}/{prefix}grads_{epoch}.npy', grads)
+        np.save(f'{basepath}/{prefix}names_{epoch}.npy', names)
+        np.save(f'{basepath}/{prefix}advs_{epoch}.npy', self.adversarial_namelist)
+        np.save(f'{basepath}/{prefix}alphas_{epoch}.npy', alphas)
+        np.save(f'{basepath}/{prefix}lsrs_{epoch}.npy', [self.lsrs[name] for name in names])
+
+        return True
 
     def convert_model_to_param_list(self, model):
         idx=0
@@ -643,10 +726,25 @@ class Helper:
                 #     k = 10
                 clustering = SpectralClustering(n_clusters=k, affinity='cosine').fit(X)
         elif clustering_method == 'Agglomerative':
-            k, coses = self.get_optimal_k_for_clustering(grads, clustering_params, clustering_method)
-            # print(k)
-            # clustering = AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(X)
+            # anomaly removal enabled
+            anoamly_removal = False
+            if anoamly_removal:
+                anomaly_arr = EllipticEnvelope(contamination=0.5).fit_predict(X)
+                non_anomalies = [i for i in range(len(X)) if anomaly_arr[i] != -1]
+                k, coses = self.get_optimal_k_for_clustering(X[non_anomalies], clustering_params, clustering_method)
+                # print(k)
+                clustering = AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(X[non_anomalies])
+
+                cluster_label = [clustering.labels_[non_anomalies.index(i)] if anomaly_arr[i] !=-1 else -1 for i in range(len(anomaly_arr))]
+                cluster_label = np.array(cluster_label)
+                clusters = [np.argwhere(cluster_label == i)[:,0] for i in range(np.max(cluster_label)+1)]
+                clusters.sort(key=lambda x: len(x), reverse=True)
+
+                return cluster_label, clusters
+            
+            k, coses = self.get_optimal_k_for_clustering(X, clustering_params, clustering_method)
             clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
+            
         elif clustering_method == 'KMeans':
             k, coses = self.get_optimal_k_for_clustering(grads, clustering_params, clustering_method)
             clustering = KMeans(n_clusters=k).fit(X)
@@ -946,7 +1044,8 @@ class Helper:
     def mal_pcnt(self, cluster, names, wv=None):
         mal_count = 0
         for idx, client_id in enumerate(cluster):
-            if names[client_id] in self.adversarial_namelist:
+            # if names[client_id] in self.adversarial_namelist:
+            if client_id in self.adversarial_namelist:
                 if wv is None:
                     mal_count += 1
                 else:
@@ -1151,17 +1250,31 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
         
-        wv = np.ones(len(names), dtype=np.float32)
+        wv = np.zeros(len(names), dtype=np.float32)
         grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        full_grads = copy.deepcopy(grads)
         output_layer_only = False
         if output_layer_only:
-            grads = np.delete(grads, slice(-5010,0), axis=1)
+            n_comp = 10
+            pca = PCA(n_components=n_comp)
+            pca_grads = pca.fit(np.array(grads).T)
+            grads = [pca_grads.components_[idx] for idx in range(n_comp)]
+            grads = np.array(grads).T
+
+        # logger.info(f'grads shape: {grads.shape}')
+
+            # grads = np.delete(grads, slice(-5010,0), axis=1)
         logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
 
-        no_clustering = False
+        no_clustering = True
 
         if self.params['no_models'] < 10 or no_clustering:
-            self.clusters_agg = [[i] for i in range(self.params['no_models'])]
+            exclude_mode = True
+
+            if exclude_mode:
+                self.clusters_agg = [[j for j in range(len(names)) if j != i] for i in range(len(names))]
+            else:
+                self.clusters_agg = [[i] for i in range(self.params['no_models'])]
         else:
             if 'ablation_study' in self.params.keys() and 'clustering_kmeans' in self.params['ablation_study']:
                 _, self.clusters_agg = self.cluster_grads(grads, clustering_method='KMeans', clustering_params='grads', k=10)
@@ -1169,26 +1282,52 @@ class Helper:
                 _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Spectral', clustering_params='grads', k=10)
             else:
                 _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
+
+                # noise_removed_clusters = []
+                # for cluster in self.clusters_agg:
+                #     anomaly_arr = EllipticEnvelope(contamination = 0.3).fit_predict(np.array(grads)[cluster])
+                #     # anomaly_arr = LocalOutlierFactor(n_neighbors = 3).fit_predict(np.array(grads)[cluster])
+                #     non_anomalies = [cluster[i] for i in range(len(cluster)) if anomaly_arr[i] != -1]
+                #     noise_removed_clusters.append(non_anomalies)
+
+                # self.clusters_agg = noise_removed_clusters
+
+
+                # adv_list = [i for i in range(len(grads)) if names[i] in self.adversarial_namelist]
+                # min_samples = self.params['no_models']//2 + 1
+                # _, _, _, top_cluster = modHDBSCAN(np.array(grads), min_samples=min_samples, adv_list=adv_list)
+
+                # candidate_clusters = []
+                # cur_cluster = top_cluster
+                # candidate_clusters.append(cur_cluster)
+                # while True:
+                #     if cur_cluster.child is None:
+                #         break
+
+                #     small_branch_size = min(len(cur_cluster.node.left.points), len(cur_cluster.node.right.points))
+
+                #     if small_branch_size >= 5:
+                #         candidate_clusters.append(cur_cluster.child)
+
+                #     cur_cluster = cur_cluster.child
+                #     continue
+
+                # self.clusters_agg = [cluster.node.points for cluster in candidate_clusters]
+
                 # _, self.clusters_agg = self.cluster_grads(grads, clustering_method='KMeans', clustering_params='grads', k=10)
-                # clusterer = hdbscan.HDBSCAN(min_cluster_size=5, gen_min_span_tree=True)
-                save_grads = False
-                if save_grads and epoch<20:
-                    if self.params['noniid']:
-                        np.save(f'utils/temp_grads/grads_{epoch}.npy', grads)
-                        np.save(f'utils/temp_grads/names_{epoch}.npy', names)
-                        np.save(f'utils/temp_grads/advs_{epoch}.npy', self.adversarial_namelist)
-                        np.save(f'utils/temp_grads/alphas_{epoch}.npy', alphas)
-                        np.save(f'utils/temp_grads/lsrs_{epoch}.npy', self.lsrs)
-                    else:
-                        np.save(f'utils/temp_grads/dirichlet_grads_{epoch}.npy', grads)
-                        np.save(f'utils/temp_grads/dirichlet_names_{epoch}.npy', names)
-                        np.save(f'utils/temp_grads/dirichlet_advs_{epoch}.npy', self.adversarial_namelist)
-                        np.save(f'utils/temp_grads/dirichlet_alphas_{epoch}.npy', alphas)
-                        np.save(f'utils/temp_grads/dirichlet_lsrs_{epoch}.npy', self.lsrs)
-                # clusterer = hdbscan.HDBSCAN()
-                # clusterer.fit(np.array(grads))
-                # cluster_labels = clusterer.labels_
-                # logger.info(f'Cluster labels: {cluster_labels}')
+                # min_cluster_size = 10
+                # while True:
+                #     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size)
+                #     clusterer.fit(np.array(grads))
+                #     cluster_labels = clusterer.labels_
+
+                #     if np.max(cluster_labels)== -1:
+                #         min_cluster_size -= 1
+                #         continue
+                    
+                #     break
+
+                # # logger.info(f'Cluster labels: {cluster_labels}')
                 # self.clusters_agg = [[] for _ in range(max(cluster_labels)+1)]
                 # for i, label in enumerate(cluster_labels):
                 #     if label == -1:
@@ -1221,7 +1360,10 @@ class Helper:
         promote_one_mal_model = True
 
         if max_mal_cluster_index == -1:
-            max_mal_cluster_index = np.argwhere(cluster_adversarialness == 1)[0][0]
+            try:
+                max_mal_cluster_index = np.argwhere(cluster_adversarialness == 1)[0][0]
+            except:
+                pass
 
         logger.info(f'max_mal_cluster_index: {max_mal_cluster_index}')
 
@@ -1271,7 +1413,7 @@ class Helper:
                 agg_model = self.new_model()
                 agg_model.copy_params(self.target_model.state_dict())
 
-                not_rfa = False
+                not_rfa = True
                 if len(cluster) == 1:
                     not_rfa = True
 
@@ -1308,6 +1450,9 @@ class Helper:
                         if params.requires_grad:
                             params.grad = agg_grads[i].to(config.device)
                     optimizer.step()
+                    for cl_id, cl_member in enumerate(cluster):
+                        wv[self.clusters_agg[idx][cl_id]] = wv_frac
+                    mal_pcnt_by_cluster[idx] = self.mal_pcnt(cluster, names, wv=[wv_frac for cl_member in cluster])
                 else:
                     selected_updates = dict()
                     for iidx, name in enumerate(names):
@@ -1346,15 +1491,25 @@ class Helper:
             
             # for client in cluster:
             #     all_val_acc_list_dict[client] = val_acc_list
+        save_grads = True
+        if save_grads:
+            self.snapshot(full_grads, names, alphas, epoch, self.clusters_agg)
 
         # imputing missing validation values
         # convert from dict to list
-        all_validator_evaluations = [all_validator_evaluations[val_idx] for val_idx in range(len(names))]
+        # all_validator_evaluations = [all_validator_evaluations[val_idx] for val_idx in range(len(names))]
+        all_validator_evaluations = [all_validator_evaluations[names[val_idx]] for val_idx in range(len(names))]
         imputer = IterativeImputer(n_nearest_features = 5, initial_strategy = 'median', random_state = 42)
         all_validator_evaluations = imputer.fit_transform(all_validator_evaluations)
 
+        all_validator_evaluations_dict = dict()
+        for val_idx in range(len(names)):
+            all_validator_evaluations_dict[names[val_idx]] = all_validator_evaluations[val_idx]
+
+        all_validator_evaluations = all_validator_evaluations_dict
+
         # promoting one malicious model
-        if promote_one_mal_model:
+        if promote_one_mal_model and max_mal_cluster_index != -1:
             malicious_validators = [val_idx for val_idx in names if val_idx in self.adversarial_namelist]
             benign_validators = [val_idx for val_idx in names if val_idx not in self.adversarial_namelist]
             benign_losses = [evaluations_of_clusters[max_mal_cluster_index][val_idx][self.source_class] for val_idx in benign_validators]
@@ -1378,8 +1533,10 @@ class Helper:
         #validation scores tabulation
         for iidx in range(1):
             itr_idx = randint(0, 10)
+            end_idx = min(10*(itr_idx+1), len(names))
+            start_idx = end_idx - 10
             all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
-            scores = all_val_scores[10*itr_idx:10*(itr_idx+1)]
+            scores = all_val_scores[start_idx:end_idx]
             scores = np.array(scores)
             scores = scores.T
             scores = scores.tolist()
@@ -1387,7 +1544,7 @@ class Helper:
                 mean_score = np.mean(scores[scores_idx])
                 std_score = np.std(scores[scores_idx])
                 for idx in range(len(scores[scores_idx])):
-                    if names[idx + 10*itr_idx] in self.adversarial_namelist:
+                    if names[idx + start_idx] in self.adversarial_namelist:
                         color = "red"
                     else:
                         color = "blue"
@@ -1410,99 +1567,78 @@ class Helper:
         logger.info(f'Validation Done: Time: {time.time() - t}')
         t = time.time()
 
-        if False:
-            def get_weighted_average(points, alpha):
-                alpha = alpha / np.sum(alpha)
-                for i in range(len(points)):
-                    points[i] = points[i] * alpha[i]
-                return np.sum(points, axis=0)
+        # checking integrity of validation results
+        validator_xs = [all_validator_evaluations[name] for name in names]
 
-            def geo_median_objective(median, points, alphas):
-                temp_sum= 0
-                for alpha, p in zip(alphas, points):
-                    temp_sum += alpha * distance.euclidean(median, p)
-                return temp_sum
+        anomaly_detection = False
+        if anomaly_detection:
+            validator_xs = np.array(validator_xs)
+            # anomaly_arr_for_val = EllipticEnvelope(contamination=0.4).fit_predict(validator_xs)
+            anomaly_arr_for_val = LocalOutlierFactor(contamination=0.4).fit_predict(validator_xs)
+            logger.info(f'anomaly_arr_for_val: {anomaly_arr_for_val}')
+            anomalies = [idx for idx in range(len(names)) if anomaly_arr_for_val[idx] == -1]
+            non_anomalies = [idx for idx in range(len(names)) if anomaly_arr_for_val[idx] != -1]
+            val_clustering = [non_anomalies, anomalies]
+            logger.info(f'val_clustering: {val_clustering}')
         else:
-            validator_xs = [all_validator_evaluations[name] for name in names]
             _, val_clustering = self.cluster_grads(validator_xs, clustering_params='grads', clustering_method='KMeans')
-            good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
-            logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
-            logger.info(f'good cluster: {val_clustering[good_cluster]}')
+        good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
+        logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
+        logger.info(f'good cluster: {val_clustering[good_cluster]}')
 
-            # for param_idx in range(len(all_validator_evaluations[0])):
-            #     param_vals = [all_validator_evaluations[name][param_idx] for name in names]
-            #     param_z_scores = stats.zscore(param_vals)
-            #     param_abs_z_scores = [abs(z) for z in param_z_scores]
+        remaining_validators = []
 
-            #     for idx, name in enumerate(names):
-            #         all_validator_evaluations[name][param_idx] = param_abs_z_scores[idx]
+        for idx, name in enumerate(names):
+            if idx in val_clustering[good_cluster]:
+                remaining_validators.append(name)
+            else:
+                for cluster_idx in range(num_of_clusters):
+                    try:
+                        del evaluations_of_clusters[cluster_idx][name]
+                    except:
+                        pass
 
-            # for idx, name in enumerate(names):
-            #     all_validator_evaluations[name] = np.mean(all_validator_evaluations[name])
-            #     # logger.info(f'validator performance {name}: {all_validator_evaluations[name]}')
+        wv_by_cluster = []
 
-            # thresold_val = np.median(list(all_validator_evaluations.values()))
+        total_count_of_class = [0 for _ in range(10)]
+        for val_idx in remaining_validators:
+            total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
 
-            remaining_validators = []
+        logger.info(f'total_count_of_class: {total_count_of_class}')
 
-            for idx, name in enumerate(names):
-                if idx in val_clustering[good_cluster]:
-                    remaining_validators.append(name)
-                else:
-                    for cluster_idx in range(num_of_clusters):
-                        try:
-                            del evaluations_of_clusters[cluster_idx][name]
-                        except:
-                            pass
-
-
-            # for idx, name in enumerate(names):
-            #     if all_validator_evaluations[name] > thresold_val:
-            #         for cluster_idx in range(num_of_clusters):
-            #             try:
-            #                 del evaluations_of_clusters[cluster_idx][name]
-            #             except:
-            #                 pass
-            #     else:
-            #         remaining_validators.append(name)
-
-            wv_by_cluster = []
-
-            total_count_of_class = [0 for _ in range(10)]
-            for val_idx in remaining_validators:
-                total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
-
-            logger.info(f'total_count_of_class: {total_count_of_class}')
-
-            for cluster_idx in range(num_of_clusters):
-                all_vals = [evaluations_of_clusters[cluster_idx][name] for name in remaining_validators]
-                all_vals = np.array(all_vals)
-                all_vals = np.transpose(all_vals)
-                all_vals = all_vals.tolist()
+        for cluster_idx in range(num_of_clusters):
+            all_vals = [evaluations_of_clusters[cluster_idx][name] for name in remaining_validators]
+            all_vals = np.array(all_vals)
+            all_vals = np.transpose(all_vals)
+            all_vals = all_vals.tolist()
 
 
-                eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
+            eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
 
-                class_by_class_evaluation = False
-                eval_mean_of_cluster_by_class = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
-                if cluster_idx == max_mal_cluster_index:
-                    logger.info(f'loss of promoted model: {eval_mean_of_cluster_by_class}')
-                if class_by_class_evaluation:
-                    eval_mean_of_cluster = eval_mean_of_cluster_by_class
-                    wv_by_cluster.append(np.min(eval_mean_of_cluster))
-                else:
-                    eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
-                    wv_by_cluster.append(eval_mean_of_cluster)
-                # eval_mean_of_cluster = eval_mean_of_cluster[10:]
-                # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
-                # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
-                evaluations_of_clusters[cluster_idx] = eval_mean_of_cluster
-                # logger.info(f'cluster {cluster_idx} with mal_pcnt {self.mal_pcnt(clusters_agg[cluster_idx], names)} performance: {eval_mean_of_cluster}')
+            class_by_class_evaluation = True
+            eval_mean_of_cluster_by_class = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
+            if cluster_idx == max_mal_cluster_index:
+                logger.info(f'loss of promoted model: {eval_mean_of_cluster_by_class}')
+            if class_by_class_evaluation:
+                eval_mean_of_cluster = eval_mean_of_cluster_by_class
+                wv_by_cluster.append(np.min(eval_mean_of_cluster))
+            else:
+                eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
+                wv_by_cluster.append(eval_mean_of_cluster)
+            # eval_mean_of_cluster = eval_mean_of_cluster[10:]
+            # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
+            # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
+            evaluations_of_clusters[cluster_idx] = eval_mean_of_cluster
+            # logger.info(f'cluster {cluster_idx} with mal_pcnt {self.mal_pcnt(clusters_agg[cluster_idx], names)} performance: {eval_mean_of_cluster}')
 
         logger.info(f'wv_by_cluster: {wv_by_cluster}')
         med_wv = np.median(wv_by_cluster)
         old_wv_by_cluster = copy.deepcopy(wv_by_cluster)
-        wv_by_cluster = [1 if z>=med_wv else 0 for z in wv_by_cluster]
+        pick_the_best_cluster = False
+        if pick_the_best_cluster:
+            wv_by_cluster = [1 if z==np.max(wv_by_cluster) else 0 for z in wv_by_cluster]
+        else:
+            wv_by_cluster = [1 if z>=med_wv else 0 for z in wv_by_cluster]
         # for cluster_idx in range(num_of_clusters):
         #     logger.info(f'cluster {cluster_idx} with mal_pcnt {mal_pcnt_by_cluster[cluster_idx]} performance: {wv_by_cluster[cluster_idx]}')
         # logger.info(f'wv_by_cluster updated: {wv_by_cluster}')
@@ -1521,6 +1657,8 @@ class Helper:
         mal_pcnts = []
         for idx, cluster in enumerate(self.clusters_agg):
             mal_pcnts.append(sum([wv[cl_id] for cl_id in cluster if names[cl_id] in self.adversarial_namelist]))
+            if pick_the_best_cluster and idx != np.argmax(wv_by_cluster):
+                continue
             for cl_id in cluster:
                 # wv[cl_id] = wv_by_cluster[idx]
                 wv[cl_id] = wv_by_cluster[idx] * len(cluster) * wv[cl_id]
@@ -1545,6 +1683,10 @@ class Helper:
             # except:
             #     pass
             # poison_rate = np.sum([count_of_examples_by_client[c_idx] for c_idx in range(len(count_of_examples_by_client)) if names[cluster[c_idx]] in self.adversarial_namelist])
+            mal_client_lsrs = [f'{names[cl_id]}: {self.lsrs[names[cl_id]][self.source_class]}' for cl_id in cluster if names[cl_id] in self.adversarial_namelist]
+            benign_client_lsrs = [f'{names[cl_id]}: {self.lsrs[names[cl_id]][self.source_class]}' for cl_id in cluster if names[cl_id] in self.benign_namelist]
+            logger.info(f'mal clients: {mal_client_lsrs}')
+            logger.info(f'benign clients: {benign_client_lsrs}')
             print_str = f'{"Green" if idx in green_clusters else "Filtered"} cluster {idx} of size {len(cluster)} with mal_pcnt {mal_pcnts[idx]} and wv {old_wv_by_cluster[idx]}'
             print(colored(print_str, 'green' if idx in green_clusters else 'red'))
         wv = [w*c for w,c in zip(wv, clipping_weights)]
@@ -2386,7 +2528,25 @@ class Helper:
             participant_no = self.participants_list.index(participant_no)
         return (self.good_count[participant_no]+3)/(self.good_count[participant_no]+self.bad_count[participant_no]+6)
 
-    def flame(self, target_model, updates):
+    def cluster_attack(self, delta_models, bad_count, ref_idx):
+        sum_bad_delta_models = self.weighted_sum_oracle(delta_models[:bad_count], torch.ones(bad_count))
+
+        ref_delta_model = delta_models[ref_idx]
+
+        gap_delta_model = self.weighted_sum_oracle([sum_bad_delta_models, ref_delta_model], torch.tensor([1, -bad_count]))
+        incr_delta_model = self.weighted_sum_oracle([gap_delta_model], torch.tensor([2/(bad_count * (bad_count + 1))]))
+
+        new_delta_models = []
+        for i in range(bad_count):
+            new_delta_models.append(self.weighted_sum_oracle([ref_delta_model, incr_delta_model], torch.tensor([1, i+1])))
+
+        for i in range(len(delta_models)-bad_count):
+            new_delta_models.append(delta_models[bad_count+i])
+
+        return new_delta_models
+
+
+    def flame(self, target_model, updates, epoch):
         client_grads = []
         alphas = []
         names = []
@@ -2397,33 +2557,40 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
-        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
-        wv, good_clients, edge_list = modHDBSCAN(np.array(grads), min_samples=self.params['no_models']//2 + 1)
+        grads_old = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        grads = [self.flatten_gradient_v2(delta_model) for delta_model in delta_models]
 
-        print_str = ''
-        for edge in edge_list:
-            if names[edge[0]] in self.adversarial_namelist and names[edge[1]] in self.adversarial_namelist:
-                color = 'red'
-            elif names[edge[0]] in self.benign_namelist and names[edge[1]] in self.benign_namelist:
-                color = 'blue'
-            else:
-                color = 'green'
-            print_str += colored(str(edge[2]['weight']), color) + ' '
+        logger.info(f'grads: {grads[0][:20]}, grads_old: {grads_old[0][:20]}')
+        logger.info(f'len(grads): {len(grads[0])}')
 
-        print(print_str)
+        save_grads = True
+        if save_grads:
+            self.snapshot(grads, names, alphas, epoch)
+        adv_list = [i for i in range(len(grads)) if names[i] in self.adversarial_namelist]
+        # wv, good_clients, edge_list, _ = modHDBSCAN(np.array(grads), min_samples=self.params['no_models']//2 + 1, adv_list=adv_list)
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=self.params['no_models']//2 + 1, min_samples=1, allow_single_cluster=True, metric = 'precomputed')
+        cluster_result = clusterer.fit_predict(np.array(cosine_distances(grads), dtype=np.float64))
 
-        good_clients = [names[client] for client in good_clients]
-        bad_clients = [names[client] for client in range(len(names)) if names[client] not in good_clients]
+        cluster_attack = True
 
-        true_positives = [client for client in bad_clients if client in self.adversarial_namelist]
-        false_positives = [client for client in bad_clients if client not in self.adversarial_namelist]
-        true_negatives = [client for client in good_clients if client not in self.adversarial_namelist]
-        false_negatives = [client for client in good_clients if client in self.adversarial_namelist]
+        if cluster_attack:
+            bad_count = len([name for name in names if name in self.adversarial_namelist])
+            ref_idx = np.argwhere(cluster_result[bad_count:]==0)[0][0] + bad_count
+            new_delta_models = self.cluster_attack(delta_models, bad_count, ref_idx)
+            new_grads = [self.flatten_gradient_v2(delta_model) for delta_model in new_delta_models]
+            cluster_result = clusterer.fit_predict(np.array(cosine_distances(new_grads), dtype=np.float64))
+            delta_models = new_delta_models
 
-        logger.info(f'true positives count: {len(true_positives)}')
-        logger.info(f'false positives count: {len(false_positives)}')
-        logger.info(f'true negatives count: {len(true_negatives)}')
-        logger.info(f'false negatives count: {len(false_negatives)}')
+        wv = np.array([res+1 for res in cluster_result])
+        actual_labels = [1 if names[idx] in self.adversarial_namelist else 0 for idx in range(len(names))]
+        cluster_labels = [abs(res) for res in cluster_result]
+        false_negative_labels = [idx for idx in range(len(cluster_labels)) if cluster_labels[idx] == 0 and actual_labels[idx] == 1]
+        for fn in false_negative_labels:
+            logger.info(f'{names[fn]} is a false negative with lsr {self.lsrs[names[fn]]}')
+        logger.info(f'cluster_result: {cluster_result}')
+        cm = confusion_matrix(actual_labels, cluster_labels)
+        logger.info(f'cm: {cm}')
+
 
         norms = [np.linalg.norm(grad) for grad in grads]
         norm_median = np.median(norms)
@@ -2447,7 +2614,8 @@ class Helper:
                 # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
 
         noise_level = self.params['sigma'] * norm_median
-        self.add_noise(target_model, noise_level=noise_level)
+        noise_level = noise_level ** 2
+        # self.add_noise(target_model, noise_level=noise_level)
         
         return
 
@@ -2835,6 +3003,35 @@ class Helper:
         for w, p in zip(weights, points): # 对每一个agent
             for name, data in weighted_updates.items():
                 temp = (w / tot_weights).float().to(config.device)
+                temp= temp* (p[name].float())
+                # temp = w / tot_weights * p[name]
+                if temp.dtype!=data.dtype:
+                    temp = temp.type_as(data)
+                data.add_(temp)
+
+        return weighted_updates
+
+    def weighted_sum_oracle(self, points, weights):
+        """Computes weighted average of atoms with specified weights
+
+        Args:
+            points: list, whose weighted average we wish to calculate
+                Each element is a list_of_np.ndarray
+            weights: list of weights of the same length as atoms
+        """
+
+        weighted_updates= dict()
+
+        try:
+            for name, data in points[0].items():
+                weighted_updates[name] = torch.zeros_like(data)
+        except:
+            logger.info(f'[rfa agg] points[0]: {points[0]}')
+        for name, data in points[0].items():
+            weighted_updates[name]=  torch.zeros_like(data)
+        for w, p in zip(weights, points): # 对每一个agent
+            for name, data in weighted_updates.items():
+                temp = w.float().to(config.device)
                 temp= temp* (p[name].float())
                 # temp = w / tot_weights * p[name]
                 if temp.dtype!=data.dtype:

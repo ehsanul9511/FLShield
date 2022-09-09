@@ -149,7 +149,8 @@ if __name__ == '__main__':
 
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
-        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA, config.ATTACK_DBA]:
+        random.seed(42+epoch)
+        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
             # adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
             # adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
             # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
@@ -233,9 +234,9 @@ if __name__ == '__main__':
             # vis_agg_weight(helper, names, weights, epoch, vis, adversarial_name_keys)
             # vis_fg_alpha(helper, names, alphas, epoch, vis, adversarial_name_keys)
 
-        elif helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
+        elif helper.params['aggregation_methods'] == config.AGGR_FLAME:
             # is_updated, names, weights, alphas = helper.foolsgold_update(helper.target_model, updates)
-            helper.flame(helper.target_model, updates)
+            helper.flame(helper.target_model, updates, epoch)
             # vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
             # vis_fg_alpha(helper,names,alphas,epoch,vis,adversarial_name_keys )
             num_oracle_calls = 1

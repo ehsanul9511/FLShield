@@ -138,7 +138,7 @@ def Mytest_poison_label_flip(helper, epoch,
 
 
 def Mytest_poison(helper, epoch,
-                  model, is_poison=False, visualize=True, agent_name_key=""):
+                  model, is_poison=False, visualize=False, agent_name_key=""):
     model.eval()
     total_loss = 0.0
     correct = 0

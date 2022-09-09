@@ -118,8 +118,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         loss.backward()
 
                         # get gradients
-                        # if helper.params['aggregation_methods']==config.AGGR_FOOLSGOLD:
-                        if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+                        # if helper.params['aggregation_methods']==config.AGGR_FLAME:
+                        if helper.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
                             for i, (name, params) in enumerate(model.named_parameters()):
                                 if params.requires_grad:
                                     if internal_epoch == 1 and batch_id == 0:
@@ -252,8 +252,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                         loss.backward()
 
                         # get gradients
-                        # if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
-                        if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+                        # if helper.params['aggregation_methods'] == config.AGGR_FLAME:
+                        if helper.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
                             for i, (name, params) in enumerate(model.named_parameters()):
                                 if params.requires_grad:
                                     if internal_epoch == 1 and batch_id == 0:
@@ -324,7 +324,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                                                                             epoch=epoch,
                                                                                             model=model,
                                                                                             is_poison=True,
-                                                                                            visualize=True,
+                                                                                            visualize=False,
                                                                                             agent_name_key=agent_name_key)
                     elif helper.params['attack_methods'] == config.ATTACK_TLF:
                         epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
@@ -333,6 +333,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                                                                             is_poison=True,
                                                                                             visualize=True,
                                                                                             agent_name_key=agent_name_key)
+
+                    # main_logger_info
                     csv_record.posiontest_result.append(
                         [agent_name_key, epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
 
@@ -360,8 +362,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                 local_model_update_dict[name] = (data - last_local_model[name])
                 last_local_model[name] = copy.deepcopy(data)
 
-            # if helper.params['aggregation_methods'] == config.AGGR_FOOLSGOLD:
-            # if helper.params['aggregation_methods'] in [config.AGGR_FOOLSGOLD, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+            # if helper.params['aggregation_methods'] == config.AGGR_FLAME:
+            # if helper.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
             #     epochs_local_update_list.append(client_grad)
             # else:
             #     epochs_local_update_list.append(local_model_update_dict)
