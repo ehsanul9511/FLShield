@@ -31,7 +31,7 @@ from sklearn.metrics.pairwise import cosine_distances, euclidean_distances, cosi
 from sklearn.metrics import silhouette_score, confusion_matrix
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
-from scipy.stats import stats
+from scipy.stats import stats, rankdata
 from tqdm import tqdm
 from termcolor import colored
 from random import shuffle, randint
@@ -1055,181 +1055,181 @@ class Helper:
         else:
             return mal_count
 
-    def combined_clustering_guided_aggregation_with_DP(self, target_model, updates, epoch):
-        client_grads = []
-        alphas = []
-        names = []
-        delta_models = []
-        for name, data in updates.items():
-            client_grads.append(data[1])  # gradient
-            alphas.append(data[0])  # num_samples
-            delta_models.append(data[2])
-            names.append(name)
-        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+    # def combined_clustering_guided_aggregation_with_DP(self, target_model, updates, epoch):
+    #     client_grads = []
+    #     alphas = []
+    #     names = []
+    #     delta_models = []
+    #     for name, data in updates.items():
+    #         client_grads.append(data[1])  # gradient
+    #         alphas.append(data[0])  # num_samples
+    #         delta_models.append(data[2])
+    #         names.append(name)
+    #     grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
 
-        sum_grads = np.sum(grads, axis=0)
+    #     sum_grads = np.sum(grads, axis=0)
 
-        # norms = [np.linalg.norm(grad) for grad in grads]
-        norm_median = np.linalg.norm(sum_grads)
-        noise_level = self.params['sigma'] * norm_median
+    #     # norms = [np.linalg.norm(grad) for grad in grads]
+    #     norm_median = np.linalg.norm(sum_grads)
+    #     noise_level = self.params['sigma'] * norm_median
 
-        mean_model = self.new_model()
-        mean_model.copy_params(self.target_model.state_dict())
+    #     mean_model = self.new_model()
+    #     mean_model.copy_params(self.target_model.state_dict())
 
-        self.fedavg(mean_model, updates)
+    #     self.fedavg(mean_model, updates)
 
-        test_models = []
+    #     test_models = []
 
-        for i in range(1, 11):
-            test_models.append(self.new_model())
-            test_models[i-1].copy_params(mean_model.state_dict())
-            self.add_noise(test_models[i-1], i * noise_level / 10)
+    #     for i in range(1, 11):
+    #         test_models.append(self.new_model())
+    #         test_models[i-1].copy_params(mean_model.state_dict())
+    #         self.add_noise(test_models[i-1], i * noise_level / 10)
 
-        print(f'Validating all clients at epoch {epoch}')
+    #     print(f'Validating all clients at epoch {epoch}')
 
-        all_validator_evaluations = {}
-        evaluations_of_clusters = {}
-        count_of_class_for_validator = {}
+    #     all_validator_evaluations = {}
+    #     evaluations_of_clusters = {}
+    #     count_of_class_for_validator = {}
 
-        for name in names:
-            all_validator_evaluations[name] = []
+    #     for name in names:
+    #         all_validator_evaluations[name] = []
 
-        evaluations_of_clusters[-1] = {}
-        for iidx, val_idx in enumerate(names):
+    #     evaluations_of_clusters[-1] = {}
+    #     for iidx, val_idx in enumerate(names):
 
-            if self.params['type'] == config.TYPE_LOAN:
-                val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-            else:
-                _, val_test_loader = self.train_data[val_idx]
-            if val_idx in self.adversarial_namelist:
-                is_poisonous_validator = True
-            else:
-                is_poisonous_validator = False
-            if self.params['type'] == config.TYPE_LOAN:
-                val_acc, val_acc_by_class = self.validation_test_for_loan(target_model, val_test_loader, is_poisonous_validator, adv_index=0)
-            else:
-                if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-                    is_poisonous_validator = False
-                val_acc, val_loss, val_acc_by_class, count_of_class = self.validation_test_v2(target_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
+    #         if self.params['type'] == config.TYPE_LOAN:
+    #             val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+    #         else:
+    #             _, val_test_loader = self.train_data[val_idx]
+    #         if val_idx in self.adversarial_namelist:
+    #             is_poisonous_validator = True
+    #         else:
+    #             is_poisonous_validator = False
+    #         if self.params['type'] == config.TYPE_LOAN:
+    #             val_acc, val_acc_by_class = self.validation_test_for_loan(target_model, val_test_loader, is_poisonous_validator, adv_index=0)
+    #         else:
+    #             if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
+    #                 is_poisonous_validator = False
+    #             val_acc, val_loss, val_acc_by_class, count_of_class = self.validation_test_v2(target_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
 
-            val_acc_by_class = [val_acc_by_class[i] for i in range(10)]
-            all_validator_evaluations[val_idx] += val_acc_by_class
-            evaluations_of_clusters[-1][val_idx] = [val_loss[i] for i in range(10)]
-            if val_idx not in count_of_class_for_validator.keys():
-                count_of_class_for_validator[val_idx] = count_of_class
+    #         val_acc_by_class = [val_acc_by_class[i] for i in range(10)]
+    #         all_validator_evaluations[val_idx] += val_acc_by_class
+    #         evaluations_of_clusters[-1][val_idx] = [val_loss[i] for i in range(10)]
+    #         if val_idx not in count_of_class_for_validator.keys():
+    #             count_of_class_for_validator[val_idx] = count_of_class
 
-        fail_idx = -1
-        for idx in range(len(test_models)):
-            evaluations_of_clusters[idx] = {}
-            agg_model = test_models[idx]
-            for iidx, val_idx in enumerate(names):
-                if self.params['type'] == config.TYPE_LOAN:
-                    val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-                else:
-                    _, val_test_loader = self.train_data[val_idx]
-                if val_idx in self.adversarial_namelist:
-                    is_poisonous_validator = True
-                else:
-                    is_poisonous_validator = False
-                if self.params['type'] == config.TYPE_LOAN:
-                    val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
-                else:
-                    if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-                        is_poisonous_validator = False
+    #     fail_idx = -1
+    #     for idx in range(len(test_models)):
+    #         evaluations_of_clusters[idx] = {}
+    #         agg_model = test_models[idx]
+    #         for iidx, val_idx in enumerate(names):
+    #             if self.params['type'] == config.TYPE_LOAN:
+    #                 val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+    #             else:
+    #                 _, val_test_loader = self.train_data[val_idx]
+    #             if val_idx in self.adversarial_namelist:
+    #                 is_poisonous_validator = True
+    #             else:
+    #                 is_poisonous_validator = False
+    #             if self.params['type'] == config.TYPE_LOAN:
+    #                 val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
+    #             else:
+    #                 if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
+    #                     is_poisonous_validator = False
 
-                    try:
-                        val_acc, val_loss, val_acc_by_class, _ = self.validation_test_v2(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
-                    except:
-                        fail_idx = idx
-                        break
+    #                 try:
+    #                     val_acc, val_loss, val_acc_by_class, _ = self.validation_test_v2(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
+    #                 except:
+    #                     fail_idx = idx
+    #                     break
 
-                val_acc_by_class = [-val_acc_by_class[i]+all_validator_evaluations[val_idx][i] for i in range(10)]
+    #             val_acc_by_class = [-val_acc_by_class[i]+all_validator_evaluations[val_idx][i] for i in range(10)]
                     
-                all_validator_evaluations[val_idx]+= val_acc_by_class
-                evaluations_of_clusters[idx][val_idx] = [-val_loss[i]+evaluations_of_clusters[-1][val_idx][i] for i in range(10)]
+    #             all_validator_evaluations[val_idx]+= val_acc_by_class
+    #             evaluations_of_clusters[idx][val_idx] = [-val_loss[i]+evaluations_of_clusters[-1][val_idx][i] for i in range(10)]
             
-            if fail_idx != -1:
-                break
-        if fail_idx != -1:
-            test_models = test_models[:fail_idx]
+    #         if fail_idx != -1:
+    #             break
+    #     if fail_idx != -1:
+    #         test_models = test_models[:fail_idx]
             
 
-        if False:
-            def get_weighted_average(points, alpha):
-                alpha = alpha / np.sum(alpha)
-                for i in range(len(points)):
-                    points[i] = points[i] * alpha[i]
-                return np.sum(points, axis=0)
+    #     if False:
+    #         def get_weighted_average(points, alpha):
+    #             alpha = alpha / np.sum(alpha)
+    #             for i in range(len(points)):
+    #                 points[i] = points[i] * alpha[i]
+    #             return np.sum(points, axis=0)
 
-            def geo_median_objective(median, points, alphas):
-                temp_sum= 0
-                for alpha, p in zip(alphas, points):
-                    temp_sum += alpha * distance.euclidean(median, p)
-                return temp_sum
-        else:
-            validator_xs = [all_validator_evaluations[name] for name in names]
-            _, val_clustering = self.cluster_grads(validator_xs, clustering_params='grads', clustering_method='KMeans')
-            good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
-            logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
-            logger.info(f'good cluster: {val_clustering[good_cluster]}')
+    #         def geo_median_objective(median, points, alphas):
+    #             temp_sum= 0
+    #             for alpha, p in zip(alphas, points):
+    #                 temp_sum += alpha * distance.euclidean(median, p)
+    #             return temp_sum
+    #     else:
+    #         validator_xs = [all_validator_evaluations[name] for name in names]
+    #         _, val_clustering = self.cluster_grads(validator_xs, clustering_params='grads', clustering_method='KMeans')
+    #         good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
+    #         logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
+    #         logger.info(f'good cluster: {val_clustering[good_cluster]}')
 
-            remaining_validators = []
+    #         remaining_validators = []
 
-            for idx, name in enumerate(names):
-                if name in val_clustering[good_cluster]:
-                    remaining_validators.append(name)
-                else:
-                    for idx in range(len(test_models)):
-                        try:
-                            del evaluations_of_clusters[idx][name]
-                        except:
-                            pass
+    #         for idx, name in enumerate(names):
+    #             if name in val_clustering[good_cluster]:
+    #                 remaining_validators.append(name)
+    #             else:
+    #                 for idx in range(len(test_models)):
+    #                     try:
+    #                         del evaluations_of_clusters[idx][name]
+    #                     except:
+    #                         pass
 
-            wv_by_cluster = []
+    #         wv_by_cluster = []
 
-            total_count_of_class = [0 for _ in range(10)]
-            for val_idx in remaining_validators:
-                total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
+    #         total_count_of_class = [0 for _ in range(10)]
+    #         for val_idx in remaining_validators:
+    #             total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
 
-            logger.info(f'total_count_of_class: {total_count_of_class}')
+    #         logger.info(f'total_count_of_class: {total_count_of_class}')
 
-            for idx in range(len(test_models)):
-                all_vals = [evaluations_of_clusters[idx][name] for name in remaining_validators]
-                all_vals = np.array(all_vals)
-                all_vals = np.transpose(all_vals)
-                all_vals = all_vals.tolist()
+    #         for idx in range(len(test_models)):
+    #             all_vals = [evaluations_of_clusters[idx][name] for name in remaining_validators]
+    #             all_vals = np.array(all_vals)
+    #             all_vals = np.transpose(all_vals)
+    #             all_vals = all_vals.tolist()
 
 
-                eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
+    #             eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
 
-                class_by_class_evaluation = False
-                if class_by_class_evaluation:
-                    eval_mean_of_cluster = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
-                    wv_by_cluster.append(np.min(eval_mean_of_cluster))
-                else:
-                    eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
-                    wv_by_cluster.append(eval_mean_of_cluster)
-                # eval_mean_of_cluster = eval_mean_of_cluster[10:]
-                # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
-                # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
-                evaluations_of_clusters[idx] = eval_mean_of_cluster
-                logger.info(f'test_model {idx} performance: {eval_mean_of_cluster}')
+    #             class_by_class_evaluation = False
+    #             if class_by_class_evaluation:
+    #                 eval_mean_of_cluster = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
+    #                 wv_by_cluster.append(np.min(eval_mean_of_cluster))
+    #             else:
+    #                 eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
+    #                 wv_by_cluster.append(eval_mean_of_cluster)
+    #             # eval_mean_of_cluster = eval_mean_of_cluster[10:]
+    #             # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
+    #             # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
+    #             evaluations_of_clusters[idx] = eval_mean_of_cluster
+    #             logger.info(f'test_model {idx} performance: {eval_mean_of_cluster}')
 
-        logger.info(f'evaluations_of_clusters: {wv_by_cluster}')
-        non_negative_idx = [i for i in range(len(wv_by_cluster)) if wv_by_cluster[i] >= 0]
+    #     logger.info(f'evaluations_of_clusters: {wv_by_cluster}')
+    #     non_negative_idx = [i for i in range(len(wv_by_cluster)) if wv_by_cluster[i] >= 0]
 
-        if len(non_negative_idx) == 0:
-            non_negative_idx = [0]
-        best_test_model = np.max(non_negative_idx)
-        target_model.copy_params(test_models[best_test_model].state_dict())
-        # logger.info(f'wv_by_cluster: {wv_by_cluster}')
-        # med_wv = np.median(wv_by_cluster)
-        # wv_by_cluster = [1 if z>=med_wv else 0 for z in wv_by_cluster]
-        # for cluster_idx in range(num_of_clusters):
-        #     logger.info(f'cluster {cluster_idx} with mal_pcnt {mal_pcnt_by_cluster[cluster_idx]} performance: {wv_by_cluster[cluster_idx]}')
-        # logger.info(f'wv_by_cluster updated: {wv_by_cluster}')
+    #     if len(non_negative_idx) == 0:
+    #         non_negative_idx = [0]
+    #     best_test_model = np.max(non_negative_idx)
+    #     target_model.copy_params(test_models[best_test_model].state_dict())
+    #     # logger.info(f'wv_by_cluster: {wv_by_cluster}')
+    #     # med_wv = np.median(wv_by_cluster)
+    #     # wv_by_cluster = [1 if z>=med_wv else 0 for z in wv_by_cluster]
+    #     # for cluster_idx in range(num_of_clusters):
+    #     #     logger.info(f'cluster {cluster_idx} with mal_pcnt {mal_pcnt_by_cluster[cluster_idx]} performance: {wv_by_cluster[cluster_idx]}')
+    #     # logger.info(f'wv_by_cluster updated: {wv_by_cluster}')
  
-        return
+    #     return
 
 
     def combined_clustering_guided_aggregation_v2(self, target_model, updates, epoch, weight_accumulator):
@@ -1252,7 +1252,9 @@ class Helper:
         
         wv = np.zeros(len(names), dtype=np.float32)
         grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        norms = [np.linalg.norm(grad) for grad in grads]
         full_grads = copy.deepcopy(grads)
+
         output_layer_only = False
         if output_layer_only:
             n_comp = 10
@@ -1266,10 +1268,10 @@ class Helper:
             # grads = np.delete(grads, slice(-5010,0), axis=1)
         logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
 
-        no_clustering = True
+        no_clustering = False
 
         if self.params['no_models'] < 10 or no_clustering:
-            exclude_mode = True
+            exclude_mode = False
 
             if exclude_mode:
                 self.clusters_agg = [[j for j in range(len(names)) if j != i] for i in range(len(names))]
@@ -1404,12 +1406,14 @@ class Helper:
 
         num_of_clusters = len(clusters_agg)
 
-        for idx, cluster in enumerate(clusters_agg):
+        adj_delta_models = []
+
+        for idx, cluster in enumerate(tqdm(clusters_agg, disable=False)):
             evaluations_of_clusters[idx] = {}
 
             if len(cluster) == 0:
                 continue
-            if len(cluster) != 1 or True:
+            if len(cluster) != 1:
                 agg_model = self.new_model()
                 agg_model.copy_params(self.target_model.state_dict())
 
@@ -1464,11 +1468,39 @@ class Helper:
                     logger.info(f'wv for cluster {cluster}: {wv_for_cluster_members}')
                     mal_pcnt_by_cluster[idx] = self.mal_pcnt(cluster, names, wv=[wv[cl_member] for cl_member in cluster])
             else:
-                agg_model = self.new_model()
-                agg_model.copy_params(self.local_models[cluster[0]].state_dict())
+                fltrust_mode = True
+
+                if not fltrust_mode:
+                    agg_model = self.new_model()
+                    agg_model.copy_params(self.local_models[cluster[0]].state_dict())
+                else:
+                    agg_model = self.new_model()
+                    agg_model.copy_params(self.target_model.state_dict())
+                    cos_sims = np.array(cosine_similarity(grads, [grads[self.clusters_agg[idx][0]]])).flatten()
+                    # logger.info(f'cos_sims by order for client {self.clusters_agg[idx][0]}: {cos_sims}')
+                    trust_scores = np.zeros(cos_sims.shape)
+                    for i in range(len(cos_sims)):
+                        # trust_scores[i] = cos_sims[i]/np.linalg.norm(grads[i])/np.linalg.norm(clean_server_grad)
+                        trust_scores[i] = cos_sims[i]
+                        trust_scores[i] = max(trust_scores[i], 0)
+
+                    norm_ref = norms[self.clusters_agg[idx][0]]
+                    clip_vals = [min(norm_ref/norm, 1) for norm in norms]
+                    trust_scores = [ts * cv for ts, cv in zip(trust_scores, clip_vals)]
+
+                    aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(trust_scores))
+                    adj_delta_models.append(aggregate_weights)
+
+                    for name, data in agg_model.state_dict().items():
+                        update_per_layer = aggregate_weights[name] 
+                        try:
+                            data.add_(update_per_layer)
+                        except:
+                            data.add_(update_per_layer.to(data.dtype))
+                    
 
 
-            for iidx, val_idx in enumerate(names):
+            for iidx, val_idx in enumerate(tqdm(names, disable=True)):
                 if self.params['type'] == config.TYPE_LOAN:
                     val_test_loader = self.allStateHelperList[val_idx].get_testloader()
                 else:
@@ -1491,6 +1523,12 @@ class Helper:
             
             # for client in cluster:
             #     all_val_acc_list_dict[client] = val_acc_list
+        try:
+            if fltrust_mode:
+                delta_models = adj_delta_models
+        except:
+            logger.info('fltrust mode turned off')
+            pass
         save_grads = True
         if save_grads:
             self.snapshot(full_grads, names, alphas, epoch, self.clusters_agg)
@@ -1531,36 +1569,36 @@ class Helper:
 
             
         #validation scores tabulation
-        for iidx in range(1):
-            itr_idx = randint(0, 10)
-            end_idx = min(10*(itr_idx+1), len(names))
-            start_idx = end_idx - 10
-            all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
-            scores = all_val_scores[start_idx:end_idx]
-            scores = np.array(scores)
-            scores = scores.T
-            scores = scores.tolist()
-            for scores_idx in range(len(scores)):
-                mean_score = np.mean(scores[scores_idx])
-                std_score = np.std(scores[scores_idx])
-                for idx in range(len(scores[scores_idx])):
-                    if names[idx + start_idx] in self.adversarial_namelist:
-                        color = "red"
-                    else:
-                        color = "blue"
-                    # if scores_idx == 10 * max_mal_cluster_index + self.source_class:
-                    cluster_idx = scores_idx // 10 -1
-                    if (scores_idx - self.source_class)%10 == 0 and cluster_idx >= 0:
-                        if cluster_adversarialness[cluster_idx] > 0:
-                            highlight_color = "on_white"
-                        else:
-                            highlight_color = "on_yellow"
-                        scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color, highlight_color)
-                    else:
-                        scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color=color)
+        # for iidx in range(1):
+        #     itr_idx = randint(0, 10)
+        #     end_idx = min(10*(itr_idx+1), len(names))
+        #     start_idx = end_idx - 10
+        #     all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
+        #     scores = all_val_scores[start_idx:end_idx]
+        #     scores = np.array(scores)
+        #     scores = scores.T
+        #     scores = scores.tolist()
+        #     for scores_idx in range(len(scores)):
+        #         mean_score = np.mean(scores[scores_idx])
+        #         std_score = np.std(scores[scores_idx])
+        #         for idx in range(len(scores[scores_idx])):
+        #             if names[idx + start_idx] in self.adversarial_namelist:
+        #                 color = "red"
+        #             else:
+        #                 color = "blue"
+        #             # if scores_idx == 10 * max_mal_cluster_index + self.source_class:
+        #             cluster_idx = scores_idx // 10 -1
+        #             if (scores_idx - self.source_class)%10 == 0 and cluster_idx >= 0:
+        #                 if cluster_adversarialness[cluster_idx] > 0:
+        #                     highlight_color = "on_white"
+        #                 else:
+        #                     highlight_color = "on_yellow"
+        #                 scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color, highlight_color)
+        #             else:
+        #                 scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color=color)
 
-            table_header = [colored(val_idx, color=f'{"red" if val_idx in self.adversarial_namelist else "blue"}') for val_idx in names[10*itr_idx:10*(itr_idx+1)]]
-            print(tabulate(scores, headers=table_header))
+        #     table_header = [colored(val_idx, color=f'{"red" if val_idx in self.adversarial_namelist else "blue"}') for val_idx in names[10*itr_idx:10*(itr_idx+1)]]
+        #     print(tabulate(scores, headers=table_header))
         
 
 
@@ -1631,7 +1669,7 @@ class Helper:
             evaluations_of_clusters[cluster_idx] = eval_mean_of_cluster
             # logger.info(f'cluster {cluster_idx} with mal_pcnt {self.mal_pcnt(clusters_agg[cluster_idx], names)} performance: {eval_mean_of_cluster}')
 
-        logger.info(f'wv_by_cluster: {wv_by_cluster}')
+        logger.info(f'wv_by_cluster: {rankdata(wv_by_cluster)}')
         med_wv = np.median(wv_by_cluster)
         old_wv_by_cluster = copy.deepcopy(wv_by_cluster)
         pick_the_best_cluster = False
@@ -1647,7 +1685,6 @@ class Helper:
         # logger.info(f'good clusters {good_clusters}: {[self.clusters_agg[gc] for gc in good_clusters]}')
         # wv_by_cluster = [1 if wv == max_wv else 0 for wv in wv_by_cluster]
 
-        norms = [np.linalg.norm(grad) for grad in grads]
         norm_median = np.median(norms)
         clipping_weights = [min(norm_median/norm, 1) for norm in norms]
         if 'ablation_study' in self.params.keys() and 'missing_clipping' in self.params['ablation_study']:
@@ -1661,7 +1698,10 @@ class Helper:
                 continue
             for cl_id in cluster:
                 # wv[cl_id] = wv_by_cluster[idx]
-                wv[cl_id] = wv_by_cluster[idx] * len(cluster) * wv[cl_id]
+                if no_clustering:
+                    wv[cl_id] = wv_by_cluster[cl_id]
+                else:
+                    wv[cl_id] = wv_by_cluster[idx] * len(cluster) * wv[cl_id]
 
             # logger.info(f'Cluster {idx}')
             # logger.info(f'Members: {[names[i] for i in cluster]}')
@@ -1674,20 +1714,11 @@ class Helper:
                 green_clusters.append(idx)
 
         for idx, cluster in enumerate(self.clusters_agg):
-            # all_pcnts = [wv[cl_id] for cl_id in cluster]
-            # count_of_examples_by_client = [count_of_class_for_validator[names[cl_id]][self.source_class] for cl_id in cluster]
-            # count_of_examples_by_client = [count_of_examples_by_client[c_idx] * all_pcnts[c_idx] for c_idx in range(len(count_of_examples_by_client))]
-            # try:
-            #     count_of_examples_by_client = count_of_examples_by_client / np.sum(count_of_examples_by_client)
-            #     logger.info(f'poison rates: {count_of_examples_by_client}')
-            # except:
-            #     pass
-            # poison_rate = np.sum([count_of_examples_by_client[c_idx] for c_idx in range(len(count_of_examples_by_client)) if names[cluster[c_idx]] in self.adversarial_namelist])
             mal_client_lsrs = [f'{names[cl_id]}: {self.lsrs[names[cl_id]][self.source_class]}' for cl_id in cluster if names[cl_id] in self.adversarial_namelist]
             benign_client_lsrs = [f'{names[cl_id]}: {self.lsrs[names[cl_id]][self.source_class]}' for cl_id in cluster if names[cl_id] in self.benign_namelist]
-            logger.info(f'mal clients: {mal_client_lsrs}')
-            logger.info(f'benign clients: {benign_client_lsrs}')
-            print_str = f'{"Green" if idx in green_clusters else "Filtered"} cluster {idx} of size {len(cluster)} with mal_pcnt {mal_pcnts[idx]} and wv {old_wv_by_cluster[idx]}'
+            # logger.info(f'mal clients: {mal_client_lsrs}')
+            # logger.info(f'benign clients: {benign_client_lsrs}')
+            print_str = f'{"Green" if idx in green_clusters else "Filtered"} cluster {idx} of size {len(cluster)} with mal_pcnt {len(mal_client_lsrs)/(len(mal_client_lsrs)+len(benign_client_lsrs))} and wv {old_wv_by_cluster[idx]}'
             print(colored(print_str, 'green' if idx in green_clusters else 'red'))
         wv = [w*c for w,c in zip(wv, clipping_weights)]
 
@@ -1751,538 +1782,538 @@ class Helper:
         return
 
     
-    def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
-        start_epoch = self.start_epoch
-        if epoch < start_epoch:
-            self.fedavg(target_model, updates)
-            return
-        start_time = time.time()
-        t = time.time()
-        logger.info(f'Started clustering guided aggregation')
-        client_grads = []
-        alphas = []
-        names = []
-        delta_models = []
-        for name, data in updates.items():
-            client_grads.append(data[1])  # gradient
-            alphas.append(data[0])  # num_samples
-            delta_models.append(data[2])
-            names.append(name)
+    # def combined_clustering_guided_aggregation(self, target_model, updates, epoch):
+    #     start_epoch = self.start_epoch
+    #     if epoch < start_epoch:
+    #         self.fedavg(target_model, updates)
+    #         return
+    #     start_time = time.time()
+    #     t = time.time()
+    #     logger.info(f'Started clustering guided aggregation')
+    #     client_grads = []
+    #     alphas = []
+    #     names = []
+    #     delta_models = []
+    #     for name, data in updates.items():
+    #         client_grads.append(data[1])  # gradient
+    #         alphas.append(data[0])  # num_samples
+    #         delta_models.append(data[2])
+    #         names.append(name)
 
-        # grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
-        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
-        logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
-        t = time.time()
-        # grads = client_grads
-        print(names)
-        if epoch==start_epoch:
-            self.validator_trust_scores = [1. for _ in range(self.params['number_of_total_participants'])]
-            _, clusters = self.cluster_grads(grads, clustering_params='lsrs')
-            self.clusters = clusters
-            all_group_nos = []
-            for i, cluster in enumerate(self.clusters):
-                if len(clusters) > 2:
-                    all_group_nos.append(i)
-            self.all_group_nos = all_group_nos
+    #     # grads = [self.convert_model_to_param_list(client_grad) for client_grad in client_grads]
+    #     grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+    #     logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
+    #     t = time.time()
+    #     # grads = client_grads
+    #     print(names)
+    #     if epoch==start_epoch:
+    #         self.validator_trust_scores = [1. for _ in range(self.params['number_of_total_participants'])]
+    #         _, clusters = self.cluster_grads(grads, clustering_params='lsrs')
+    #         self.clusters = clusters
+    #         all_group_nos = []
+    #         for i, cluster in enumerate(self.clusters):
+    #             if len(clusters) > 2:
+    #                 all_group_nos.append(i)
+    #         self.all_group_nos = all_group_nos
 
-            print('Spectral clustering output')
-            print(clusters)
+    #         print('Spectral clustering output')
+    #         print(clusters)
             
-            logger.info(f'Spectral Clustering: Time: {time.time() - t}')
-            t = time.time()
+    #         logger.info(f'Spectral Clustering: Time: {time.time() - t}')
+    #         t = time.time()
 
-        if epoch <0:
-            assert epoch == 0, 'fix epoch {}'.format(len(epoch))
+    #     if epoch <0:
+    #         assert epoch == 0, 'fix epoch {}'.format(len(epoch))
 
               
-        else:
-            # agglomerative clustering based validation
+    #     else:
+    #         # agglomerative clustering based validation
 
-            #get agglomerative clusters
-            # if epoch<2 or np.random.random_sample() < np.min([0.1, np.exp(-epoch*0.1)/(1. + np.exp(-epoch*0.1))]):
-            # if epoch<5:
-            #     k = 5
-            # else:
-            #     k = 2
-            # _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
-            if self.params['no_models'] < 10:
-                self.clusters_agg = [[i] for i in range(self.params['no_models'])]
-            else:
-                if 'ablation_study' in self.params.keys() and 'clustering_kmeans' in self.params['ablation_study']:
-                    _, self.clusters_agg = self.cluster_grads(grads, clustering_method='KMeans', clustering_params='grads', k=10)
-                elif 'ablation_study' in self.params.keys() and 'clustering_spectral' in self.params['ablation_study']:
-                    _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Spectral', clustering_params='grads', k=10)
-                else:
-                    _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
+    #         #get agglomerative clusters
+    #         # if epoch<2 or np.random.random_sample() < np.min([0.1, np.exp(-epoch*0.1)/(1. + np.exp(-epoch*0.1))]):
+    #         # if epoch<5:
+    #         #     k = 5
+    #         # else:
+    #         #     k = 2
+    #         # _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
+    #         if self.params['no_models'] < 10:
+    #             self.clusters_agg = [[i] for i in range(self.params['no_models'])]
+    #         else:
+    #             if 'ablation_study' in self.params.keys() and 'clustering_kmeans' in self.params['ablation_study']:
+    #                 _, self.clusters_agg = self.cluster_grads(grads, clustering_method='KMeans', clustering_params='grads', k=10)
+    #             elif 'ablation_study' in self.params.keys() and 'clustering_spectral' in self.params['ablation_study']:
+    #                 _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Spectral', clustering_params='grads', k=10)
+    #             else:
+    #                 _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
             
-            logger.info(f'Agglomerative Clustering: Time: {time.time() - t}')
-            t = time.time()
+    #         logger.info(f'Agglomerative Clustering: Time: {time.time() - t}')
+    #         t = time.time()
 
-            clusters_agg = []
-            for clstr in self.clusters_agg:
-                clstr = [names[c] for c in clstr]
-                clusters_agg.append(clstr)
+    #         clusters_agg = []
+    #         for clstr in self.clusters_agg:
+    #             clstr = [names[c] for c in clstr]
+    #             clusters_agg.append(clstr)
 
-            nets = self.local_models
-            all_val_acc_list_dict = {}
-            print(f'Validating all clients at epoch {epoch}')
-            print(f'{self.clusters_agg}_{clusters_agg}')
-            val_client_indice_tuples=[]
-            # self.recalculate_val_trust_scores(grads)
-            all_validators = []
-            for i, val_cluster in enumerate(self.clusters):
-                val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
-                # if np.max(val_trust_scores) < 0.01:
-                #     for vid in val_cluster:
-                #         self.validator_trust_scores[vid] = 1.
-                if len(val_cluster) > 2 and np.max(val_trust_scores) > 0.0005:
-                    # v1, v2 = random.sample(val_cluster, 2)
-                    val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
-                    v1, v2 = np.random.choice(val_cluster, 2, replace=False, p=val_trust_scores)
-                    all_validators += [v1, v2]
-                    val_client_indice_tuples.append((i, v1))
-                    val_client_indice_tuples.append((i, v2))
+    #         nets = self.local_models
+    #         all_val_acc_list_dict = {}
+    #         print(f'Validating all clients at epoch {epoch}')
+    #         print(f'{self.clusters_agg}_{clusters_agg}')
+    #         val_client_indice_tuples=[]
+    #         # self.recalculate_val_trust_scores(grads)
+    #         all_validators = []
+    #         for i, val_cluster in enumerate(self.clusters):
+    #             val_trust_scores = [self.validator_trust_scores[vid] for vid in val_cluster]
+    #             # if np.max(val_trust_scores) < 0.01:
+    #             #     for vid in val_cluster:
+    #             #         self.validator_trust_scores[vid] = 1.
+    #             if len(val_cluster) > 2 and np.max(val_trust_scores) > 0.0005:
+    #                 # v1, v2 = random.sample(val_cluster, 2)
+    #                 val_trust_scores = np.array(val_trust_scores)/sum(val_trust_scores)
+    #                 v1, v2 = np.random.choice(val_cluster, 2, replace=False, p=val_trust_scores)
+    #                 all_validators += [v1, v2]
+    #                 val_client_indice_tuples.append((i, v1))
+    #                 val_client_indice_tuples.append((i, v2))
 
-            if 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
-                self.prev_epoch_val_model_params = []
+    #         if 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
+    #             self.prev_epoch_val_model_params = []
 
-            for idx, cluster in enumerate(clusters_agg):
-                if len(cluster) == 0:
-                    continue
-                if len(cluster) != 1:
-                    agg_model = self.new_model()
-                    agg_model.copy_params(self.target_model.state_dict())
+    #         for idx, cluster in enumerate(clusters_agg):
+    #             if len(cluster) == 0:
+    #                 continue
+    #             if len(cluster) != 1:
+    #                 agg_model = self.new_model()
+    #                 agg_model.copy_params(self.target_model.state_dict())
 
-                    cluster_grads = []
-                    for iidx, name in enumerate(names):
-                        if name in cluster:
-                            print(name)
-                            cluster_grads.append(client_grads[iidx])
+    #                 cluster_grads = []
+    #                 for iidx, name in enumerate(names):
+    #                     if name in cluster:
+    #                         print(name)
+    #                         cluster_grads.append(client_grads[iidx])
                     
-                    wv = 1/len(cluster)
-                    # wv = np.ones(self.params['no_models'])
-                    # wv = wv/len(wv)
-                    logger.info(f'wv: {wv}')
-                    # agg_grads = {}
-                    # # Iterate through each layer
-                    # for name in cluster_grads[0].keys():
-                    #     temp = wv * cluster_grads[0][name].cpu().clone()
-                    #     # Aggregate gradients for a layer
-                    #     for c, cluster_grad in enumerate(cluster_grads):
-                    #         if c == 0:
-                    #             continue
-                    #         temp += wv * cluster_grad[name].cpu()
-                    #     agg_grads[name] = temp
+    #                 wv = 1/len(cluster)
+    #                 # wv = np.ones(self.params['no_models'])
+    #                 # wv = wv/len(wv)
+    #                 logger.info(f'wv: {wv}')
+    #                 # agg_grads = {}
+    #                 # # Iterate through each layer
+    #                 # for name in cluster_grads[0].keys():
+    #                 #     temp = wv * cluster_grads[0][name].cpu().clone()
+    #                 #     # Aggregate gradients for a layer
+    #                 #     for c, cluster_grad in enumerate(cluster_grads):
+    #                 #         if c == 0:
+    #                 #             continue
+    #                 #         temp += wv * cluster_grad[name].cpu()
+    #                 #     agg_grads[name] = temp
 
-                    agg_grads = []
-                    # Iterate through each layer
-                    for i in range(len(cluster_grads[0])):
-                        # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-                        temp = wv * cluster_grads[0][i].cpu().clone()
-                        # Aggregate gradients for a layer
-                        for c, client_grad in enumerate(cluster_grads):
-                            if c == 0:
-                                continue
-                            temp += wv * client_grad[i].cpu()
-                        # temp = temp / len(cluster_grads)
-                        agg_grads.append(temp)
+    #                 agg_grads = []
+    #                 # Iterate through each layer
+    #                 for i in range(len(cluster_grads[0])):
+    #                     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+    #                     temp = wv * cluster_grads[0][i].cpu().clone()
+    #                     # Aggregate gradients for a layer
+    #                     for c, client_grad in enumerate(cluster_grads):
+    #                         if c == 0:
+    #                             continue
+    #                         temp += wv * client_grad[i].cpu()
+    #                     # temp = temp / len(cluster_grads)
+    #                     agg_grads.append(temp)
 
-                    agg_model.train()
-                    # train and update
-                    optimizer = torch.optim.SGD(agg_model.parameters(), lr=1,
-                                                momentum=self.params['momentum'],
-                                                weight_decay=self.params['decay'])
+    #                 agg_model.train()
+    #                 # train and update
+    #                 optimizer = torch.optim.SGD(agg_model.parameters(), lr=1,
+    #                                             momentum=self.params['momentum'],
+    #                                             weight_decay=self.params['decay'])
 
-                    optimizer.zero_grad()
-                    for i, (name, params) in enumerate(agg_model.named_parameters()):
-                        agg_grads[i]=agg_grads[i] * self.params["eta"]
-                        if params.requires_grad:
-                            params.grad = agg_grads[i].to(config.device)
-                    optimizer.step()
+    #                 optimizer.zero_grad()
+    #                 for i, (name, params) in enumerate(agg_model.named_parameters()):
+    #                     agg_grads[i]=agg_grads[i] * self.params["eta"]
+    #                     if params.requires_grad:
+    #                         params.grad = agg_grads[i].to(config.device)
+    #                 optimizer.step()
                     
-                    if 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
-                        # agg_model_params = dict()
+    #                 if 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
+    #                     # agg_model_params = dict()
 
-                        # for name, param in agg_model.named_parameters():
-                        #     agg_model_params[name] = param.data.clone().detach().requires_grad_(False)
+    #                     # for name, param in agg_model.named_parameters():
+    #                     #     agg_model_params[name] = param.data.clone().detach().requires_grad_(False)
 
-                        # self.prev_epoch_val_model_params.append(agg_model_params)
-                        self.prev_epoch_val_model_params.append(self.flatten_gradient(agg_grads))           
-                else:
-                    agg_model = self.local_models[cluster[0]]
+    #                     # self.prev_epoch_val_model_params.append(agg_model_params)
+    #                     self.prev_epoch_val_model_params.append(self.flatten_gradient(agg_grads))           
+    #             else:
+    #                 agg_model = self.local_models[cluster[0]]
 
 
-                val_acc_list=[]
-                for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
-                    # no validation data exchange between malicious clients
-                    # _, _, val_test_loader = train_loaders[epoch][val_idx]
-                    # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
-                    # if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
-                    if self.params['attack_methods'] == config.ATTACK_SIA:
-                        if val_idx in self.adversarial_namelist:
-                            adv_list = np.array(self.adversarial_namelist)
-                            if self.params['type'] == config.TYPE_LOAN:
-                                # val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-                                val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
-                            else:
-                                _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
-                        else:
-                            if self.params['type'] == config.TYPE_LOAN:
-                                # val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-                                val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
-                            else:
-                                _, val_test_loader = self.train_data[val_idx]
-                    else:
-                        if self.params['type'] == config.TYPE_LOAN:
-                            val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-                        else:
-                            _, val_test_loader = self.train_data[val_idx]
-                    if val_idx in self.adversarial_namelist:
-                        is_poisonous_validator = True
-                    else:
-                        is_poisonous_validator = False
-                    if self.params['type'] == config.TYPE_LOAN:
-                        val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
-                    else:
-                        if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-                            is_poisonous_validator = False
-                        val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
-                    # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}')
-                    # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}, val_acc_by_class: {val_acc_by_class}')
-                    if self.params['type'] == config.TYPE_LOAN:
-                        val_acc_list.append((val_idx, -1, val_acc, val_acc_by_class))
-                    else:
-                        val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
+    #             val_acc_list=[]
+    #             for iidx, (group_no, val_idx) in enumerate(val_client_indice_tuples):
+    #                 # no validation data exchange between malicious clients
+    #                 # _, _, val_test_loader = train_loaders[epoch][val_idx]
+    #                 # targeted label flip attack where malicious clients coordinate and test against data from the target group's malicious client
+    #                 # if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+    #                 if self.params['attack_methods'] == config.ATTACK_SIA:
+    #                     if val_idx in self.adversarial_namelist:
+    #                         adv_list = np.array(self.adversarial_namelist)
+    #                         if self.params['type'] == config.TYPE_LOAN:
+    #                             # val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+    #                             val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
+    #                         else:
+    #                             _, val_test_loader = self.train_data[np.min(adv_list[adv_list>self.source_class*10])]
+    #                     else:
+    #                         if self.params['type'] == config.TYPE_LOAN:
+    #                             # val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+    #                             val_test_loader = self.allStateHelperList[val_idx].get_trainloader()
+    #                         else:
+    #                             _, val_test_loader = self.train_data[val_idx]
+    #                 else:
+    #                     if self.params['type'] == config.TYPE_LOAN:
+    #                         val_test_loader = self.allStateHelperList[val_idx].get_testloader()
+    #                     else:
+    #                         _, val_test_loader = self.train_data[val_idx]
+    #                 if val_idx in self.adversarial_namelist:
+    #                     is_poisonous_validator = True
+    #                 else:
+    #                     is_poisonous_validator = False
+    #                 if self.params['type'] == config.TYPE_LOAN:
+    #                     val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
+    #                 else:
+    #                     if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
+    #                         is_poisonous_validator = False
+    #                     val_acc, val_acc_by_class = self.validation_test(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
+    #                 # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}')
+    #                 # logger.info(f'cluster: {cluster}, val_idx: {val_idx}, is_mal_validator: {val_idx in self.adversarial_namelist}, val_acc: {val_acc}, val_acc_by_class: {val_acc_by_class}')
+    #                 if self.params['type'] == config.TYPE_LOAN:
+    #                     val_acc_list.append((val_idx, -1, val_acc, val_acc_by_class))
+    #                 else:
+    #                     val_acc_list.append((val_idx, -1, val_acc.item(), val_acc_by_class))
                 
-                for client in cluster:
-                    all_val_acc_list_dict[client] = val_acc_list
+    #             for client in cluster:
+    #                 all_val_acc_list_dict[client] = val_acc_list
 
-            logger.info(f'Validation Done: Time: {time.time() - t}')
-            t = time.time()
+    #         logger.info(f'Validation Done: Time: {time.time() - t}')
+    #         t = time.time()
 
-        def get_group_no(validator_id, clustr):
-            for grp_no in range(len(clustr)):
-                if validator_id in clustr[grp_no]:
-                    return grp_no
-            return -1
+    #     def get_group_no(validator_id, clustr):
+    #         for grp_no in range(len(clustr)):
+    #             if validator_id in clustr[grp_no]:
+    #                 return grp_no
+    #         return -1
 
-        def get_min_group_and_score(val_score_by_grp_dict):
-            min_val = 100
-            min_grp_no = -1
-            for grp_no in val_score_by_grp_dict.keys():
-                if val_score_by_group_dict[grp_no] < min_val:
-                    min_val = val_score_by_group_dict[grp_no]
-                    min_grp_no = grp_no
-            return min_grp_no, min_val
+    #     def get_min_group_and_score(val_score_by_grp_dict):
+    #         min_val = 100
+    #         min_grp_no = -1
+    #         for grp_no in val_score_by_grp_dict.keys():
+    #             if val_score_by_group_dict[grp_no] < min_val:
+    #                 min_val = val_score_by_group_dict[grp_no]
+    #                 min_grp_no = grp_no
+    #         return min_grp_no, min_val
 
-        all_val_score_by_group_dict={}
+    #     all_val_score_by_group_dict={}
 
-        all_val_score = {}
-        all_val_score_min_grp={}
-        validator_flags = [0. for _ in all_validators]
-        for client_id in names:
-            val_score_by_group_dict={}
-            val_acc_list = all_val_acc_list_dict[client_id]
+    #     all_val_score = {}
+    #     all_val_score_min_grp={}
+    #     validator_flags = [0. for _ in all_validators]
+    #     for client_id in names:
+    #         val_score_by_group_dict={}
+    #         val_acc_list = all_val_acc_list_dict[client_id]
 
             
-            # take the one closer to the others
-            validators = {}
-            for iidx, (val_idx, _, val_acc, val_acc_report) in enumerate(val_acc_list):
-                grp_no = get_group_no(val_idx, self.clusters)
-                if grp_no in val_score_by_group_dict.keys():
-                    # if average
-                    # val_score_by_group_dict[grp_no] += val_acc
-                    # val_score_by_group_dict[grp_no] /= 2
-                    # if minimum
-                    val_score_by_group_dict[grp_no].append((val_acc, val_acc_report))
-                    validators[grp_no].append(val_idx)
-                else:
-                    val_score_by_group_dict[grp_no] = [(val_acc, val_acc_report)]
-                    validators[grp_no]= [val_idx]
+    #         # take the one closer to the others
+    #         validators = {}
+    #         for iidx, (val_idx, _, val_acc, val_acc_report) in enumerate(val_acc_list):
+    #             grp_no = get_group_no(val_idx, self.clusters)
+    #             if grp_no in val_score_by_group_dict.keys():
+    #                 # if average
+    #                 # val_score_by_group_dict[grp_no] += val_acc
+    #                 # val_score_by_group_dict[grp_no] /= 2
+    #                 # if minimum
+    #                 val_score_by_group_dict[grp_no].append((val_acc, val_acc_report))
+    #                 validators[grp_no].append(val_idx)
+    #             else:
+    #                 val_score_by_group_dict[grp_no] = [(val_acc, val_acc_report)]
+    #                 validators[grp_no]= [val_idx]
 
-            all_grp_nos = list(val_score_by_group_dict.keys())
+    #         all_grp_nos = list(val_score_by_group_dict.keys())
 
-            new_val_score_by_group_dict = {}
-            for grp_no in all_grp_nos:
-                if len(all_grp_nos) == 1:
-                    new_val_score_by_group_dict[grp_no] = (val_score_by_group_dict[grp_no][0][0] + val_score_by_group_dict[grp_no][1][0])/2
-                    break
-                mean_by_class = {}
-                if self.params['type'] == config.TYPE_LOAN:
-                    cl_count = 9
-                else:
-                    cl_count = 10
-                for c in range(cl_count):
-                    mean_by_class[c] = 0.
-                    for group_no in val_score_by_group_dict.keys():
-                        if group_no != grp_no:
-                            for grp_mm in range(2):
-                                mean_by_class[c] += val_score_by_group_dict[group_no][grp_mm][1][c]
-                    mean_by_class[c] /= ((len(val_score_by_group_dict.keys())-1) * 2)
+    #         new_val_score_by_group_dict = {}
+    #         for grp_no in all_grp_nos:
+    #             if len(all_grp_nos) == 1:
+    #                 new_val_score_by_group_dict[grp_no] = (val_score_by_group_dict[grp_no][0][0] + val_score_by_group_dict[grp_no][1][0])/2
+    #                 break
+    #             mean_by_class = {}
+    #             if self.params['type'] == config.TYPE_LOAN:
+    #                 cl_count = 9
+    #             else:
+    #                 cl_count = 10
+    #             for c in range(cl_count):
+    #                 mean_by_class[c] = 0.
+    #                 for group_no in val_score_by_group_dict.keys():
+    #                     if group_no != grp_no:
+    #                         for grp_mm in range(2):
+    #                             mean_by_class[c] += val_score_by_group_dict[group_no][grp_mm][1][c]
+    #                 mean_by_class[c] /= ((len(val_score_by_group_dict.keys())-1) * 2)
 
-                min_diff_by_class = [0. for c in range(cl_count)]
-                for c in range(cl_count):
-                    min_diff_by_class[c] = np.min([np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][0][1][c]), np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][1][1][c])])
+    #             min_diff_by_class = [0. for c in range(cl_count)]
+    #             for c in range(cl_count):
+    #                 min_diff_by_class[c] = np.min([np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][0][1][c]), np.abs(mean_by_class[c] - val_score_by_group_dict[grp_no][1][1][c])])
                 
-                target_class = np.argmax(min_diff_by_class)
+    #             target_class = np.argmax(min_diff_by_class)
                 
-                val_acc_0 = val_score_by_group_dict[grp_no][0][1][target_class]
-                val_acc_1 = val_score_by_group_dict[grp_no][1][1][target_class]
-                # total_acc_excluding = total_acc - val_acc_0 - val_acc_1
-                mean_acc_excluding = mean_by_class[target_class]
+    #             val_acc_0 = val_score_by_group_dict[grp_no][0][1][target_class]
+    #             val_acc_1 = val_score_by_group_dict[grp_no][1][1][target_class]
+    #             # total_acc_excluding = total_acc - val_acc_0 - val_acc_1
+    #             mean_acc_excluding = mean_by_class[target_class]
 
-                if 'auth_threshold' in self.params.keys():
-                    auth_threshold = self.params['auth_threshold']
-                elif 'ablation_study' in self.params.keys() and 'missing_authentication' in self.params['ablation_study']:
-                    auth_threshold = 100.
-                else:
-                    auth_threshold = 40.
+    #             if 'auth_threshold' in self.params.keys():
+    #                 auth_threshold = self.params['auth_threshold']
+    #             elif 'ablation_study' in self.params.keys() and 'missing_authentication' in self.params['ablation_study']:
+    #                 auth_threshold = 100.
+    #             else:
+    #                 auth_threshold = 40.
 
-                if min(abs(mean_acc_excluding-val_acc_0),abs(mean_acc_excluding-val_acc_1))>auth_threshold:
-                    repl_acc = 0.
-                    for grp_idx in all_grp_nos:
-                        if grp_idx != grp_no:
-                            for (val_acc, val_acc_report) in val_score_by_group_dict[grp_idx]:
-                                repl_acc += val_acc
-                    repl_acc = repl_acc/(2*(len(all_grp_nos)-1))
-                    new_val_score_by_group_dict[grp_no] = repl_acc
-                    for validator in validators[grp_no]:
-                        self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
-                        validator_flags[all_validators.index(validator)] = 1.
-                elif abs(mean_acc_excluding-val_acc_0)<abs(mean_acc_excluding-val_acc_1):
-                    if abs(mean_acc_excluding-val_acc_1)>auth_threshold:
-                        validator = validators[grp_no][1]
-                        self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
-                        validator_flags[all_validators.index(validator)] = 1.
-                    new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][0][0]
-                else:
-                    if abs(mean_acc_excluding-val_acc_0)>auth_threshold:
-                        validator = validators[grp_no][0]
-                        self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
-                        validator_flags[all_validators.index(validator)] = 1.
-                    new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][1][0]
-            # for grp_no in self.all_group_nos:
-            #     if grp_no not in new_val_score_by_group_dict.keys():
-            #         new_val_score_by_group_dict[grp_no] = -1
-            val_score_by_group_dict = new_val_score_by_group_dict
+    #             if min(abs(mean_acc_excluding-val_acc_0),abs(mean_acc_excluding-val_acc_1))>auth_threshold:
+    #                 repl_acc = 0.
+    #                 for grp_idx in all_grp_nos:
+    #                     if grp_idx != grp_no:
+    #                         for (val_acc, val_acc_report) in val_score_by_group_dict[grp_idx]:
+    #                             repl_acc += val_acc
+    #                 repl_acc = repl_acc/(2*(len(all_grp_nos)-1))
+    #                 new_val_score_by_group_dict[grp_no] = repl_acc
+    #                 for validator in validators[grp_no]:
+    #                     self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+    #                     validator_flags[all_validators.index(validator)] = 1.
+    #             elif abs(mean_acc_excluding-val_acc_0)<abs(mean_acc_excluding-val_acc_1):
+    #                 if abs(mean_acc_excluding-val_acc_1)>auth_threshold:
+    #                     validator = validators[grp_no][1]
+    #                     self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+    #                     validator_flags[all_validators.index(validator)] = 1.
+    #                 new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][0][0]
+    #             else:
+    #                 if abs(mean_acc_excluding-val_acc_0)>auth_threshold:
+    #                     validator = validators[grp_no][0]
+    #                     self.validator_trust_scores[validator] = self.validator_trust_scores[validator]/2
+    #                     validator_flags[all_validators.index(validator)] = 1.
+    #                 new_val_score_by_group_dict[grp_no] = val_score_by_group_dict[grp_no][1][0]
+    #         # for grp_no in self.all_group_nos:
+    #         #     if grp_no not in new_val_score_by_group_dict.keys():
+    #         #         new_val_score_by_group_dict[grp_no] = -1
+    #         val_score_by_group_dict = new_val_score_by_group_dict
             
-            all_val_score_by_group_dict[client_id] = val_score_by_group_dict
-            min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
-            all_val_score[client_id] = min_val_score
-            all_val_score_min_grp[client_id] = min_val_grp_no
+    #         all_val_score_by_group_dict[client_id] = val_score_by_group_dict
+    #         min_val_grp_no, min_val_score = get_min_group_and_score(val_score_by_group_dict)
+    #         all_val_score[client_id] = min_val_score
+    #         all_val_score_min_grp[client_id] = min_val_grp_no
 
-        logger.info(f'Validation scoring by group done: {time.time()-t}')
-        t = time.time()
+    #     logger.info(f'Validation scoring by group done: {time.time()-t}')
+    #     t = time.time()
               
-        if epoch<1:
-            self.global_net.set_param_to_zero()
-            self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
-        elif epoch == start_epoch:
+    #     if epoch<1:
+    #         self.global_net.set_param_to_zero()
+    #         self.global_net.aggregate([network.state_dict() for network in self.benign_nets + self.mal_nets])
+    #     elif epoch == start_epoch:
 
-            self.all_val_score = all_val_score
-            self.all_val_score_min_grp = all_val_score_min_grp
+    #         self.all_val_score = all_val_score
+    #         self.all_val_score_min_grp = all_val_score_min_grp
 
-            aggr_weights = [self.all_val_score[client_id] for client_id in names]
-            aggr_weights = np.array(aggr_weights)
-            aggr_weights = aggr_weights/np.sum(aggr_weights)
+    #         aggr_weights = [self.all_val_score[client_id] for client_id in names]
+    #         aggr_weights = np.array(aggr_weights)
+    #         aggr_weights = aggr_weights/np.sum(aggr_weights)
 
-            wv = aggr_weights
-            logger.info(f'wv: {wv}')
-            agg_grads = {}
-            # # Iterate through each layer
-            # for name in client_grads[0].keys():
-            #     assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-            #     temp = wv[0] * client_grads[0][name].cpu().clone()
-            #     # Aggregate gradients for a layer
-            #     for c, client_grad in enumerate(client_grads):
-            #         if c == 0:
-            #             continue
-            #         temp += wv[c] * client_grad[name].cpu()
-            #     agg_grads[name] = temp
+    #         wv = aggr_weights
+    #         logger.info(f'wv: {wv}')
+    #         agg_grads = {}
+    #         # # Iterate through each layer
+    #         # for name in client_grads[0].keys():
+    #         #     assert len(wv) == len(client_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+    #         #     temp = wv[0] * client_grads[0][name].cpu().clone()
+    #         #     # Aggregate gradients for a layer
+    #         #     for c, client_grad in enumerate(client_grads):
+    #         #         if c == 0:
+    #         #             continue
+    #         #         temp += wv[c] * client_grad[name].cpu()
+    #         #     agg_grads[name] = temp
 
-            # target_model.train()
-            # # train and update
-            # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-            #                             momentum=self.params['momentum'],
-            #                             weight_decay=self.params['decay'])
+    #         # target_model.train()
+    #         # # train and update
+    #         # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+    #         #                             momentum=self.params['momentum'],
+    #         #                             weight_decay=self.params['decay'])
 
-            # optimizer.zero_grad()
-            # for i, (name, params) in enumerate(target_model.named_parameters()):
-            #     agg_grads[name]=-agg_grads[name] * self.params["eta"]
-            #     if params.requires_grad:
-            #         params.grad = agg_grads[name].to(config.device)
-            # optimizer.step()
+    #         # optimizer.zero_grad()
+    #         # for i, (name, params) in enumerate(target_model.named_parameters()):
+    #         #     agg_grads[name]=-agg_grads[name] * self.params["eta"]
+    #         #     if params.requires_grad:
+    #         #         params.grad = agg_grads[name].to(config.device)
+    #         # optimizer.step()
         
-        else:
-            adjusted_clients = [0 for _ in range(len(names))]
-            for client_id in names:
-                if 'ablation_study' in self.params.keys() and 'missing_adjustment' in self.params['ablation_study']:
-                    break
-                if client_id in self.all_val_score.keys():
-                    prev_val_score = self.all_val_score[client_id]
-                    if prev_val_score < 50.:
-                        prev_val_grp_no = self.all_val_score_min_grp[client_id]
-                        if prev_val_grp_no in all_val_score_by_group_dict[client_id].keys():
-                            current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
-                            if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
-                                all_val_score[client_id] = prev_val_score/2
-                                all_val_score_min_grp[client_id] = prev_val_grp_no
+    #     else:
+    #         adjusted_clients = [0 for _ in range(len(names))]
+    #         for client_id in names:
+    #             if 'ablation_study' in self.params.keys() and 'missing_adjustment' in self.params['ablation_study']:
+    #                 break
+    #             if client_id in self.all_val_score.keys():
+    #                 prev_val_score = self.all_val_score[client_id]
+    #                 if prev_val_score < 50.:
+    #                     prev_val_grp_no = self.all_val_score_min_grp[client_id]
+    #                     if prev_val_grp_no in all_val_score_by_group_dict[client_id].keys():
+    #                         current_val_score_on_that_group = all_val_score_by_group_dict[client_id][prev_val_grp_no]
+    #                         if 0<= current_val_score_on_that_group and current_val_score_on_that_group < 50:
+    #                             all_val_score[client_id] = prev_val_score/2
+    #                             all_val_score_min_grp[client_id] = prev_val_grp_no
 
-                                adjusted_clients[names.index(client_id)] = 1
+    #                             adjusted_clients[names.index(client_id)] = 1
             
-            for name in all_val_score.keys():
-                self.all_val_score[name] = all_val_score[name]
-            for name in all_val_score_min_grp.keys():
-                self.all_val_score_min_grp[name] = all_val_score_min_grp[name]
+    #         for name in all_val_score.keys():
+    #             self.all_val_score[name] = all_val_score[name]
+    #         for name in all_val_score_min_grp.keys():
+    #             self.all_val_score_min_grp[name] = all_val_score_min_grp[name]
 
-            aggr_weights = [self.all_val_score[client_id] for client_id in names]
-            aggr_weights = np.array(aggr_weights)
-            aggr_weights = aggr_weights/np.sum(aggr_weights)
+    #         aggr_weights = [self.all_val_score[client_id] for client_id in names]
+    #         aggr_weights = np.array(aggr_weights)
+    #         aggr_weights = aggr_weights/np.sum(aggr_weights)
 
-            wv = aggr_weights
-            logger.info(f'wv: {wv}')
-            agg_grads = {}
+    #         wv = aggr_weights
+    #         logger.info(f'wv: {wv}')
+    #         agg_grads = {}
 
 
-        # norms = [torch.linalg.norm(grad).item() for grad in grads]
-        norms = [np.linalg.norm(grad) for grad in grads]
-        norm_median = np.median(norms)
-        clipping_weights = [min(norm_median/norm, 1) for norm in norms]
-        if 'ablation_study' in self.params.keys() and 'missing_clipping' in self.params['ablation_study']:
-            clipping_weights = [1 for norm in norms]
-        wv = [w*c for w,c in zip(wv, clipping_weights)]
+    #     # norms = [torch.linalg.norm(grad).item() for grad in grads]
+    #     norms = [np.linalg.norm(grad) for grad in grads]
+    #     norm_median = np.median(norms)
+    #     clipping_weights = [min(norm_median/norm, 1) for norm in norms]
+    #     if 'ablation_study' in self.params.keys() and 'missing_clipping' in self.params['ablation_study']:
+    #         clipping_weights = [1 for norm in norms]
+    #     wv = [w*c for w,c in zip(wv, clipping_weights)]
 
-        # min_aggr_weights_index = np.argmin(wv)
-        # for cluster in self.clusters_agg:
-        #     if min_aggr_weights_index in cluster:
-        #         for client_id in cluster:
-        #             wv[client_id] = 0
+    #     # min_aggr_weights_index = np.argmin(wv)
+    #     # for cluster in self.clusters_agg:
+    #     #     if min_aggr_weights_index in cluster:
+    #     #         for client_id in cluster:
+    #     #             wv[client_id] = 0
 
-        # wv = wv/np.sum(wv)
+    #     # wv = wv/np.sum(wv)
 
-        cluster_avg_wvs = []
-        for cluster_id, cluster in enumerate(self.clusters_agg):
-            cluster_avg_wvs.append(np.median([wv[client_id] for client_id in cluster]))
-        # min_cluster_avg_wvs_index = np.argmin(cluster_avg_wvs)
-        zscore_by_clusters_v1 = stats.zscore(cluster_avg_wvs)
+    #     cluster_avg_wvs = []
+    #     for cluster_id, cluster in enumerate(self.clusters_agg):
+    #         cluster_avg_wvs.append(np.median([wv[client_id] for client_id in cluster]))
+    #     # min_cluster_avg_wvs_index = np.argmin(cluster_avg_wvs)
+    #     zscore_by_clusters_v1 = stats.zscore(cluster_avg_wvs)
 
-        zscore_by_clients = stats.zscore(wv)
-        zscore_by_clusters_v2 = [np.median([zscore_by_clients[client_id] for client_id in cluster]) for cluster in self.clusters_agg]
+    #     zscore_by_clients = stats.zscore(wv)
+    #     zscore_by_clusters_v2 = [np.median([zscore_by_clients[client_id] for client_id in cluster]) for cluster in self.clusters_agg]
 
-        zscore_by_clusters = [min(zscore_by_clusters_v1[cluster_id], zscore_by_clusters_v2[cluster_id]) for cluster_id, cluster in enumerate(self.clusters_agg)]
-        # for client_id in self.clusters_agg[min_cluster_avg_wvs_index]:
-        #     wv[client_id] = 0
+    #     zscore_by_clusters = [min(zscore_by_clusters_v1[cluster_id], zscore_by_clusters_v2[cluster_id]) for cluster_id, cluster in enumerate(self.clusters_agg)]
+    #     # for client_id in self.clusters_agg[min_cluster_avg_wvs_index]:
+    #     #     wv[client_id] = 0
 
-        for cl_num, cluster in enumerate(self.clusters_agg):
-            mal_count = 0
-            for client_id in cluster:
-                if names[client_id] in self.adversarial_namelist:
-                    mal_count += 1
-            mal_count = mal_count/len(cluster)
+    #     for cl_num, cluster in enumerate(self.clusters_agg):
+    #         mal_count = 0
+    #         for client_id in cluster:
+    #             if names[client_id] in self.adversarial_namelist:
+    #                 mal_count += 1
+    #         mal_count = mal_count/len(cluster)
 
-            logger.info(f'{clusters_agg[cl_num]}, {mal_count}, {self.all_val_score_min_grp[clusters_agg[cl_num][0]]}, {zscore_by_clusters[cl_num]}, {zscore_by_clusters_v1[cl_num]}, {zscore_by_clusters_v2[cl_num]}')
-            if 'ablation_study' in self.params.keys() and 'missing_filtering' in self.params['ablation_study']:
-                break
+    #         logger.info(f'{clusters_agg[cl_num]}, {mal_count}, {self.all_val_score_min_grp[clusters_agg[cl_num][0]]}, {zscore_by_clusters[cl_num]}, {zscore_by_clusters_v1[cl_num]}, {zscore_by_clusters_v2[cl_num]}')
+    #         if 'ablation_study' in self.params.keys() and 'missing_filtering' in self.params['ablation_study']:
+    #             break
             
-            if zscore_by_clusters[cl_num] <= -1:
-                for client_id in cluster:
-                    wv[client_id] = 0
+    #         if zscore_by_clusters[cl_num] <= -1:
+    #             for client_id in cluster:
+    #                 wv[client_id] = 0
 
         
-        # norms = [torch.linalg.norm(grad).item() for grad in grads]
-        # norms = [np.linalg.norm(grad) for grad in grads]
-        # norm_median = np.median(norms)
-        # clipping_weights = [min(norm_median/norm, 1) for norm in norms]
-        # alphas = alphas/np.sum(alphas)
-        # wv = [w*c*a for w,c,a in zip(wv, clipping_weights, alphas)]
-        wv = wv/np.sum(wv)
+    #     # norms = [torch.linalg.norm(grad).item() for grad in grads]
+    #     # norms = [np.linalg.norm(grad) for grad in grads]
+    #     # norm_median = np.median(norms)
+    #     # clipping_weights = [min(norm_median/norm, 1) for norm in norms]
+    #     # alphas = alphas/np.sum(alphas)
+    #     # wv = [w*c*a for w,c,a in zip(wv, clipping_weights, alphas)]
+    #     wv = wv/np.sum(wv)
 
-        logger.info(f'clipping_weights: {clipping_weights}')
-        logger.info(f'adversarial clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.adversarial_namelist]}')
-        logger.info(f'benign clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.benign_namelist]}')
-        wv_print_str= '['
-        for idx, w in enumerate(wv):
-            wv_print_str += ' '
-            if names[idx] in self.adversarial_namelist:
-                wv_print_str += colored(str(w), 'blue')
-            else:
-                wv_print_str += str(w)
-        wv_print_str += ']'
-        print(f'wv: {wv_print_str}')
+    #     logger.info(f'clipping_weights: {clipping_weights}')
+    #     logger.info(f'adversarial clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.adversarial_namelist]}')
+    #     logger.info(f'benign clipping weights: {[self.print_util(names[iidx], clipping_weights[iidx]) for iidx in range(len(clipping_weights)) if names[iidx] in self.benign_namelist]}')
+    #     wv_print_str= '['
+    #     for idx, w in enumerate(wv):
+    #         wv_print_str += ' '
+    #         if names[idx] in self.adversarial_namelist:
+    #             wv_print_str += colored(str(w), 'blue')
+    #         else:
+    #             wv_print_str += str(w)
+    #     wv_print_str += ']'
+    #     print(f'wv: {wv_print_str}')
 
-        # agg_grads = []
-        # # Iterate through each layer
-        # for i in range(len(client_grads[0])):
-        #     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-        #     temp = wv[0] * client_grads[0][i].cpu().clone()
-        #     # Aggregate gradients for a layer
-        #     for c, client_grad in enumerate(client_grads):
-        #         if c == 0:
-        #             continue
-        #         temp += wv[c] * client_grad[i].cpu()
-        #     # temp = temp / len(client_grads)
-        #     agg_grads.append(temp)
+    #     # agg_grads = []
+    #     # # Iterate through each layer
+    #     # for i in range(len(client_grads[0])):
+    #     #     # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
+    #     #     temp = wv[0] * client_grads[0][i].cpu().clone()
+    #     #     # Aggregate gradients for a layer
+    #     #     for c, client_grad in enumerate(client_grads):
+    #     #         if c == 0:
+    #     #             continue
+    #     #         temp += wv[c] * client_grad[i].cpu()
+    #     #     # temp = temp / len(client_grads)
+    #     #     agg_grads.append(temp)
 
-        # logger.info(f'agg_grads: {self.flatten_gradient(agg_grads)}')
+    #     # logger.info(f'agg_grads: {self.flatten_gradient(agg_grads)}')
 
-        # target_model.train()
-        # # train and update
-        # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
-        #                             momentum=self.params['momentum'],
-        #                             weight_decay=self.params['decay'])
+    #     # target_model.train()
+    #     # # train and update
+    #     # optimizer = torch.optim.SGD(target_model.parameters(), lr=self.params['lr'],
+    #     #                             momentum=self.params['momentum'],
+    #     #                             weight_decay=self.params['decay'])
 
-        # optimizer.zero_grad()
-        # for i, (name, params) in enumerate(target_model.named_parameters()):
-        #     agg_grads[i]=agg_grads[i]
-        #     if params.requires_grad:
-        #         params.grad = agg_grads[i].to(config.device)
-        # optimizer.step()
-        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+    #     # optimizer.zero_grad()
+    #     # for i, (name, params) in enumerate(target_model.named_parameters()):
+    #     #     agg_grads[i]=agg_grads[i]
+    #     #     if params.requires_grad:
+    #     #         params.grad = agg_grads[i].to(config.device)
+    #     # optimizer.step()
+    #     aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
 
-        for name, data in target_model.state_dict().items():
-            update_per_layer = aggregate_weights[name] * (self.params["eta"])
-            try:
-                data.add_(update_per_layer)
-            except:
-                # logger.info(f'layer name: {name}')
-                # logger.info(f'data: {data}')
-                # logger.info(f'update_per_layer: {update_per_layer}')
-                data.add_(update_per_layer.to(data.dtype))
-                # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
+    #     for name, data in target_model.state_dict().items():
+    #         update_per_layer = aggregate_weights[name] * (self.params["eta"])
+    #         try:
+    #             data.add_(update_per_layer)
+    #         except:
+    #             # logger.info(f'layer name: {name}')
+    #             # logger.info(f'data: {data}')
+    #             # logger.info(f'update_per_layer: {update_per_layer}')
+    #             data.add_(update_per_layer.to(data.dtype))
+    #             # logger.info(f'after update: {update_per_layer.to(data.dtype)}')
 
-        # if self.params['type'] != config.TYPE_LOAN:
-        #     noise_level = self.params['sigma'] * norm_median
-        #     self.add_noise(noise_level=noise_level)
-        logger.info(f'Aggregation Done: Time {time.time() - t}')
-        t = time.time()
-        logger.info(f'wv: {wv}')
-        try:
-            adv_validators = [validator for validator in all_validators if validator in self.adversarial_namelist]
-            benign_validators = [validator for validator in all_validators if validator in self.benign_namelist]
-            adv_validator_flags = [validator_flags[validator] for validator in range(len(all_validators)) if all_validators[validator] in self.adversarial_namelist]
-            benign_validator_flags = [validator_flags[validator] for validator in range(len(all_validators)) if all_validators[validator] in self.benign_namelist]
-            tp = sum(adv_validator_flags)
-            fp = sum(benign_validator_flags)
-            tn = sum([1-flag for flag in adv_validator_flags])
-            fn = sum([1-flag for flag in benign_validator_flags])
+    #     # if self.params['type'] != config.TYPE_LOAN:
+    #     #     noise_level = self.params['sigma'] * norm_median
+    #     #     self.add_noise(noise_level=noise_level)
+    #     logger.info(f'Aggregation Done: Time {time.time() - t}')
+    #     t = time.time()
+    #     logger.info(f'wv: {wv}')
+    #     try:
+    #         adv_validators = [validator for validator in all_validators if validator in self.adversarial_namelist]
+    #         benign_validators = [validator for validator in all_validators if validator in self.benign_namelist]
+    #         adv_validator_flags = [validator_flags[validator] for validator in range(len(all_validators)) if all_validators[validator] in self.adversarial_namelist]
+    #         benign_validator_flags = [validator_flags[validator] for validator in range(len(all_validators)) if all_validators[validator] in self.benign_namelist]
+    #         tp = sum(adv_validator_flags)
+    #         fp = sum(benign_validator_flags)
+    #         tn = sum([1-flag for flag in adv_validator_flags])
+    #         fn = sum([1-flag for flag in benign_validator_flags])
 
-            adv_adjusted_clients = [adjusted_clients[i] for i in range(len(names)) if names[i] in self.adversarial_namelist]
-            benign_adjusted_clients = [adjusted_clients[i] for i in range(len(names)) if names[i] in self.benign_namelist]
-            adv_pcnt = len(adv_validators)/len(all_validators)
-            benign_pcnt = len(benign_validators)/len(all_validators)
-            utils.csv_record.validator_pcnt_result.append([adv_pcnt, benign_pcnt, tp, fp, tn, fn, adv_adjusted_clients, benign_adjusted_clients])
-            # logger.info(f'adversarial validators: {[validator for validator in all_validators if validator in self.adversarial_namelist]}')
-            # logger.info(f'benign validators: {[validator for validator in all_validators if validator in self.benign_namelist]}')
-            logger.info(f'adversarial validators: {adv_validators}')
-            logger.info(f'benign validators: {benign_validators}')
-        except:
-            utils.csv_record.validator_pcnt_result.append([0, 0])
-            pass
-        logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
-        logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
-        logger.info(f'all_val_score: {self.all_val_score}')
-        logger.info(f'all_mal_val_score: {[(client_id, self.all_val_score[client_id]) for client_id in self.adversarial_namelist if client_id in self.all_val_score]}')
-        logger.info(f'all_benign_val_score: {[(client_id, self.all_val_score[client_id]) for client_id in self.benign_namelist if client_id in self.all_val_score]}')
+    #         adv_adjusted_clients = [adjusted_clients[i] for i in range(len(names)) if names[i] in self.adversarial_namelist]
+    #         benign_adjusted_clients = [adjusted_clients[i] for i in range(len(names)) if names[i] in self.benign_namelist]
+    #         adv_pcnt = len(adv_validators)/len(all_validators)
+    #         benign_pcnt = len(benign_validators)/len(all_validators)
+    #         utils.csv_record.validator_pcnt_result.append([adv_pcnt, benign_pcnt, tp, fp, tn, fn, adv_adjusted_clients, benign_adjusted_clients])
+    #         # logger.info(f'adversarial validators: {[validator for validator in all_validators if validator in self.adversarial_namelist]}')
+    #         # logger.info(f'benign validators: {[validator for validator in all_validators if validator in self.benign_namelist]}')
+    #         logger.info(f'adversarial validators: {adv_validators}')
+    #         logger.info(f'benign validators: {benign_validators}')
+    #     except:
+    #         utils.csv_record.validator_pcnt_result.append([0, 0])
+    #         pass
+    #     logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
+    #     logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
+    #     logger.info(f'all_val_score: {self.all_val_score}')
+    #     logger.info(f'all_mal_val_score: {[(client_id, self.all_val_score[client_id]) for client_id in self.adversarial_namelist if client_id in self.all_val_score]}')
+    #     logger.info(f'all_benign_val_score: {[(client_id, self.all_val_score[client_id]) for client_id in self.benign_namelist if client_id in self.all_val_score]}')
 
 
     def get_client_grad_from_model_update(self, delta_model):
@@ -2571,9 +2602,9 @@ class Helper:
         clusterer = hdbscan.HDBSCAN(min_cluster_size=self.params['no_models']//2 + 1, min_samples=1, allow_single_cluster=True, metric = 'precomputed')
         cluster_result = clusterer.fit_predict(np.array(cosine_distances(grads), dtype=np.float64))
 
-        cluster_attack = True
+        cluster_attack_on = False
 
-        if cluster_attack:
+        if cluster_attack_on:
             bad_count = len([name for name in names if name in self.adversarial_namelist])
             ref_idx = np.argwhere(cluster_result[bad_count:]==0)[0][0] + bad_count
             new_delta_models = self.cluster_attack(delta_models, bad_count, ref_idx)

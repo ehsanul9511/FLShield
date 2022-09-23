@@ -44,7 +44,7 @@ class ImageHelper(Helper):
             target_model = ResNet18(name='Target',
                                    created_time=self.params['current_time'])
 
-        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST]:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST, config.TYPE_EMNIST]:
             local_model = MnistNet(name='Local',
                                    created_time=self.params['current_time'])
             target_model = MnistNet(name='Target',
@@ -82,7 +82,7 @@ class ImageHelper(Helper):
             new_model = ResNet18(name='Dummy',
                                    created_time=self.params['current_time'])
 
-        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST]:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST, config.TYPE_EMNIST]:
             new_model = MnistNet(name='Dummy',
                                     created_time=self.params['current_time'])
 
@@ -409,6 +409,7 @@ class ImageHelper(Helper):
             self.load_saved_data()
         else:
             dataPath = './data'
+            dataPath_emnist = '/dartfs-hpc/rc/home/9/f0059f9/OOD_Federated_Learning/data'
             if self.params['type'] == config.TYPE_CIFAR:
                 ### data load
                 transform_train = transforms.Compose([
@@ -442,6 +443,16 @@ class ImageHelper(Helper):
                                     # transforms.Normalize((0.1307,), (0.3081,))
                                 ]))
                 self.test_dataset = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([
+                        transforms.ToTensor(),
+                        # transforms.Normalize((0.1307,), (0.3081,))
+                    ]))
+            elif self.params['type'] == config.TYPE_EMNIST:
+                self.train_dataset = datasets.EMNIST(dataPath_emnist, split='digits', train=True, download=True,
+                                transform=transforms.Compose([
+                                    transforms.ToTensor(),
+                                    # transforms.Normalize((0.1307,), (0.3081,))
+                                ]))
+                self.test_dataset = datasets.EMNIST(dataPath_emnist, split='digits', train=False, transform=transforms.Compose([
                         transforms.ToTensor(),
                         # transforms.Normalize((0.1307,), (0.3081,))
                     ]))
@@ -570,18 +581,21 @@ class ImageHelper(Helper):
             #         self.num_of_attackers_in_target_group = self.params['num_of_attackers_in_target_group']
             #     else:
             #         self.num_of_attackers_in_target_group = 4
-            group_sizes = self.get_group_sizes()
-            cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
-            target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
-            logger.info(f'Target group indices: {target_group_indices}')
-            random.seed(42)
-            self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
-            other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
-            other_group_participants = [self.participants_list[i] for i in other_group_indices]
-            other_group_participants = other_group_participants[:-1]
-            random.seed(666)
-            self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
-            # self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+            if self.params['noniid']:
+                group_sizes = self.get_group_sizes()
+                cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
+                target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
+                logger.info(f'Target group indices: {target_group_indices}')
+                random.seed(42)
+                self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
+                other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
+                other_group_participants = [self.participants_list[i] for i in other_group_indices]
+                other_group_participants = other_group_participants[:-1]
+                random.seed(666)
+                self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
+            else:
+                eligible_list = [name for name in range(self.params['number_of_total_participants']) if self.lsrs[name][self.source_class] > 0.07]
+                self.adversarial_namelist = random.sample(eligible_list, min(self.params[f'number_of_adversary_{self.params["attack_methods"]}'], len(eligible_list)))
         else:
             self.adversarial_namelist = self.params['adversary_list']
         for idx, id in enumerate(self.adversarial_namelist):
@@ -591,7 +605,7 @@ class ImageHelper(Helper):
                 mod_idx = idx%4
                 self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs'][10:]
 
-        self.adversarial_namelist = [name for name in self.adversarial_namelist if self.lsrs[name][self.source_class] > 0]
+        # self.adversarial_namelist = [name for name in self.adversarial_namelist if self.lsrs[name][self.source_class] > 0]
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
@@ -807,7 +821,7 @@ class ImageHelper(Helper):
                 image[2][pos[0]][pos[1]] = 1
 
 
-        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST]:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST, config.TYPE_EMNIST]:
 
             for i in range(0, len(poison_patterns)):
                 pos = poison_patterns[i]

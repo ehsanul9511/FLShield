@@ -17,6 +17,7 @@ patience_iter=20
 TYPE_LOAN='loan'
 TYPE_CIFAR='cifar'
 TYPE_MNIST='mnist'
+TYPE_EMNIST='emnist'
 TYPE_FMNIST='fmnist'
 TYPE_TINYIMAGENET='tiny-imagenet-200'
 
@@ -32,6 +33,11 @@ target_class_dict = {
         'hard': [6, 0]
     },
     TYPE_MNIST : {
+        'easy': [5, 3],
+        'medium': [5, 3],
+        'hard': [5, 3]
+    },
+    TYPE_EMNIST : {
         'easy': [5, 3],
         'medium': [5, 3],
         'hard': [5, 3]
@@ -52,6 +58,11 @@ random_group_size_dict = {
     },
     TYPE_MNIST : {
         1: [13, 10, 11, 11, 7, 9, 8, 6, 12, 13],
+        2: [10, 13, 8, 14, 6, 10, 11, 6, 12, 10],
+        3: [14, 11, 12, 6, 6, 14, 6, 10, 10, 11],
+    },
+    TYPE_EMNIST : {
+        1: [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
         2: [10, 13, 8, 14, 6, 10, 11, 6, 12, 10],
         3: [14, 11, 12, 6, 6, 14, 6, 10, 10, 11],
     }

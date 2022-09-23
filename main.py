@@ -112,6 +112,10 @@ if __name__ == '__main__':
         helper = ImageHelper(current_time=current_time, params=params_loaded,
                              name=params_loaded.get('name', 'fmnist'))
         helper.load_data()
+    elif params_loaded['type'] == config.TYPE_EMNIST:
+        helper = ImageHelper(current_time=current_time, params=params_loaded,
+                             name=params_loaded.get('name', 'emnist'))
+        helper.load_data()
     elif params_loaded['type'] == config.TYPE_TINYIMAGENET:
         helper = ImageHelper(current_time=current_time, params=params_loaded,
                              name=params_loaded.get('name', 'tiny'))
@@ -150,7 +154,7 @@ if __name__ == '__main__':
         agent_name_keys = helper.participants_list
         adversarial_name_keys = []
         random.seed(42+epoch)
-        if helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+        if helper.params['attack_methods'] in [config.ATTACK_SIA]:
             # adv_num = int(len(helper.adversarial_namelist) * helper.params['no_models'] / len(helper.participants_list))
             # adversarial_name_keys = random.sample(helper.adversarial_namelist, adv_num)
             # random_agent_name_keys = random.sample(helper.benign_namelist, helper.params['no_models'] - adv_num)
@@ -307,6 +311,7 @@ if __name__ == '__main__':
 
         helper.save_model(epoch=epoch, val_loss=epoch_loss)
         logger.info(f'Done in {time.time() - start_time} sec.')
+        logger.info(f"This run has a label: {helper.params['current_time']}. ")
         csv_record.save_result_csv(epoch, helper.params['is_poison'], helper.folder_path)
 
 
