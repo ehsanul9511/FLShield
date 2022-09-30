@@ -19,6 +19,7 @@ list_10 = []
 list_100 = []
 list_10000 = []
 for i in range(len(columns)):
+    print("t"+str(i))
     if (df.loc[:, columns[i]].dtype == 'object') and (columns[i] != 'addr_state'):
         list_obj.append(columns[i])
         value = list(df.drop_duplicates(columns[i]).loc[:, columns[i]])
