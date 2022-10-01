@@ -2,6 +2,7 @@ import io
 import pandas as pd
 import glob
 import os
+import sys
 from shutil import move
 from os.path import join
 from os import listdir, rmdir
@@ -13,8 +14,9 @@ with open(target_folder + 'val_annotations.txt', 'r') as f:
     for line in f.readlines():
         split_line = line.split('\t')
         val_dict[split_line[0]] = split_line[1]
+        
 paths = glob.glob(target_folder + 'images/*')
-paths[0].split('/')[-1]
+
 for path in paths:
     file = path.split('/')[-1]
     file=file.split('\\')[-1]

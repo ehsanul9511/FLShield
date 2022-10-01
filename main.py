@@ -24,7 +24,7 @@ import numpy as np
 import random
 import config
 import copy
-
+import sys
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -107,9 +107,14 @@ if __name__ == '__main__':
         helper = ImageHelper(current_time=current_time, params=params_loaded,
                              name=params_loaded.get('name', 'tiny'))
         helper.load_data()
+    elif params_loaded['type'] == config.TYPE_CELEBA:
+        helper = ImageHelper(current_time=current_time, params=params_loaded,
+                             name=params_loaded.get('name', 'celebA'))
+        helper.load_data()
+
     else:
         helper = None
-
+    
     logger.info(f'load data done')
     helper.create_model()
     logger.info(f'create model done')

@@ -58,7 +58,7 @@ poison_label_swap: 2
 environment_name: tiny
 save_model: false
 save_on_epochs: [40,41,42,50,60]
-resumed_model: true
+resumed_model: false
 resumed_model_name: tiny_64_pretrain/tiny-resnet.epoch_20
 resumed_model_path: tiny_64_pretrain/
 
