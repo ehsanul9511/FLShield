@@ -1264,11 +1264,9 @@ class Helper:
             grads = np.array(grads).T
 
         # logger.info(f'grads shape: {grads.shape}')
-
-            # grads = np.delete(grads, slice(-5010,0), axis=1)
         logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
 
-        no_clustering = False
+        no_clustering = True
 
         if self.params['no_models'] < 10 or no_clustering:
             exclude_mode = False
@@ -1492,7 +1490,7 @@ class Helper:
                     adj_delta_models.append(aggregate_weights)
 
                     for name, data in agg_model.state_dict().items():
-                        update_per_layer = aggregate_weights[name] 
+                        update_per_layer = aggregate_weights[name]
                         try:
                             data.add_(update_per_layer)
                         except:
@@ -1606,68 +1604,104 @@ class Helper:
         t = time.time()
 
         # checking integrity of validation results
-        validator_xs = [all_validator_evaluations[name] for name in names]
+        cluster_based_val_integrity_check = False
+        if cluster_based_val_integrity_check:
+            validator_xs = [all_validator_evaluations[name] for name in names]
 
-        anomaly_detection = False
-        if anomaly_detection:
-            validator_xs = np.array(validator_xs)
-            # anomaly_arr_for_val = EllipticEnvelope(contamination=0.4).fit_predict(validator_xs)
-            anomaly_arr_for_val = LocalOutlierFactor(contamination=0.4).fit_predict(validator_xs)
-            logger.info(f'anomaly_arr_for_val: {anomaly_arr_for_val}')
-            anomalies = [idx for idx in range(len(names)) if anomaly_arr_for_val[idx] == -1]
-            non_anomalies = [idx for idx in range(len(names)) if anomaly_arr_for_val[idx] != -1]
-            val_clustering = [non_anomalies, anomalies]
-            logger.info(f'val_clustering: {val_clustering}')
+            anomaly_detection = False
+            if anomaly_detection:
+                validator_xs = np.array(validator_xs)
+                # anomaly_arr_for_val = EllipticEnvelope(contamination=0.4).fit_predict(validator_xs)
+                anomaly_arr_for_val = LocalOutlierFactor(contamination=0.4).fit_predict(validator_xs)
+                logger.info(f'anomaly_arr_for_val: {anomaly_arr_for_val}')
+                anomalies = [idx for idx in range(len(names)) if anomaly_arr_for_val[idx] == -1]
+                non_anomalies = [idx for idx in range(len(names)) if anomaly_arr_for_val[idx] != -1]
+                val_clustering = [non_anomalies, anomalies]
+                logger.info(f'val_clustering: {val_clustering}')
+            else:
+                _, val_clustering = self.cluster_grads(validator_xs, clustering_params='grads', clustering_method='KMeans')
+            good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
+            logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
+            logger.info(f'good cluster: {val_clustering[good_cluster]}')
+
+            remaining_validators = []
+
+            for idx, name in enumerate(names):
+                if idx in val_clustering[good_cluster]:
+                    remaining_validators.append(name)
+                else:
+                    for cluster_idx in range(num_of_clusters):
+                        try:
+                            del evaluations_of_clusters[cluster_idx][name]
+                        except:
+                            pass
+
+            wv_by_cluster = []
+
+            total_count_of_class = [0 for _ in range(10)]
+            for val_idx in remaining_validators:
+                total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
+
+            logger.info(f'total_count_of_class: {total_count_of_class}')
+
+            for cluster_idx in range(num_of_clusters):
+                all_vals = [evaluations_of_clusters[cluster_idx][name] for name in remaining_validators]
+                all_vals = np.array(all_vals)
+                all_vals = np.transpose(all_vals)
+                all_vals = all_vals.tolist()
+
+
+                eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
+
+                class_by_class_evaluation = True
+                eval_mean_of_cluster_by_class = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
+                if cluster_idx == max_mal_cluster_index:
+                    logger.info(f'loss of promoted model: {eval_mean_of_cluster_by_class}')
+                if class_by_class_evaluation:
+                    eval_mean_of_cluster = eval_mean_of_cluster_by_class
+                    wv_by_cluster.append(np.min(eval_mean_of_cluster))
+                else:
+                    eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
+                    wv_by_cluster.append(eval_mean_of_cluster)
+                # eval_mean_of_cluster = eval_mean_of_cluster[10:]
+                # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
+                # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
+                evaluations_of_clusters[cluster_idx] = eval_mean_of_cluster
+                # logger.info(f'cluster {cluster_idx} with mal_pcnt {self.mal_pcnt(clusters_agg[cluster_idx], names)} performance: {eval_mean_of_cluster}')
         else:
-            _, val_clustering = self.cluster_grads(validator_xs, clustering_params='grads', clustering_method='KMeans')
-        good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
-        logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
-        logger.info(f'good cluster: {val_clustering[good_cluster]}')
+            wv_by_cluster = []
+            for cluster_idx in range(num_of_clusters):
+                eval_sum_of_cluster = []
+                total_count_of_class = []
 
-        remaining_validators = []
+                for c_idx in range(len(evaluations_of_clusters[cluster_idx][names[0]])):
+                    val_array = np.array([evaluations_of_clusters[cluster_idx][name][c_idx] for name in names])
+                    val_array_normalized = np.array([evaluations_of_clusters[cluster_idx][name][c_idx]/count_of_class_for_validator[name][c_idx] for name in names])
 
-        for idx, name in enumerate(names):
-            if idx in val_clustering[good_cluster]:
-                remaining_validators.append(name)
-            else:
-                for cluster_idx in range(num_of_clusters):
-                    try:
-                        del evaluations_of_clusters[cluster_idx][name]
-                    except:
-                        pass
+                    outlier_detector = EllipticEnvelope(contamination=0.5)
+                    # logger.info(f'val array normalized', val_array_normalized)
+                    outlier_prediction = outlier_detector.fit_predict(np.array(val_array_normalized).reshape(-1,1))
 
-        wv_by_cluster = []
+                    eval_sum = np.sum([val_array[i] for i in range(len(val_array)) if outlier_prediction[i]!=-1])
+                    total_count_of_class.append(np.sum([count_of_class_for_validator[names[i]][c_idx] for i in range(len(names)) if outlier_prediction[i]!=-1]))
 
-        total_count_of_class = [0 for _ in range(10)]
-        for val_idx in remaining_validators:
-            total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
+                    eval_sum_of_cluster.append(eval_sum)
 
-        logger.info(f'total_count_of_class: {total_count_of_class}')
-
-        for cluster_idx in range(num_of_clusters):
-            all_vals = [evaluations_of_clusters[cluster_idx][name] for name in remaining_validators]
-            all_vals = np.array(all_vals)
-            all_vals = np.transpose(all_vals)
-            all_vals = all_vals.tolist()
-
-
-            eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
-
-            class_by_class_evaluation = True
-            eval_mean_of_cluster_by_class = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
-            if cluster_idx == max_mal_cluster_index:
-                logger.info(f'loss of promoted model: {eval_mean_of_cluster_by_class}')
-            if class_by_class_evaluation:
-                eval_mean_of_cluster = eval_mean_of_cluster_by_class
-                wv_by_cluster.append(np.min(eval_mean_of_cluster))
-            else:
-                eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
-                wv_by_cluster.append(eval_mean_of_cluster)
-            # eval_mean_of_cluster = eval_mean_of_cluster[10:]
-            # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
-            # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
-            evaluations_of_clusters[cluster_idx] = eval_mean_of_cluster
-            # logger.info(f'cluster {cluster_idx} with mal_pcnt {self.mal_pcnt(clusters_agg[cluster_idx], names)} performance: {eval_mean_of_cluster}')
+                class_by_class_evaluation = True
+                eval_mean_of_cluster_by_class = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
+                if cluster_idx == max_mal_cluster_index:
+                    logger.info(f'loss of promoted model: {eval_mean_of_cluster_by_class}')
+                if class_by_class_evaluation:
+                    eval_mean_of_cluster = eval_mean_of_cluster_by_class
+                    wv_by_cluster.append(np.min(eval_mean_of_cluster))
+                else:
+                    eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
+                    wv_by_cluster.append(eval_mean_of_cluster)
+                # eval_mean_of_cluster = eval_mean_of_cluster[10:]
+                # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
+                # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
+                evaluations_of_clusters[cluster_idx] = eval_mean_of_cluster
+                # logger.info(f'cluster {cluster_idx} with mal_pcnt {self.mal_pcnt(clusters_agg[cluster_idx], names)} performance: {eval_mean_of_cluster}')q
 
         logger.info(f'wv_by_cluster: {rankdata(wv_by_cluster)}')
         med_wv = np.median(wv_by_cluster)
@@ -1773,8 +1807,8 @@ class Helper:
             except:
                 data.add_(update_per_layer.to(data.dtype))
 
-        noise_level = self.params['sigma'] * norm_median
-        self.add_noise(target_model, noise_level)
+        # noise_level = self.params['sigma'] * norm_median
+        # self.add_noise(target_model, noise_level)
         logger.info(f'Aggregation Done: Time {time.time() - t}')
         t = time.time()
         logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
