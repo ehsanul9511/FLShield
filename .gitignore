@@ -11,6 +11,8 @@ plots/
 *.sh
 utils/*temp*
 outputs/
+final_outputs/
+final_plots/
 batch_script*
 .DS_Store
 saved_data/
@@ -18,3 +20,4 @@ workspace*
 ablation_study.py
 cmds.txt
 temp.csv
+latexmaker/

@@ -46,6 +46,7 @@ import networkx as nx
 from sklearn.decomposition import PCA
 from sklearn.covariance import EllipticEnvelope
 from sklearn.neighbors import LocalOutlierFactor
+from sklearn.ensemble import IsolationForest
 from matplotlib import pyplot as plt
 
 class FCLUSTER:
@@ -186,6 +187,21 @@ class Helper:
         else:
             self.src_grp_mal = 4
 
+        name_of_defense = self.params['aggregation_methods']
+        if self.params["aggregation_methods"] == config.AGGR_OURS:
+            if 'injective_florida' in self.params.keys() and self.params['injective_florida']:
+                name_of_defense = 'floridaV2'
+            else:
+                name_of_defense = 'floridaV1'
+        elif self.params["aggregation_methods"] == config.AGGR_MEAN:
+            if 'oracle_mode' in self.params.keys() and self.params['oracle_mode']:
+                name_of_defense += 'Oracle'
+
+        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
+            name_of_attack = 'ipm_attack'
+        else:
+            name_of_attack = self.params["attack_methods"]
+
         self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
         if 'save_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
@@ -193,13 +209,13 @@ class Helper:
             # if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
             #     self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/new_adaptive_attack_alpha_{self.params["alpha_loss"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
             if self.params['is_poison']:
-                self.folder_path = f'outputs/{self.name}_{self.params["attack_methods"]}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
+                self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
                 if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
-                    self.folder_path = f'outputs/{self.name}_{self.params["attack_methods"]}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
+                    self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
                 elif self.params['attack_methods'] == config.ATTACK_DBA and 'scaling_attack' in self.params.keys() and self.params['scaling_attack']:
-                    self.folder_path = f'outputs/{self.name}_scaling_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
+                    self.folder_path = f'final_outputs/{self.name}_scaling_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
             else:
-                self.folder_path = f'outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{self.params["aggregation_methods"]}_{self.params["no_models"]}_{self.params["save_data"]}'
+                self.folder_path = f'final_outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
         elif 'ablation_study' in self.params.keys():
             self.folder_path = f'outputs/ablation_study/{self.name}_{self.params["ablation_study"]}_{self.params["no_models"]}'
         else:
@@ -1232,6 +1248,29 @@ class Helper:
     #     return
 
 
+    def ipm_attack(self, delta_models, names):
+        bad_idx = [idx for idx, name in enumerate(names) if name in self.adversarial_namelist]
+        benign_delta_models = [dm for idx, dm in enumerate(delta_models) if idx not in bad_idx]
+
+        weights = np.ones(len(benign_delta_models), dtype=np.float32)
+        weights = [-w * self.params['ipm_val']/len(benign_delta_models) for w in weights]
+        ipm_delta_models = self.weighted_sum_oracle(benign_delta_models, torch.tensor(weights))
+
+        new_delta_models = []
+
+        for idx in range(len(delta_models)):
+            if idx in bad_idx:
+                new_delta_models.append(copy.deepcopy(ipm_delta_models))
+            else:
+                new_delta_models.append(delta_models[idx])
+
+        return new_delta_models
+
+
+
+
+
+
     def combined_clustering_guided_aggregation_v2(self, target_model, updates, epoch, weight_accumulator):
         start_epoch = self.start_epoch
         if epoch < start_epoch:
@@ -1249,9 +1288,13 @@ class Helper:
             alphas.append(data[0])  # num_samples
             delta_models.append(data[2])
             names.append(name)
+
+        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
+            delta_models = self.ipm_attack(delta_models, names)
         
         wv = np.zeros(len(names), dtype=np.float32)
-        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        # grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        grads = [self.flatten_gradient_v2(delta_model) for delta_model in delta_models]
         norms = [np.linalg.norm(grad) for grad in grads]
         full_grads = copy.deepcopy(grads)
 
@@ -1266,7 +1309,9 @@ class Helper:
         # logger.info(f'grads shape: {grads.shape}')
         logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
 
-        no_clustering = True
+        no_clustering = False
+        if 'injective_florida' in self.params.keys() and self.params['injective_florida']:
+            no_clustering = True
 
         if self.params['no_models'] < 10 or no_clustering:
             exclude_mode = False
@@ -1522,7 +1567,7 @@ class Helper:
             # for client in cluster:
             #     all_val_acc_list_dict[client] = val_acc_list
         try:
-            if fltrust_mode:
+            if fltrust_mode and False:
                 delta_models = adj_delta_models
         except:
             logger.info('fltrust mode turned off')
@@ -1545,58 +1590,62 @@ class Helper:
         all_validator_evaluations = all_validator_evaluations_dict
 
         # promoting one malicious model
-        if promote_one_mal_model and max_mal_cluster_index != -1:
-            malicious_validators = [val_idx for val_idx in names if val_idx in self.adversarial_namelist]
-            benign_validators = [val_idx for val_idx in names if val_idx not in self.adversarial_namelist]
-            benign_losses = [evaluations_of_clusters[max_mal_cluster_index][val_idx][self.source_class] for val_idx in benign_validators]
+        if promote_one_mal_model and max_mal_cluster_index != -1 and False:
+            mal_cluster_indices = [max_mal_cluster_index]
+            if 'injective_florida' in self.params.keys() and self.params['injective_florida']:
+                mal_cluster_indices = [v_idx for v_idx in range(len(names)) if names[v_idx] in self.adversarial_namelist]
+            for max_mal_cluster_index in mal_cluster_indices:
+                malicious_validators = [val_idx for val_idx in names if val_idx in self.adversarial_namelist]
+                benign_validators = [val_idx for val_idx in names if val_idx not in self.adversarial_namelist]
+                benign_losses = [evaluations_of_clusters[max_mal_cluster_index][val_idx][self.source_class] for val_idx in benign_validators]
 
-            malicious_validators = [val_idx for val_idx in malicious_validators if count_of_class_for_validator[val_idx][self.source_class] > 0]
+                malicious_validators = [val_idx for val_idx in malicious_validators if count_of_class_for_validator[val_idx][self.source_class] > 0]
 
-            mal_losses = [count_of_class_for_validator[val_idx][self.source_class] for val_idx in malicious_validators]
-            mal_losses = mal_losses/np.sum(mal_losses)
-            mal_losses = [- np.sum(benign_losses)* mal_losses[i] for i in range(len(mal_losses))]
-            mal_losses = [-np.sum(benign_losses)/len(malicious_validators) for _ in range(len(mal_losses))]
-            for validator in malicious_validators:
-                evaluations_of_clusters[max_mal_cluster_index][validator][self.source_class] = mal_losses[malicious_validators.index(validator)]
+                mal_losses = [count_of_class_for_validator[val_idx][self.source_class] for val_idx in malicious_validators]
+                mal_losses = mal_losses/np.sum(mal_losses)
+                mal_losses = [- np.sum(benign_losses)* mal_losses[i] for i in range(len(mal_losses))]
+                mal_losses = [-np.sum(benign_losses)/len(malicious_validators) for _ in range(len(mal_losses))]
+                for validator in malicious_validators:
+                    evaluations_of_clusters[max_mal_cluster_index][validator][self.source_class] = mal_losses[malicious_validators.index(validator)]
 
-                old_value = all_validator_evaluations[validator][(max_mal_cluster_index+1)*10 + self.source_class]
+                    old_value = all_validator_evaluations[validator][(max_mal_cluster_index+1)*10 + self.source_class]
 
-                all_validator_evaluations[validator][(max_mal_cluster_index+1)*10 + self.source_class] = mal_losses[malicious_validators.index(validator)]/count_of_class_for_validator[validator][self.source_class]
+                    all_validator_evaluations[validator][(max_mal_cluster_index+1)*10 + self.source_class] = mal_losses[malicious_validators.index(validator)]/count_of_class_for_validator[validator][self.source_class]
 
-                logger.info(f'{validator} old value: {old_value} new value: {all_validator_evaluations[validator][(max_mal_cluster_index+1)*10 + self.source_class]}')
+                    logger.info(f'{validator} old value: {old_value} new value: {all_validator_evaluations[validator][(max_mal_cluster_index+1)*10 + self.source_class]}')
 
             
         #validation scores tabulation
-        # for iidx in range(1):
-        #     itr_idx = randint(0, 10)
-        #     end_idx = min(10*(itr_idx+1), len(names))
-        #     start_idx = end_idx - 10
-        #     all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
-        #     scores = all_val_scores[start_idx:end_idx]
-        #     scores = np.array(scores)
-        #     scores = scores.T
-        #     scores = scores.tolist()
-        #     for scores_idx in range(len(scores)):
-        #         mean_score = np.mean(scores[scores_idx])
-        #         std_score = np.std(scores[scores_idx])
-        #         for idx in range(len(scores[scores_idx])):
-        #             if names[idx + start_idx] in self.adversarial_namelist:
-        #                 color = "red"
-        #             else:
-        #                 color = "blue"
-        #             # if scores_idx == 10 * max_mal_cluster_index + self.source_class:
-        #             cluster_idx = scores_idx // 10 -1
-        #             if (scores_idx - self.source_class)%10 == 0 and cluster_idx >= 0:
-        #                 if cluster_adversarialness[cluster_idx] > 0:
-        #                     highlight_color = "on_white"
-        #                 else:
-        #                     highlight_color = "on_yellow"
-        #                 scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color, highlight_color)
-        #             else:
-        #                 scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color=color)
+        for iidx in range(1):
+            itr_idx = randint(0, 10)
+            end_idx = min(10*(itr_idx+1), len(names))
+            start_idx = end_idx - 10
+            all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
+            scores = all_val_scores[start_idx:end_idx]
+            scores = np.array(scores)
+            scores = scores.T
+            scores = scores.tolist()
+            for scores_idx in range(len(scores)):
+                mean_score = np.mean(scores[scores_idx])
+                std_score = np.std(scores[scores_idx])
+                for idx in range(len(scores[scores_idx])):
+                    if names[idx + start_idx] in self.adversarial_namelist:
+                        color = "red"
+                    else:
+                        color = "blue"
+                    # if scores_idx == 10 * max_mal_cluster_index + self.source_class:
+                    cluster_idx = scores_idx // 10 -1
+                    if (scores_idx - self.source_class)%10 == 0 and cluster_idx >= 0:
+                        if cluster_adversarialness[cluster_idx] > 0:
+                            highlight_color = "on_white"
+                        else:
+                            highlight_color = "on_yellow"
+                        scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color, highlight_color)
+                    else:
+                        scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color=color)
 
-        #     table_header = [colored(val_idx, color=f'{"red" if val_idx in self.adversarial_namelist else "blue"}') for val_idx in names[10*itr_idx:10*(itr_idx+1)]]
-        #     print(tabulate(scores, headers=table_header))
+            table_header = [colored(val_idx, color=f'{"red" if val_idx in self.adversarial_namelist else "blue"}') for val_idx in names[10*itr_idx:10*(itr_idx+1)]]
+            print(tabulate(scores, headers=table_header))
         
 
 
@@ -1678,9 +1727,11 @@ class Helper:
                     val_array = np.array([evaluations_of_clusters[cluster_idx][name][c_idx] for name in names])
                     val_array_normalized = np.array([evaluations_of_clusters[cluster_idx][name][c_idx]/count_of_class_for_validator[name][c_idx] for name in names])
 
-                    outlier_detector = EllipticEnvelope(contamination=0.5)
+                    # outlier_detector = EllipticEnvelope(contamination=0.5)
+                    outlier_detector = LocalOutlierFactor(n_neighbors=int(len(names)/3), contamination=0.5)
                     # logger.info(f'val array normalized', val_array_normalized)
                     outlier_prediction = outlier_detector.fit_predict(np.array(val_array_normalized).reshape(-1,1))
+                    # logger.info(f'outlier prediction {outlier_prediction}')
 
                     eval_sum = np.sum([val_array[i] for i in range(len(val_array)) if outlier_prediction[i]!=-1])
                     total_count_of_class.append(np.sum([count_of_class_for_validator[names[i]][c_idx] for i in range(len(names)) if outlier_prediction[i]!=-1]))
@@ -1688,6 +1739,8 @@ class Helper:
                     eval_sum_of_cluster.append(eval_sum)
 
                 class_by_class_evaluation = True
+                if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
+                    class_by_class_evaluation = False
                 eval_mean_of_cluster_by_class = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
                 if cluster_idx == max_mal_cluster_index:
                     logger.info(f'loss of promoted model: {eval_mean_of_cluster_by_class}')
@@ -1735,7 +1788,8 @@ class Helper:
                 if no_clustering:
                     wv[cl_id] = wv_by_cluster[cl_id]
                 else:
-                    wv[cl_id] = wv_by_cluster[idx] * len(cluster) * wv[cl_id]
+                    # wv[cl_id] = wv_by_cluster[idx] * len(cluster) * wv[cl_id]
+                    wv[cl_id] = wv_by_cluster[idx]
 
             # logger.info(f'Cluster {idx}')
             # logger.info(f'Members: {[names[i] for i in cluster]}')
@@ -1754,6 +1808,7 @@ class Helper:
             # logger.info(f'benign clients: {benign_client_lsrs}')
             print_str = f'{"Green" if idx in green_clusters else "Filtered"} cluster {idx} of size {len(cluster)} with mal_pcnt {len(mal_client_lsrs)/(len(mal_client_lsrs)+len(benign_client_lsrs))} and wv {old_wv_by_cluster[idx]}'
             print(colored(print_str, 'green' if idx in green_clusters else 'red'))
+        logger.info(f'wv: {wv}')
         wv = [w*c for w,c in zip(wv, clipping_weights)]
 
         # cluster_avg_wvs = []
@@ -2468,6 +2523,8 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
+        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
+            delta_models = self.ipm_attack(delta_models, names)
         logger.info(f'names: {names}')
         adv_indices = [idx for idx, name in enumerate(names) if name in self.adversarial_namelist]
         benign_indices = [idx for idx, name in enumerate(names) if name in self.benign_namelist]
@@ -2476,7 +2533,8 @@ class Helper:
         non_src_class_indices = non_src_class_indices[:-1]
 
         # only for testing purpose
-        grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        # grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
+        grads = [self.flatten_gradient_v2(delta_model) for delta_model in delta_models]
         logger.info(f'grad shape: {grads[0].shape}')
         # grads = client_grads
         clean_server_grad = grads[-1]
@@ -2695,6 +2753,8 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
+        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
+            delta_models = self.ipm_attack(delta_models, names)
         grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
         # wv = modHDBSCAN(grads)
 
@@ -2714,6 +2774,11 @@ class Helper:
                 np.save(f'utils/temp_grads/dirichlet_lsrs_{epoch}.npy', self.lsrs)
 
         wv = np.array(alphas)/np.sum(alphas)
+
+        if 'oracle_mode' in self.params.keys() and self.params['oracle_mode']:
+            for idx, name in enumerate(names):
+                if name in self.adversarial_namelist:
+                    wv[idx] = 0
         logger.info(f'alphas: {alphas}')
         logger.info(f'wv: {wv}')
         self.color_print_wv(wv, names)
