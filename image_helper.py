@@ -493,7 +493,7 @@ class ImageHelper(Helper):
                 train_loaders[-2] = train_loaders[-1] 
             elif self.params['sampling_dirichlet']:
                 ## sample indices for participants using Dirichlet distribution
-                preload_data = True
+                preload_data = False
                 if preload_data:
                     train_loaders=[]
                     for i in range(self.params['number_of_total_participants']):

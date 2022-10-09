@@ -208,7 +208,13 @@ class Helper:
             # self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
             # if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
             #     self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/new_adaptive_attack_alpha_{self.params["alpha_loss"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
-            if self.params['is_poison']:
+            if self.params['bias'] != 0.1 or self.params['sampling_dirichlet']:
+                if self.params['sampling_dirichlet']:
+                    noniid_type = 'dirichlet'
+                else:
+                    noniid_type = 'noniid'
+                self.folder_path = f'final_outputs/specialized_{self.name}_{name_of_defense}_{noniid_type}'
+            elif self.params['is_poison']:
                 self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
                 if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
                     self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
@@ -220,6 +226,7 @@ class Helper:
             self.folder_path = f'outputs/ablation_study/{self.name}_{self.params["ablation_study"]}_{self.params["no_models"]}'
         else:
             self.folder_path = f'saved_models/model_{self.name}_{current_time}'
+
         # try:
         #     os.mkdir(self.folder_path)
         # except FileExistsError:
@@ -1616,36 +1623,36 @@ class Helper:
 
             
         #validation scores tabulation
-        for iidx in range(1):
-            itr_idx = randint(0, 10)
-            end_idx = min(10*(itr_idx+1), len(names))
-            start_idx = end_idx - 10
-            all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
-            scores = all_val_scores[start_idx:end_idx]
-            scores = np.array(scores)
-            scores = scores.T
-            scores = scores.tolist()
-            for scores_idx in range(len(scores)):
-                mean_score = np.mean(scores[scores_idx])
-                std_score = np.std(scores[scores_idx])
-                for idx in range(len(scores[scores_idx])):
-                    if names[idx + start_idx] in self.adversarial_namelist:
-                        color = "red"
-                    else:
-                        color = "blue"
-                    # if scores_idx == 10 * max_mal_cluster_index + self.source_class:
-                    cluster_idx = scores_idx // 10 -1
-                    if (scores_idx - self.source_class)%10 == 0 and cluster_idx >= 0:
-                        if cluster_adversarialness[cluster_idx] > 0:
-                            highlight_color = "on_white"
-                        else:
-                            highlight_color = "on_yellow"
-                        scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color, highlight_color)
-                    else:
-                        scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color=color)
+        # for iidx in range(1):
+        #     itr_idx = randint(0, 10)
+        #     end_idx = min(10*(itr_idx+1), len(names))
+        #     start_idx = end_idx - 10
+        #     all_val_scores = [all_validator_evaluations[val_idx] for val_idx in names]
+        #     scores = all_val_scores[start_idx:end_idx]
+        #     scores = np.array(scores)
+        #     scores = scores.T
+        #     scores = scores.tolist()
+        #     for scores_idx in range(len(scores)):
+        #         mean_score = np.mean(scores[scores_idx])
+        #         std_score = np.std(scores[scores_idx])
+        #         for idx in range(len(scores[scores_idx])):
+        #             if names[idx + start_idx] in self.adversarial_namelist:
+        #                 color = "red"
+        #             else:
+        #                 color = "blue"
+        #             # if scores_idx == 10 * max_mal_cluster_index + self.source_class:
+        #             cluster_idx = scores_idx // 10 -1
+        #             if (scores_idx - self.source_class)%10 == 0 and cluster_idx >= 0:
+        #                 if cluster_adversarialness[cluster_idx] > 0:
+        #                     highlight_color = "on_white"
+        #                 else:
+        #                     highlight_color = "on_yellow"
+        #                 scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color, highlight_color)
+        #             else:
+        #                 scores[scores_idx][idx] = colored("{:.2f}".format(scores[scores_idx][idx]), color=color)
 
-            table_header = [colored(val_idx, color=f'{"red" if val_idx in self.adversarial_namelist else "blue"}') for val_idx in names[10*itr_idx:10*(itr_idx+1)]]
-            print(tabulate(scores, headers=table_header))
+        #     table_header = [colored(val_idx, color=f'{"red" if val_idx in self.adversarial_namelist else "blue"}') for val_idx in names[10*itr_idx:10*(itr_idx+1)]]
+        #     print(tabulate(scores, headers=table_header))
         
 
 

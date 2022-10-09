@@ -16,7 +16,7 @@ poisoning_per_batch: 10
 baseline: true
 eta: 0.1
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold']
-aggregation_methods: 'fltrust'
+aggregation_methods: 'mean'
 scale_weights_poison: 30
 # adversary_list: [CT,MO,TN]
 adversary_list: [FL, IL, NJ, PA, OH, GA, VA, NC, MI, MD, AZ, CT, MO, TN]

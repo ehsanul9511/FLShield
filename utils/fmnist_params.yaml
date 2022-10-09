@@ -30,7 +30,7 @@ camera_ready: false
 
 noniid: true
 bias: 0.1
-sampling_dirichlet: true
+sampling_dirichlet: false
 dirichlet_alpha: 0.5
 baseline: true # single-shot: false; multi-shot:true
 scale_weights_poison: 100
@@ -125,7 +125,7 @@ log_interval: 2
 poison_momentum: 0.7
 poison_decay: 0.005
 results_json: true
-alpha_loss: 0.7
+alpha_loss: 1
 diff_privacy: false
 sigma: 0.001
 
