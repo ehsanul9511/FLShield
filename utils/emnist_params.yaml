@@ -13,15 +13,15 @@ internal_poison_epochs: 1
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'our_aggr', 'afa', 'foolsgold']
-aggregation_methods: mean
+aggregation_methods: our_aggr
 injective_florida: true
-oracle_mode: true
+oracle_mode: false
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
 attack_methods: 'targeted_label_flip'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 10
+no_models: 25
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: true
@@ -50,9 +50,9 @@ tlf_label: 'medium'
 poison_label_swap: 2
 random_adversary_for_label_flip: true
 number_of_adversary_dba: 30
-number_of_adversary_targeted_label_flip: 30
+number_of_adversary_targeted_label_flip: 40
 number_of_adversary_server_imitation_attack: 40
-src_grp_mal: 4
+src_grp_mal: 0
 skip_iteration_in_tlf: false
 adaptive_grad_attack: False
 save_data: 1

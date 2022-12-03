@@ -99,9 +99,9 @@ class LoanHelper(Helper):
 
         if self.params['resumed_model']:
             if torch.cuda.is_available():
-                loaded_params = torch.load(f"saved_models/{self.params['resumed_model_name']}")
+                loaded_params = torch.load(f"{self.params['resumed_model_name']}")
             else:
-                loaded_params = torch.load(f"saved_models/{self.params['resumed_model_name']}",
+                loaded_params = torch.load(f"{self.params['resumed_model_name']}",
                                            map_location='cpu')
             target_model.load_state_dict(loaded_params['state_dict'])
             self.start_epoch = loaded_params['epoch']+1

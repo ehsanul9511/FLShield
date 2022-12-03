@@ -11,7 +11,7 @@ epochs: 1000
 internal_epochs: 2
 internal_poison_epochs: 6
 internal_poison_clean_epochs: 0
-poisoning_per_batch: 5
+poisoning_per_batch: 20
 aggr_epoch_interval: 1
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold']
 aggregation_methods: 'mean'

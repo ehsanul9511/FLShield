@@ -403,6 +403,27 @@ class ImageHelper(Helper):
         self.test_data_poison, self.test_targetlabel_data = self.poison_test_dataset()
         logger.info(f'Loaded data')
 
+    def split_train_val_single(self, train_data, val_size, seed=1):
+        np.random.seed(seed)
+        train_data, val_data = torch.utils.data.random_split(train_data, [len(train_data)-val_size, val_size])
+        return train_data, val_data
+
+    def split_train_val(self, all_train_loaders, val_pcnt=0.3, seed=1):
+        train_loaders = all_train_loaders
+        val_loaders = []
+        reused_val_loaders = []
+        for i in range(self.params['number_of_total_participants']):
+            # local data of each worker
+            train_data = train_loaders[i][1].dataset
+            train_size = int((1 - val_pcnt) * len(train_data))
+            val_size = len(train_data) - train_size
+            train_data, val_data = torch.utils.data.random_split(train_data, [train_size, val_size], generator=torch.Generator().manual_seed(seed))
+            reused_val_data = train_data + val_data
+            train_loaders[i] = (i, torch.utils.data.DataLoader(train_data, batch_size=self.params['batch_size'], shuffle=True))
+            val_loaders.append(torch.utils.data.DataLoader(val_data, batch_size=self.params['batch_size'], shuffle=True))
+            reused_val_loaders.append(torch.utils.data.DataLoader(reused_val_data, batch_size=self.params['batch_size'], shuffle=True))
+        return train_loaders, val_loaders, reused_val_loaders
+
     def load_data(self):
         logger.info('Loading data')
         if 'load_data' in self.params:
@@ -527,6 +548,10 @@ class ImageHelper(Helper):
             logger.info('train loaders done')
             self.train_data = train_loaders
 
+            # split train_data into validation data
+            # if self.params['validation']:
+            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data)
+
             self.test_data = self.get_test()
             self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
 
@@ -582,17 +607,19 @@ class ImageHelper(Helper):
             #     else:
             #         self.num_of_attackers_in_target_group = 4
             if self.params['noniid']:
-                group_sizes = self.get_group_sizes()
-                cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
-                target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
-                logger.info(f'Target group indices: {target_group_indices}')
+                # group_sizes = self.get_group_sizes()
+                # cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
+                # target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
+                # logger.info(f'Target group indices: {target_group_indices}')
+                # random.seed(42)
+                # self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
+                # other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
+                # other_group_participants = [self.participants_list[i] for i in other_group_indices]
+                # other_group_participants = other_group_participants[:-1]
+                # random.seed(666)
+                # self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
                 random.seed(42)
-                self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
-                other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
-                other_group_participants = [self.participants_list[i] for i in other_group_indices]
-                other_group_participants = other_group_participants[:-1]
-                random.seed(666)
-                self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
+                self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
             else:
                 eligible_list = [name for name in range(self.params['number_of_total_participants']) if self.lsrs[name][self.source_class] > 0.07]
                 self.adversarial_namelist = random.sample(eligible_list, min(self.params[f'number_of_adversary_{self.params["attack_methods"]}'], len(eligible_list)))

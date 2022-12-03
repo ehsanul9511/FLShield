@@ -13,6 +13,7 @@ from torch.autograd import Variable
 import math
 import csv
 from torchvision import transforms
+from collections import defaultdict
 from loan_helper import LoanHelper
 from image_helper import ImageHelper
 from utils.utils import dict_html
@@ -95,6 +96,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     with open(f'./{args.params}', 'r') as f:
         params_loaded = yaml.load(f)
+    parmas_loaded = defaultdict(lambda: None, params_loaded)
     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
     if params_loaded['type'] == config.TYPE_LOAN:
         helper = LoanHelper(current_time=current_time, params=params_loaded,
