@@ -25,6 +25,7 @@ import train
 import test
 
 from florida_utils.validation_processing import ValidationProcessor
+from florida_utils.cluster_grads import cluster_grads as cluster_function
 
 from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering, KMeans
@@ -169,7 +170,7 @@ class Helper:
         self.poisoned_data = None
         self.test_data_poison = None
 
-        self.params = params
+        self.params = defaultdict(lambda: None, params)
         self.name = name
         self.best_loss = math.inf
 
@@ -695,50 +696,6 @@ class Helper:
         # logger.info(f'Silhouette scores: {sil}')
         return sil.index(max(sil))+minval, coses
 
-    def recalculate_val_trust_scores(self, grads):
-        clusters = self.clusters
-        X=grads
-        grads_for_clusters = []       
-        for cluster in clusters:
-            grads = [X[i] for i in cluster]
-            grads_for_clusters.append(grads)
-
-        if 'ablation_study' in self.params.keys() and 'dynamic_distance' in self.params['ablation_study']:
-            dynamic_dist_array = []
-            for i, cluster in enumerate(clusters):
-                distances = [self.get_average_distance(X[cl], grads_for_clusters[i]) for cl in cluster]
-                distances_dict = {cl: dist for cl, dist in zip(cluster, distances)}
-                cluster.sort(key=lambda x: distances_dict[x])
-                sorted(distances)
-                distances_gap = [distances[i+1]-distances[i] for i in range(len(distances)-1)]
-                dynamic_dist_idx = distances_gap.index(max(distances_gap)) + 1
-                if 'fixed' in self.params['ablation_study']:
-                    dynamic_dist_idx = 5
-                for idx, cluster_elem in enumerate(clusters[i]):
-                    if idx>=dynamic_dist_idx:
-                        if 'no_dist' in self.params['ablation_study']:
-                            self.validator_trust_scores[cluster_elem] = min(self.validator_trust_scores[cluster_elem], 1.)
-                        else:
-                            self.validator_trust_scores[cluster_elem] = min(self.validator_trust_scores[cluster_elem], 1/idx)
-                dynamic_dist_array.append(dynamic_dist_idx)
-
-            logger.info(f'Validator Trust Scores')
-            for cluster in clusters:
-                logger.info([f'{elem} ({elem in self.adversarial_namelist}): {self.validator_trust_scores[elem]}' for elem in cluster])
-            if len(utils.csv_record.dynamic_dist_fileheader) == 0:
-                utils.csv_record.dynamic_dist_fileheader = np.arange(len(clusters)).tolist()
-            utils.csv_record.dynamic_dist_result.append(dynamic_dist_array)
-            return
-
-
-        for i, cluster in enumerate(clusters):
-            cluster.sort(key = lambda x: self.get_average_distance(X[x], grads_for_clusters[i]))
-            # clusters[i] = cluster[:5]
-            for idx, cluster_elem in enumerate(clusters[i]):
-                if idx>=5:
-                    self.validator_trust_scores[cluster_elem] = min(self.validator_trust_scores[cluster_elem], 1/idx)
-        return
-
     def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
         # nets = [grad.numpy() for grad in grads]
         # nets = [np.array(grad) for grad in grads]
@@ -1091,183 +1048,6 @@ class Helper:
         else:
             return mal_count
 
-    # def combined_clustering_guided_aggregation_with_DP(self, target_model, updates, epoch):
-    #     client_grads = []
-    #     alphas = []
-    #     names = []
-    #     delta_models = []
-    #     for name, data in updates.items():
-    #         client_grads.append(data[1])  # gradient
-    #         alphas.append(data[0])  # num_samples
-    #         delta_models.append(data[2])
-    #         names.append(name)
-    #     grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
-
-    #     sum_grads = np.sum(grads, axis=0)
-
-    #     # norms = [np.linalg.norm(grad) for grad in grads]
-    #     norm_median = np.linalg.norm(sum_grads)
-    #     noise_level = self.params['sigma'] * norm_median
-
-    #     mean_model = self.new_model()
-    #     mean_model.copy_params(self.target_model.state_dict())
-
-    #     self.fedavg(mean_model, updates)
-
-    #     test_models = []
-
-    #     for i in range(1, 11):
-    #         test_models.append(self.new_model())
-    #         test_models[i-1].copy_params(mean_model.state_dict())
-    #         self.add_noise(test_models[i-1], i * noise_level / 10)
-
-    #     print(f'Validating all clients at epoch {epoch}')
-
-    #     all_validator_evaluations = {}
-    #     evaluations_of_clusters = {}
-    #     count_of_class_for_validator = {}
-
-    #     for name in names:
-    #         all_validator_evaluations[name] = []
-
-    #     evaluations_of_clusters[-1] = {}
-    #     for iidx, val_idx in enumerate(names):
-
-    #         if self.params['type'] == config.TYPE_LOAN:
-    #             val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-    #         else:
-    #             _, val_test_loader = self.train_data[val_idx]
-    #         if val_idx in self.adversarial_namelist:
-    #             is_poisonous_validator = True
-    #         else:
-    #             is_poisonous_validator = False
-    #         if self.params['type'] == config.TYPE_LOAN:
-    #             val_acc, val_acc_by_class = self.validation_test_for_loan(target_model, val_test_loader, is_poisonous_validator, adv_index=0)
-    #         else:
-    #             if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-    #                 is_poisonous_validator = False
-    #             val_acc, val_loss, val_acc_by_class, count_of_class = self.validation_test_v2(target_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
-
-    #         val_acc_by_class = [val_acc_by_class[i] for i in range(10)]
-    #         all_validator_evaluations[val_idx] += val_acc_by_class
-    #         evaluations_of_clusters[-1][val_idx] = [val_loss[i] for i in range(10)]
-    #         if val_idx not in count_of_class_for_validator.keys():
-    #             count_of_class_for_validator[val_idx] = count_of_class
-
-    #     fail_idx = -1
-    #     for idx in range(len(test_models)):
-    #         evaluations_of_clusters[idx] = {}
-    #         agg_model = test_models[idx]
-    #         for iidx, val_idx in enumerate(names):
-    #             if self.params['type'] == config.TYPE_LOAN:
-    #                 val_test_loader = self.allStateHelperList[val_idx].get_testloader()
-    #             else:
-    #                 _, val_test_loader = self.train_data[val_idx]
-    #             if val_idx in self.adversarial_namelist:
-    #                 is_poisonous_validator = True
-    #             else:
-    #                 is_poisonous_validator = False
-    #             if self.params['type'] == config.TYPE_LOAN:
-    #                 val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
-    #             else:
-    #                 if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-    #                     is_poisonous_validator = False
-
-    #                 try:
-    #                     val_acc, val_loss, val_acc_by_class, _ = self.validation_test_v2(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
-    #                 except:
-    #                     fail_idx = idx
-    #                     break
-
-    #             val_acc_by_class = [-val_acc_by_class[i]+all_validator_evaluations[val_idx][i] for i in range(10)]
-                    
-    #             all_validator_evaluations[val_idx]+= val_acc_by_class
-    #             evaluations_of_clusters[idx][val_idx] = [-val_loss[i]+evaluations_of_clusters[-1][val_idx][i] for i in range(10)]
-            
-    #         if fail_idx != -1:
-    #             break
-    #     if fail_idx != -1:
-    #         test_models = test_models[:fail_idx]
-            
-
-    #     if False:
-    #         def get_weighted_average(points, alpha):
-    #             alpha = alpha / np.sum(alpha)
-    #             for i in range(len(points)):
-    #                 points[i] = points[i] * alpha[i]
-    #             return np.sum(points, axis=0)
-
-    #         def geo_median_objective(median, points, alphas):
-    #             temp_sum= 0
-    #             for alpha, p in zip(alphas, points):
-    #                 temp_sum += alpha * distance.euclidean(median, p)
-    #             return temp_sum
-    #     else:
-    #         validator_xs = [all_validator_evaluations[name] for name in names]
-    #         _, val_clustering = self.cluster_grads(validator_xs, clustering_params='grads', clustering_method='KMeans')
-    #         good_cluster = np.argmax([len(cluster) for cluster in val_clustering])
-    #         logger.info([self.mal_pcnt(cluster, names) for cluster in val_clustering])
-    #         logger.info(f'good cluster: {val_clustering[good_cluster]}')
-
-    #         remaining_validators = []
-
-    #         for idx, name in enumerate(names):
-    #             if name in val_clustering[good_cluster]:
-    #                 remaining_validators.append(name)
-    #             else:
-    #                 for idx in range(len(test_models)):
-    #                     try:
-    #                         del evaluations_of_clusters[idx][name]
-    #                     except:
-    #                         pass
-
-    #         wv_by_cluster = []
-
-    #         total_count_of_class = [0 for _ in range(10)]
-    #         for val_idx in remaining_validators:
-    #             total_count_of_class = [total_count_of_class[i]+ count_of_class_for_validator[val_idx][i] for i in range(10)]
-
-    #         logger.info(f'total_count_of_class: {total_count_of_class}')
-
-    #         for idx in range(len(test_models)):
-    #             all_vals = [evaluations_of_clusters[idx][name] for name in remaining_validators]
-    #             all_vals = np.array(all_vals)
-    #             all_vals = np.transpose(all_vals)
-    #             all_vals = all_vals.tolist()
-
-
-    #             eval_sum_of_cluster = [np.sum(all_vals[i]) for i in range(len(all_vals))]
-
-    #             class_by_class_evaluation = False
-    #             if class_by_class_evaluation:
-    #                 eval_mean_of_cluster = [eval_sum_of_cluster[i]/total_count_of_class[i] for i in range(len(eval_sum_of_cluster))]
-    #                 wv_by_cluster.append(np.min(eval_mean_of_cluster))
-    #             else:
-    #                 eval_mean_of_cluster = np.sum(eval_sum_of_cluster)/np.sum(total_count_of_class)
-    #                 wv_by_cluster.append(eval_mean_of_cluster)
-    #             # eval_mean_of_cluster = eval_mean_of_cluster[10:]
-    #             # eval_mean_of_cluster = eval_mean_of_cluster.reshape(len(eval_mean_of_cluster)//10, 10)
-    #             # eval_mean_of_cluster = np.mean(eval_mean_of_cluster, axis=0)
-    #             evaluations_of_clusters[idx] = eval_mean_of_cluster
-    #             logger.info(f'test_model {idx} performance: {eval_mean_of_cluster}')
-
-    #     logger.info(f'evaluations_of_clusters: {wv_by_cluster}')
-    #     non_negative_idx = [i for i in range(len(wv_by_cluster)) if wv_by_cluster[i] >= 0]
-
-    #     if len(non_negative_idx) == 0:
-    #         non_negative_idx = [0]
-    #     best_test_model = np.max(non_negative_idx)
-    #     target_model.copy_params(test_models[best_test_model].state_dict())
-    #     # logger.info(f'wv_by_cluster: {wv_by_cluster}')
-    #     # med_wv = np.median(wv_by_cluster)
-    #     # wv_by_cluster = [1 if z>=med_wv else 0 for z in wv_by_cluster]
-    #     # for cluster_idx in range(num_of_clusters):
-    #     #     logger.info(f'cluster {cluster_idx} with mal_pcnt {mal_pcnt_by_cluster[cluster_idx]} performance: {wv_by_cluster[cluster_idx]}')
-    #     # logger.info(f'wv_by_cluster updated: {wv_by_cluster}')
- 
-    #     return
-
-
     def ipm_attack(self, delta_models, names):
         bad_idx = [idx for idx, name in enumerate(names) if name in self.adversarial_namelist]
         benign_delta_models = [dm for idx, dm in enumerate(delta_models) if idx not in bad_idx]
@@ -1285,50 +1065,6 @@ class Helper:
                 new_delta_models.append(delta_models[idx])
 
         return new_delta_models
-
-
-    def filter_LIPC(self, val_array_normalized):
-        outlier_prediction = [1 for _ in range(len(val_array_normalized))]
-        outlier_detector_type = self.get_param_val('outlier_detector_type')
-        outlier_detector_type = 'EllipticEnvelope'
-        if outlier_detector_type == 'EllipticEnvelope':
-            try:
-                outlier_detector = EllipticEnvelope(contamination=0.5)
-                # outlier_detector = LocalOutlierFactor(n_neighbors=int(len(names)/3), contamination=0.5)
-                # logger.info(f'val array normalized', val_array_normalized)
-                outlier_prediction = outlier_detector.fit_predict(np.array(val_array_normalized).reshape(-1,1))
-                # logger.info(f'outlier prediction {outlier_prediction}')
-            except:
-                logger.info(f'val array normalized', val_array_normalized)
-                outlier_prediction = [1 for _ in range(len(val_array_normalized))]
-                pass
-        else:
-            # do KMeans
-            kmeans = KMeans(n_clusters=2, random_state=0).fit(np.array(val_array_normalized).reshape(-1,1))
-            outlier_prediction = kmeans.labels_
-            # map the labels to 1 and -1
-            outlier_prediction = [1 if x==0 else -1 for x in outlier_prediction]
-        return outlier_prediction
-
-
-    def fed_validation(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator):
-        s = np.zeros((num_of_clusters, num_of_classes))
-        for cluster_idx in range(num_of_clusters):
-
-            for c_idx in range(len(evaluations_of_clusters[cluster_idx][names[0]])):
-                # val_array = np.array([evaluations_of_clusters[cluster_idx][name][c_idx] for name in names])
-                val_array_normalized = np.array([evaluations_of_clusters[cluster_idx][name][c_idx]/count_of_class_for_validator[name][c_idx] if count_of_class_for_validator[name][c_idx] !=0 else 0 for name in names])
-
-                val_array_normalized[np.isnan(val_array_normalized)] = 0
-
-                outlier_prediction = self.filter_LIPC(val_array_normalized)
-
-                # eval_sum = np.sum([val_array[i] for i in range(len(val_array)) if outlier_prediction[i]!=-1])
-                # total_count_of_class.append(np.sum([count_of_class_for_validator[names[i]][c_idx] for i in range(len(names)) if outlier_prediction[i]!=-1]))
-
-                s[cluster_idx][c_idx] = np.mean([val_array_normalized[i] for i in range(len(val_array_normalized)) if outlier_prediction[i]!=-1])
-
-        return s
 
 
 
@@ -1350,7 +1086,7 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
-        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
+        if self.params['ipm_attack']:
             delta_models = self.ipm_attack(delta_models, names)
         
         wv = np.zeros(len(names), dtype=np.float32)
@@ -1370,29 +1106,24 @@ class Helper:
         # logger.info(f'grads shape: {grads.shape}')
         logger.info(f'Converted gradients to param list: Time: {time.time() - t}')
 
+        if self.params['save_grads']:
+            np.save(f'{self.folder_path}/grads_{epoch}.npy', grads)
+            np.save(f'{self.folder_path}/names_{epoch}.npy', names)
+
         if self.params['type'] != config.TYPE_LOAN:
             num_of_classes = 10
         else:
             num_of_classes = 9
 
         no_clustering = False
-        if 'injective_florida' in self.params.keys() and self.params['injective_florida']:
+        if self.params['injective_florida']:
             no_clustering = True
 
         if self.params['no_models'] < 10 or no_clustering:
-            exclude_mode = False
-
-            if exclude_mode:
-                self.clusters_agg = [[j for j in range(len(names)) if j != i] for i in range(len(names))]
-            else:
-                self.clusters_agg = [[i] for i in range(len(names))]
+            self.clusters_agg = [[i] for i in range(len(names))]
         else:
-            if 'ablation_study' in self.params.keys() and 'clustering_kmeans' in self.params['ablation_study']:
-                _, self.clusters_agg = self.cluster_grads(grads, clustering_method='KMeans', clustering_params='grads', k=10)
-            elif 'ablation_study' in self.params.keys() and 'clustering_spectral' in self.params['ablation_study']:
-                _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Spectral', clustering_params='grads', k=10)
-            else:
-                _, self.clusters_agg = self.cluster_grads(grads, clustering_method='Agglomerative', clustering_params='grads', k=10)
+            clustering_method = self.params['clustering_method'] if self.params['clustering_method'] is not None else 'Agglomerative'
+            _, self.clusters_agg = cluster_function(grads, clustering_method)
         
         logger.info(f'Agglomerative Clustering: Time: {time.time() - t}')
         t = time.time()
@@ -1403,37 +1134,14 @@ class Helper:
             self.clusters_agg = [np.arange(len(self.adversarial_namelist)-benign_spillover).tolist() + np.arange(len(self.adversarial_namelist), len(self.adversarial_namelist)+benign_spillover).tolist(), np.arange(len(self.adversarial_namelist)-benign_spillover, len(self.adversarial_namelist)).tolist() + np.arange(len(self.adversarial_namelist)+benign_spillover, len(names)).tolist()]
 
         clusters_agg = []
-        mal_pcnt_by_cluster = []
         logger.info('Clustering by model updates')
-        max_mal_cluster_index = -1
-        max_mal_cluster_size = 0
-        cluster_adversarialness = np.ones(len(self.clusters_agg))
         for idx, cluster in enumerate(self.clusters_agg):
             logger.info(f'cluster: {cluster}')
             logger.info(f'names: {names}')
             clstr = [names[c] for c in cluster]
             clusters_agg.append(clstr)
-            mal_pcnt_by_cluster.append(self.mal_pcnt(clstr, names))
-            mal_pcnt = len([c for c in clstr if c in self.adversarial_namelist])/len(clstr)
-            if mal_pcnt > 0.5 and len(clstr) > max_mal_cluster_size:
-                max_mal_cluster_size = len(clstr)
-                max_mal_cluster_index = idx
-            elif mal_pcnt == 0:
-                cluster_adversarialness[idx] = 0
 
-        pure_benign_clusters_indices = np.argwhere(cluster_adversarialness == 0).squeeze()
-        promote_one_mal_model = False
 
-        if max_mal_cluster_index == -1:
-            try:
-                max_mal_cluster_index = np.argwhere(cluster_adversarialness == 1)[0][0]
-            except:
-                pass
-
-        logger.info(f'max_mal_cluster_index: {max_mal_cluster_index}')
-
-        nets = self.local_models
-        all_val_acc_list_dict = {}
         print(f'Validating all clients at epoch {epoch}')
 
         all_validator_evaluations = {}
@@ -1451,7 +1159,7 @@ class Helper:
             else:
                 # _, val_test_loader = self.train_data[val_idx]
                 val_test_loader = self.val_data[val_idx]
-            if val_idx in self.adversarial_namelist and not promote_one_mal_model:
+            if val_idx in self.adversarial_namelist:
                 is_poisonous_validator = True
             else:
                 is_poisonous_validator = False
@@ -1522,7 +1230,6 @@ class Helper:
                     optimizer.step()
                     for cl_id, cl_member in enumerate(cluster):
                         wv[self.clusters_agg[idx][cl_id]] = wv_frac
-                    mal_pcnt_by_cluster[idx] = self.mal_pcnt(cluster, names, wv=[wv_frac for cl_member in cluster])
                 else:
                     selected_updates = dict()
                     for iidx, name in enumerate(names):
@@ -1532,7 +1239,6 @@ class Helper:
                     for cl_id, cl_member in enumerate(cluster):
                         wv[self.clusters_agg[idx][cl_id]] = wv_for_cluster_members[cl_id]
                     logger.info(f'wv for cluster {cluster}: {wv_for_cluster_members}')
-                    mal_pcnt_by_cluster[idx] = self.mal_pcnt(cluster, names, wv=[wv[cl_member] for cl_member in cluster])
             else:
                 fltrust_mode = True
 
@@ -1572,7 +1278,7 @@ class Helper:
                 else:
                     # _, val_test_loader = self.train_data[val_idx]
                     val_test_loader = self.val_data[val_idx]
-                if val_idx in self.adversarial_namelist and not promote_one_mal_model:
+                if val_idx in self.adversarial_namelist:
                     is_poisonous_validator = True
                 else:
                     is_poisonous_validator = False
@@ -1659,7 +1365,7 @@ class Helper:
             'num_of_clusters': num_of_clusters,
             'all_validator_evaluations': all_validator_evaluations,
             'epoch': epoch,
-            'params': self.params,
+            'params': dict(self.params),
             'cluster_maliciousness': cluster_maliciousness,
             'benign_namelist': self.benign_namelist,
             'adversarial_namelist': self.adversarial_namelist,

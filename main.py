@@ -143,7 +143,7 @@ if __name__ == '__main__':
 
     # save parameters:
     with open(f'{helper.folder_path}/params.yaml', 'w') as f:
-        yaml.dump(helper.params, f)
+        yaml.dump(dict(helper.params), f)
 
     submit_update_dict = None
     num_no_progress = 0

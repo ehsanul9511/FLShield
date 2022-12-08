@@ -16,7 +16,7 @@ aggr_epoch_interval: 1 # aggregate every round
 aggregation_methods: our_aggr
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
 attack_methods: 'targeted_label_flip'
-injective_florida: true
+injective_florida: false
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
@@ -25,6 +25,8 @@ number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: true
 is_poison: true
+
+save_grads: true
 
 mal_val_type: adaptive
 
@@ -112,7 +114,7 @@ environment_name: mnist_DBA
 save_model: false
 save_on_epochs: [10, 15, 20, 25, 30, 35]
 
-resumed_model: false
+resumed_model: true
 resumed_model_name: utils/model_bank/fmnist/model_last.pt.tar.epoch_35
 resumed_model_path: utils/model_bank/fmnist
 
