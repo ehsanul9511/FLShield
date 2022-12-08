@@ -95,7 +95,8 @@ if __name__ == '__main__':
     parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
     args = parser.parse_args()
     with open(f'./{args.params}', 'r') as f:
-        params_loaded = yaml.load(f)
+        # params_loaded = yaml.load(f)
+        params_loaded = yaml.safe_load(f)
     parmas_loaded = defaultdict(lambda: None, params_loaded)
     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
     if params_loaded['type'] == config.TYPE_LOAN:

@@ -26,6 +26,8 @@ is_random_namelist: true
 is_random_adversary: true
 is_poison: true
 
+mal_val_type: adaptive
+
 camera_ready: false
 
 noniid: true
@@ -49,7 +51,7 @@ tlf_label: 'medium'
 poison_label_swap: 2
 random_adversary_for_label_flip: true
 number_of_adversary_dba: 40
-number_of_adversary_targeted_label_flip: 60
+number_of_adversary_targeted_label_flip: 40
 number_of_adversary_server_imitation_attack: 40
 src_grp_mal: 3
 skip_iteration_in_tlf: false
@@ -110,7 +112,7 @@ environment_name: mnist_DBA
 save_model: false
 save_on_epochs: [10, 15, 20, 25, 30, 35]
 
-resumed_model: true
+resumed_model: false
 resumed_model_name: utils/model_bank/fmnist/model_last.pt.tar.epoch_35
 resumed_model_path: utils/model_bank/fmnist
 
