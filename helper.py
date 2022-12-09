@@ -26,6 +26,7 @@ import test
 
 from florida_utils.validation_processing import ValidationProcessor
 from florida_utils.cluster_grads import cluster_grads as cluster_function
+from florida_utils.validation_test import validation_test
 
 from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering, KMeans
@@ -662,117 +663,6 @@ class Helper:
         # return np.sum(euclidean_distances(cluster, [candidate]))/(len(cluster)-1)
         return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
     
-    def get_optimal_k_for_clustering(self, grads, clustering_params='grads', clustering_method='Agglomerative'):
-        coses = []
-        nets = grads
-        # nets = [grad.numpy() for grad in grads]
-        # nets = [np.array(grad) for grad in grads]
-        # for i1, net1 in enumerate(nets):
-        #     coses_l=[]
-        #     for i2, net2 in enumerate(nets):
-        #         coses_l.append(1-cos_calc_btn_grads(net1.grad_params, net2.grad_params))
-        #     coses.append(coses_l)
-        coses = cosine_distances(nets, nets)
-        coses = np.array(coses)
-        np.fill_diagonal(coses, 0)
-        # logger.info(f'coses: {coses}')
-        
-        sil= []
-        if clustering_params=='grads':
-            minval = 2
-        else:
-            minval = 9
-        for k in range(minval, min(len(nets), 15)):
-            if clustering_method=='Agglomerative':
-                clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
-            elif clustering_method=='KMeans':
-                clustering = KMeans(n_clusters=k).fit(nets)
-            elif clustering_method=='Spectral':
-                clustering = SpectralClustering(n_clusters=k, affinity='precomputed').fit(coses)
-            labels = clustering.labels_
-            # print(labels)
-            sil.append(silhouette_score(coses, labels, metric='precomputed'))
-        # print(sil)
-        # logger.info(f'Silhouette scores: {sil}')
-        return sil.index(max(sil))+minval, coses
-
-    def cluster_grads(self, grads, clustering_method='Spectral', clustering_params='grads', k=10):
-        # nets = [grad.numpy() for grad in grads]
-        # nets = [np.array(grad) for grad in grads]
-        nets = grads
-        if clustering_params=='lsrs':
-            X = self.lsrs
-        elif clustering_params=='grads':
-            X = nets
-
-        if clustering_method == 'Spectral':
-            if clustering_params == 'grads':
-                k, coses = self.get_optimal_k_for_clustering(grads, clustering_params, clustering_method)
-                clustering = SpectralClustering(n_clusters=k, affinity='precomputed').fit(coses)
-            else:
-                k, coses = self.get_optimal_k_for_clustering(X, clustering_params, clustering_method)
-                # if self.params['type'] != config.TYPE_LOAN:
-                #     k = 10
-                clustering = SpectralClustering(n_clusters=k, affinity='cosine').fit(X)
-        elif clustering_method == 'Agglomerative':
-            # anomaly removal enabled
-            anoamly_removal = False
-            if anoamly_removal:
-                anomaly_arr = EllipticEnvelope(contamination=0.5).fit_predict(X)
-                non_anomalies = [i for i in range(len(X)) if anomaly_arr[i] != -1]
-                k, coses = self.get_optimal_k_for_clustering(X[non_anomalies], clustering_params, clustering_method)
-                # print(k)
-                clustering = AgglomerativeClustering(n_clusters=k, affinity='cosine', linkage='complete').fit(X[non_anomalies])
-
-                cluster_label = [clustering.labels_[non_anomalies.index(i)] if anomaly_arr[i] !=-1 else -1 for i in range(len(anomaly_arr))]
-                cluster_label = np.array(cluster_label)
-                clusters = [np.argwhere(cluster_label == i)[:,0] for i in range(np.max(cluster_label)+1)]
-                clusters.sort(key=lambda x: len(x), reverse=True)
-
-                return cluster_label, clusters
-            
-            k, coses = self.get_optimal_k_for_clustering(X, clustering_params, clustering_method)
-            clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
-            
-        elif clustering_method == 'KMeans':
-            k, coses = self.get_optimal_k_for_clustering(grads, clustering_params, clustering_method)
-            clustering = KMeans(n_clusters=k).fit(X)
-
-        clusters = [[] for _ in range(k)]
-        for i, label in enumerate(clustering.labels_.tolist()):
-            clusters[label].append(i)
-        for cluster in clusters:
-            cluster.sort()
-        clusters.sort(key = lambda cluster: len(cluster), reverse = True)
-        logger.info(f'Validator Groups: {clusters}')
-
-        # grads_for_clusters = []
-        # for cluster in clusters:
-        #     grads = [X[i] for i in cluster]
-        #     grads_for_clusters.append(grads)
-            
-        # for i, cluster in enumerate(clusters):
-        #     cluster.sort(key = lambda x: self.get_validation_score(X[x], grads_for_clusters[i]))
-
-
-        if clustering_params=='lsrs' and False: 
-            grads_for_clusters = []       
-            for cluster in clusters:
-                grads = [X[i] for i in cluster]
-                grads_for_clusters.append(grads)
-
-            print('clusters ', clusters)
-
-            for i, cluster in enumerate(clusters):
-                cluster.sort(key = lambda x: self.get_average_distance(X[x], grads_for_clusters[i]))
-                # clusters[i] = cluster[:5]
-                for idx, cluster_elem in enumerate(clusters[i]):
-                    if idx>=5:
-                        self.validator_trust_scores[cluster_elem] = 1/idx
-            print('clusters ', clusters)
-
-        return clustering.labels_, clusters
-
     def validation_test_for_loan(self, network, test_loader, is_poisonous=False, adv_index=-1, tqdm_disable=True):
         network.eval()
         correct = 0
@@ -1153,28 +1043,10 @@ class Helper:
 
         evaluations_of_clusters[-1] = {}
         for iidx, val_idx in enumerate(names):
-
-            if self.params['type'] == config.TYPE_LOAN:
-                val_test_loader = self.allStateHelperList[iidx].get_testloader()
-            else:
-                # _, val_test_loader = self.train_data[val_idx]
-                val_test_loader = self.val_data[val_idx]
-            if val_idx in self.adversarial_namelist:
-                is_poisonous_validator = True
-            else:
-                is_poisonous_validator = False
-            if self.params['type'] == config.TYPE_LOAN:
-                # val_acc, val_acc_by_class = self.validation_test_for_loan(target_model, val_test_loader, is_poisonous_validator, adv_index=0)
-                val_acc, val_loss, val_acc_by_class, count_of_class = self.validation_test_v2(target_model, val_test_loader, is_poisonous=False, adv_index=iidx)
-
-            else:
-                if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-                    is_poisonous_validator = False
-                val_acc, val_loss, val_acc_by_class, count_of_class = self.validation_test_v2(target_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
-
-            val_acc_by_class = [val_acc_by_class[i] for i in range(num_of_classes)]
-            all_validator_evaluations[val_idx] += val_acc_by_class
-            evaluations_of_clusters[-1][val_idx] = [val_loss[i] for i in range(num_of_classes)]
+            val_score_by_class, val_score_by_class_per_example, count_of_class = validation_test(self, target_model, val_idx if self.params['type'] != config.TYPE_LOAN else iidx)
+            val_score_by_class_per_example = [val_score_by_class_per_example[i] for i in range(num_of_classes)]
+            all_validator_evaluations[val_idx] += val_score_by_class_per_example
+            evaluations_of_clusters[-1][val_idx] = [val_score_by_class[i] for i in range(num_of_classes)]
             if val_idx not in count_of_class_for_validator.keys():
                 count_of_class_for_validator[val_idx] = count_of_class
 
@@ -1184,128 +1056,50 @@ class Helper:
 
         for idx, cluster in enumerate(tqdm(clusters_agg, disable=False)):
             evaluations_of_clusters[idx] = {}
+            agg_model = self.new_model()
+            agg_model.copy_params(self.target_model.state_dict())
+            weight_vec = np.zeros(len(names), dtype=np.float32)
 
-            if len(cluster) == 0:
-                continue
             if len(cluster) != 1:
-                agg_model = self.new_model()
-                agg_model.copy_params(self.target_model.state_dict())
-
-                not_rfa = True
-                if len(cluster) == 1:
-                    not_rfa = True
-
-                if not_rfa:
-                    cluster_grads = []
-                    for iidx, name in enumerate(names):
-                        if name in cluster:
-                            cluster_grads.append(client_grads[iidx])
-                    
-                    wv_frac = 1/len(cluster)
-
-                    agg_grads = []
-                    # Iterate through each layer
-                    for i in range(len(cluster_grads[0])):
-                        # assert len(wv) == len(cluster_grads), 'len of wv {} is not consistent with len of client_grads {}'.format(len(wv), len(client_grads))
-                        temp = wv_frac * cluster_grads[0][i].cpu().clone()
-                        # Aggregate gradients for a layer
-                        for c, client_grad in enumerate(cluster_grads):
-                            if c == 0:
-                                continue
-                            temp += wv_frac * client_grad[i].cpu()
-                        # temp = temp / len(cluster_grads)
-                        agg_grads.append(temp)
-
-                    agg_model.train()
-                    # train and update
-                    optimizer = torch.optim.SGD(agg_model.parameters(), lr=1,
-                                                momentum=self.params['momentum'],
-                                                weight_decay=self.params['decay'])
-
-                    optimizer.zero_grad()
-                    for i, (name, params) in enumerate(agg_model.named_parameters()):
-                        agg_grads[i]=agg_grads[i] * self.params["eta"]
-                        if params.requires_grad:
-                            params.grad = agg_grads[i].to(config.device)
-                    optimizer.step()
-                    for cl_id, cl_member in enumerate(cluster):
-                        wv[self.clusters_agg[idx][cl_id]] = wv_frac
-                else:
-                    selected_updates = dict()
-                    for iidx, name in enumerate(names):
-                        if name in cluster:
-                            selected_updates[name] = (alphas[iidx], delta_models[iidx])
-                    _, _, _, wv_for_cluster_members, _ = self.geometric_median_update(target_model=agg_model, updates=selected_updates)
-                    for cl_id, cl_member in enumerate(cluster):
-                        wv[self.clusters_agg[idx][cl_id]] = wv_for_cluster_members[cl_id]
-                    logger.info(f'wv for cluster {cluster}: {wv_for_cluster_members}')
+                for i in range(len(names)):
+                    if names[i] in cluster:
+                        weight_vec[i] = 1/len(cluster)
             else:
-                fltrust_mode = True
+                cos_sims = np.array(cosine_similarity(grads, [grads[self.clusters_agg[idx][0]]])).flatten()
+                # logger.info(f'cos_sims by order for client {self.clusters_agg[idx][0]}: {cos_sims}')
+                trust_scores = np.zeros(cos_sims.shape)
+                for i in range(len(cos_sims)):
+                    # trust_scores[i] = cos_sims[i]/np.linalg.norm(grads[i])/np.linalg.norm(clean_server_grad)
+                    trust_scores[i] = cos_sims[i]
+                    trust_scores[i] = max(trust_scores[i], 0)
 
-                if not fltrust_mode:
-                    agg_model = self.new_model()
-                    agg_model.copy_params(self.local_models[cluster[0]].state_dict())
-                else:
-                    agg_model = self.new_model()
-                    agg_model.copy_params(self.target_model.state_dict())
-                    cos_sims = np.array(cosine_similarity(grads, [grads[self.clusters_agg[idx][0]]])).flatten()
-                    # logger.info(f'cos_sims by order for client {self.clusters_agg[idx][0]}: {cos_sims}')
-                    trust_scores = np.zeros(cos_sims.shape)
-                    for i in range(len(cos_sims)):
-                        # trust_scores[i] = cos_sims[i]/np.linalg.norm(grads[i])/np.linalg.norm(clean_server_grad)
-                        trust_scores[i] = cos_sims[i]
-                        trust_scores[i] = max(trust_scores[i], 0)
+                norm_ref = norms[self.clusters_agg[idx][0]]
+                clip_vals = [min(norm_ref/norm, 1) for norm in norms]
+                trust_scores = [ts * cv for ts, cv in zip(trust_scores, clip_vals)]
+                weight_vec = trust_scores
 
-                    norm_ref = norms[self.clusters_agg[idx][0]]
-                    clip_vals = [min(norm_ref/norm, 1) for norm in norms]
-                    trust_scores = [ts * cv for ts, cv in zip(trust_scores, clip_vals)]
+            aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(weight_vec))
+            adj_delta_models.append(aggregate_weights)
 
-                    aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(trust_scores))
-                    adj_delta_models.append(aggregate_weights)
-
-                    for name, data in agg_model.state_dict().items():
-                        update_per_layer = aggregate_weights[name]
-                        try:
-                            data.add_(update_per_layer)
-                        except:
-                            data.add_(update_per_layer.to(data.dtype))
+            for name, data in agg_model.state_dict().items():
+                update_per_layer = aggregate_weights[name]
+                try:
+                    data.add_(update_per_layer)
+                except:
+                    data.add_(update_per_layer.to(data.dtype))
                     
-
-
+                    
             for iidx, val_idx in enumerate(tqdm(names, disable=True)):
-                if self.params['type'] == config.TYPE_LOAN:
-                    val_test_loader = self.allStateHelperList[iidx].get_testloader()
-                else:
-                    # _, val_test_loader = self.train_data[val_idx]
-                    val_test_loader = self.val_data[val_idx]
-                if val_idx in self.adversarial_namelist:
-                    is_poisonous_validator = True
-                else:
-                    is_poisonous_validator = False
-                if self.params['type'] == config.TYPE_LOAN:
-                    # val_acc, val_acc_by_class = self.validation_test_for_loan(agg_model, val_test_loader, is_poisonous_validator, adv_index=0)
-                    val_acc, val_loss, val_acc_by_class, _ = self.validation_test_v2(agg_model, val_test_loader, is_poisonous=False, adv_index=iidx)
-                else:
-                    if 'ablation_study' in self.params.keys() and 'no_wrong_validation' in self.params['ablation_study']:
-                        is_poisonous_validator = False
-                    val_acc, val_loss, val_acc_by_class, _ = self.validation_test_v2(agg_model, val_test_loader, is_poisonous=is_poisonous_validator, adv_index=0)
+                val_score_by_class, val_score_by_class_per_example, count_of_class = validation_test(self, agg_model, val_idx if self.params['type'] != config.TYPE_LOAN else iidx)
+                val_score_by_class_per_example = [val_score_by_class_per_example[i] for i in range(num_of_classes)]
 
-                val_acc_by_class = [-val_acc_by_class[i]+all_validator_evaluations[val_idx][i] for i in range(num_of_classes)]
+                val_score_by_class_per_example = [-val_score_by_class_per_example[i]+all_validator_evaluations[val_idx][i] for i in range(num_of_classes)]
                     
-                all_validator_evaluations[val_idx]+= val_acc_by_class
-                evaluations_of_clusters[idx][val_idx] = [-val_loss[i]+evaluations_of_clusters[-1][val_idx][i] for i in range(num_of_classes)]
+                all_validator_evaluations[val_idx]+= val_score_by_class_per_example
+                evaluations_of_clusters[idx][val_idx] = [-val_score_by_class[i]+evaluations_of_clusters[-1][val_idx][i] for i in range(num_of_classes)]
             
             # for client in cluster:
             #     all_val_acc_list_dict[client] = val_acc_list
-        try:
-            if fltrust_mode and False:
-                delta_models = adj_delta_models
-        except:
-            logger.info('fltrust mode turned off')
-            pass
-        save_grads = True
-        if save_grads:
-            self.snapshot(full_grads, names, alphas, epoch, self.clusters_agg)
 
         # imputing missing validation values
         # convert from dict to list

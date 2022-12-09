@@ -4,6 +4,7 @@ from scipy.spatial import distance
 from sklearn.metrics.pairwise import cosine_distances, euclidean_distances, cosine_similarity
 from sklearn.metrics import silhouette_score, confusion_matrix
 import logging
+from collections import defaultdict
 
 logger = logging.getLogger("logger")
 
@@ -79,7 +80,14 @@ if __name__ == '__main__':
     with open(f'{args.location}/params.yaml', 'r') as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
 
+    params = defaultdict(lambda: None, params)
+
+    clustering_method = params['clustering_method'] if params['clustering_method'] else 'Agglomerative'
+    
+    clustering_method = args.clustering_method if args.clustering_method else clustering_method
+
     # cluster
-    _, clusters = cluster_grads(grads, clustering_method='Agglomerative')
+    logger.info(f'Clustering Method: {clustering_method}')
+    _, clusters = cluster_grads(grads, clustering_method)
 
     logger.info(f'Validator Groups: {clusters}')

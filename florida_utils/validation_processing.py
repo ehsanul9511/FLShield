@@ -5,6 +5,7 @@ from sklearn.cluster import KMeans
 import numpy as np
 import torch
 from tqdm import tqdm
+import copy
 
 import logging
 logger = logging.getLogger("logger")
@@ -35,10 +36,15 @@ class ValidationProcessor:
             outlier_prediction = [1 for _ in range(len(val_array_normalized))]
         else:
             # do KMeans
-            kmeans = KMeans(n_clusters=2, random_state=0).fit(np.array(val_array_normalized).reshape(-1,1))
-            outlier_prediction = kmeans.labels_
-            # map the labels to 1 and -1
-            outlier_prediction = [1 if x==0 else -1 for x in outlier_prediction]
+            try:
+                kmeans = KMeans(n_clusters=2, random_state=0).fit(np.array(val_array_normalized).reshape(-1,1))
+                outlier_prediction = kmeans.labels_
+                # map the labels to 1 and -1
+                outlier_prediction = [1 if x==0 else -1 for x in outlier_prediction]
+            except:
+                logger.info(f'val array normalized', val_array_normalized)
+                outlier_prediction = [1 for _ in range(len(val_array_normalized))]
+                pass
         return outlier_prediction
 
 
@@ -64,7 +70,7 @@ class ValidationProcessor:
     def naive_malicious_val_crafting(self, evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names):
         for cluster_i in range(num_of_clusters):
             if self.cluster_maliciousness[cluster_i] > 0:
-                cluster_j = self.argsort_result[num_of_clusters//2 + 1]
+                cluster_j = self.argsort_result[min(num_of_clusters//2 + 1, num_of_clusters-1)]
                 cl_p = self.lowest_performing_classes[cluster_j]
                 cl = self.lowest_performing_classes[cluster_i]
                 value_1 = np.sum([evaluations_of_clusters[cluster_j][val_idx][cl_p]/count_of_class_for_validator[val_idx][cl_p] for val_idx in names])
@@ -120,26 +126,21 @@ class ValidationProcessor:
                     # calculate the distance between the two tensors
                     loss_2 += torch.dist(mean_tensor[i], mean_tensor[j], p=2)
 
-            logger.info(f'loss_1: {loss_1}')
-            logger.info(f'loss_2: {loss_2}')
+            logger.info(f'loss_1: {loss_1}, loss_2: {loss_2}, loss: {loss_1 + loss_2}')
 
-            return loss_1 + loss_2
+            return
 
-        loss_val = loss_fun(mal_eval_tensor, benign_eval_tensor)
-        logger.info(f'loss_val: {loss_val}')
-
-        mal_cluster_indices = [i for i in range(num_of_clusters) if self.cluster_maliciousness[i] > 0]
-        benign_cluster_indices = [i for i in range(num_of_clusters) if self.cluster_maliciousness[i] == 0]
+        loss_fun(mal_eval_tensor, benign_eval_tensor)
 
         # autograd
         for _ in tqdm(range(1000), disable=False):
             mean_tensor = torch.mean(torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0), dim=0)
-            mal_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in mal_cluster_indices], dim=0).T
-            benign_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in benign_cluster_indices], dim=0).T
+            mal_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.mal_cluster_indices], dim=0).T
+            benign_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.benign_cluster_indices], dim=0).T
             mean_benign_eval_tensor = torch.mean(benign_eval_tensor, dim=0)
 
-            mal_cluster_tensor_mean_by_class = torch.mean(torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in mal_cluster_indices], dim=0).T, dim=0)
-            benign_cluster_tensor_mean_by_class = torch.mean(torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in benign_cluster_indices], dim=0).T, dim=0)
+            mal_cluster_tensor_mean_by_class = torch.mean(torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.mal_cluster_indices], dim=0).T, dim=0)
+            benign_cluster_tensor_mean_by_class = torch.mean(torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.benign_cluster_indices], dim=0).T, dim=0)
 
             # loss =  torch.nn.functional.mse_loss(mal_eval_tensor, torch.cat([mean_benign_eval_tensor.reshape(1, num_of_clusters, num_of_classes) for _ in range(len(mal_eval_tensor))], dim=0)) + torch.linalg.norm(mal_cluster_tensor_mean_by_class) -  torch.linalg.norm(benign_cluster_tensor_mean_by_class)
 
@@ -149,16 +150,16 @@ class ValidationProcessor:
             d_loss = torch.autograd.grad(loss, mal_eval_tensor, create_graph=True)[0]
             mal_eval_tensor = mal_eval_tensor - 0.5 * d_loss   
 
-        loss_val = loss_fun(mal_eval_tensor, benign_eval_tensor)
-        logger.info(f'loss_val: {loss_val}')
+        loss_fun(mal_eval_tensor, benign_eval_tensor)
 
+        evaluations_of_clusters_new = copy.deepcopy(evaluations_of_clusters)
         for i in range(len(mal_eval_tensor)):
             # for j in range(len(self.adversarial_namelist)):
             for j in range(num_of_clusters):
                 for k in range(num_of_classes):
-                    evaluations_of_clusters[j][names[i]][k] = mal_eval_tensor[i][j][k].detach().numpy()*count_of_class_for_validator[names[i]][k]
+                    evaluations_of_clusters_new[j][names[i]][k] = mal_eval_tensor[i][j][k].detach().numpy()*count_of_class_for_validator[names[i]][k]
 
-        return evaluations_of_clusters
+        return evaluations_of_clusters_new
             
 
 
@@ -196,6 +197,16 @@ class ValidationProcessor:
         # get the validation score
         s = self.fed_validation(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
+        if self.params['injective_florida']:
+            self.mal_cluster_indices = [i for i in range(num_of_clusters) if self.cluster_maliciousness[i] > 0]
+            self.benign_cluster_indices = [i for i in range(num_of_clusters) if self.cluster_maliciousness[i] == 0]
+        else:
+            all_indices = np.argsort(self.cluster_maliciousness)
+            self.mal_cluster_indices = all_indices[num_of_clusters//2:]
+            self.benign_cluster_indices = all_indices[:num_of_clusters//2]
+            logger.info(f'self.mal_cluster_indices: {self.mal_cluster_indices}, self.benign_cluster_indices: {self.benign_cluster_indices}')
+            self.cluster_maliciousness = [1 if i in self.mal_cluster_indices else 0 for i in range(num_of_clusters)]
+
         logger.info(f'before malicious validation crafting')
         self.argsort_result = np.argsort([np.min(s[i]) for i in range(len(s))])
         self.lowest_performing_classes = [np.argmin(s[i]) for i in range(len(s))]
@@ -205,32 +216,53 @@ class ValidationProcessor:
         val_score_by_cluster = [np.min(s[i]) for i in range(len(s))]
         # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
         logger.info(f'self.argsort_result: {self.argsort_result}')
-        # logger.info(f's: {s}')
+        logger.info(f's: {s}')
 
         mal_val_type = self.params['mal_val_type']
 
-        for dist_sim_coeff in np.arange(0.1, 0.2, 0.1):
-            logger.info(f'dist_sim_coeff: {dist_sim_coeff}')
-            if mal_val_type == 'adaptive':
-                evaluations_of_clusters = self.adaptive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, dist_sim_coeff)
-            else:
-                evaluations_of_clusters = self.naive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names)
+        if mal_val_type == 'adaptive':
+            mal_cluster_score_decreases = []
 
+            for dist_sim_coeff in np.arange(0.1, 1., 0.1):
+                logger.info(f'dist_sim_coeff: {dist_sim_coeff}')
+                evaluations_of_clusters_temp = self.adaptive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, dist_sim_coeff)
 
-            logger.info(f'after malicious validation crafting')
-            s = self.fed_validation(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
+                s = self.fed_validation(num_of_clusters, num_of_classes, names, evaluations_of_clusters_temp, count_of_class_for_validator)
 
-            self.argsort_result = np.argsort([np.min(s[i]) for i in range(len(s))])
-            self.lowest_performing_classes = [np.argmin(s[i]) for i in range(len(s))]
-            logger.info(f'self.lowest_performing_classes: {self.lowest_performing_classes}')
-            logger.info(f'lowest_score_for_each_cluster: {[np.min(s[i]) for i in range(len(s))]}')
-            # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
-            logger.info(f'self.argsort_result: {self.argsort_result}')
+                self.argsort_result = np.argsort([np.min(s[i]) for i in range(len(s))])
+                self.lowest_performing_classes = [np.argmin(s[i]) for i in range(len(s))]
+                # logger.info(f'self.lowest_performing_classes: {self.lowest_performing_classes}')
+                # logger.info(f'lowest_score_for_each_cluster: {[np.min(s[i]) for i in range(len(s))]}')
+                # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
+                # logger.info(f'self.argsort_result: {self.argsort_result}')
 
-            new_val_score_by_cluster = np.array(val_score_by_cluster) - np.array([np.min(s[i]) for i in range(len(s))])
+                new_val_score_by_cluster = np.array(val_score_by_cluster) - np.array([np.min(s[i]) for i in range(len(s))])
 
-            logger.info(f'malicious validation score decrease: {np.mean(new_val_score_by_cluster[:len(self.adversarial_namelist)])}')
-            logger.info(f'benign validation score decrease: {np.mean(new_val_score_by_cluster[len(self.adversarial_namelist):])}')
+                mal_cluster_score_decrease = np.mean(new_val_score_by_cluster[self.mal_cluster_indices])
+                benign_cluster_score_decrease = np.mean(new_val_score_by_cluster[self.benign_cluster_indices])
+
+                mal_cluster_score_decreases.append(mal_cluster_score_decrease)
+
+                logger.info(f'malicious validation score decrease: {np.mean(new_val_score_by_cluster[self.mal_cluster_indices])}')
+                logger.info(f'benign validation score decrease: {np.mean(new_val_score_by_cluster[self.benign_cluster_indices])}')
+
+            best_sim_coeff = np.arange(0.1, 1., 0.1)[np.argmin(mal_cluster_score_decreases)]
+            logger.info(f'best_sim_coeff: {best_sim_coeff}')
+
+            evaluations_of_clusters = self.adaptive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, best_sim_coeff)
+        else:
+            evaluations_of_clusters = self.naive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names)
+
+        logger.info(f'after malicious validation crafting')
+        s = self.fed_validation(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
+
+        self.argsort_result = np.argsort([np.min(s[i]) for i in range(len(s))])
+        self.lowest_performing_classes = [np.argmin(s[i]) for i in range(len(s))]
+        logger.info(f'self.lowest_performing_classes: {self.lowest_performing_classes}')
+        logger.info(f'lowest_score_for_each_cluster: {[np.min(s[i]) for i in range(len(s))]}')
+        # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
+        logger.info(f'self.argsort_result: {self.argsort_result}')
+
 
         # s = s[self.argsort_result[len(self.argsort_result)//2:]]
         # logger.info(f's: {s}')
