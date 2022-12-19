@@ -22,37 +22,41 @@ for p in partitions:
     if not os.path.exists(image_folder + p):
         os.mkdir(image_folder + p)
 labels=['Bald', 'Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Gray_Hair']
-for l in labels:
-    if not os.path.exists(target_folder +partitions[0]+'/'+l):
-        os.mkdir(target_folder +partitions[0]+'/'+l)
-    if not os.path.exists(target_folder +partitions[1]+'/'+l):
-        os.mkdir(target_folder+partitions[1]+'/'+l)
+# for l in labels:
+#     if not os.path.exists(target_folder +partitions[0]+'/'+l):
+#         os.mkdir(target_folder +partitions[0]+'/'+l)
+#     if not os.path.exists(target_folder +partitions[1]+'/'+l):
+#         os.mkdir(target_folder+partitions[1]+'/'+l)
 
-with open(target_folder + 'list_eval_partition.txt', 'r') as f:
-    for line in f.readlines():
-        split_line = line.split(' ')
+# with open(target_folder + 'list_eval_partition.txt', 'r') as f:
+#     for line in f.readlines():
+#         split_line = line.split(' ')
 
-        if '0' in split_line[1]:
-            move(image_folder+split_line[0], image_folder+partitions[0])
-        elif '1' in split_line[1]:
-            move(image_folder+split_line[0], image_folder+partitions[1])
-        else:
-            move(image_folder+split_line[0], image_folder+partitions[2])
+#         if '0' in split_line[1]:
+#             move(image_folder+split_line[0], image_folder+partitions[0])
+#         elif '1' in split_line[1]:
+#             move(image_folder+split_line[0], image_folder+partitions[1])
+#         else:
+#             move(image_folder+split_line[0], image_folder+partitions[2])
       
-
-read_file = pd.read_csv (attr_file, delimiter = " ")
+read_file = pd.read_csv (attr_file, delimiter =r"\s+")
 read_file.to_csv (csv_file, index=None)
 
-
 df = pd.read_csv(csv_file)
+
+print(df.columns)
+
+from tqdm import tqdm
 
 for i in range(2):
     paths = glob.glob(image_folder + partitions[i]+'/*')
 
-    for path in paths:
-        file = path.split('/')[-1]
-        file = path.split('\\')[-1]
-        row=df.loc[df['file'] == file]
+    for path in tqdm(paths):
+        # print(path)
+        file_name = path.split('/')[-1]
+        # print(file_name)
+        # file_name = path.split('\\')[-1]
+        row=df.loc[df['File'] == file_name]
         for l in labels:
             if int(row[l])==1:
                 move(path, target_folder +partitions[i]+'/'+l)

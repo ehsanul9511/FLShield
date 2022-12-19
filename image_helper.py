@@ -345,11 +345,11 @@ class ImageHelper(Helper):
                 which_data_dist = random.sample(range(1,4), 1)[0]
             group_sizes = config.random_group_size_dict[self.params['type']][which_data_dist]
         else:
-            group_sizes = [10 for _ in range(10)]
+            group_sizes = [num_labels for _ in range(num_labels)]
         return group_sizes
 
     def assign_data_nonuniform(self, train_data, bias, num_labels=10, num_workers=100, server_pc=100, p=0.01, server_case2_cls=0, dataset="FashionMNIST", seed=1, flt_aggr=True):
-        server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label = self.assign_data(train_data, bias, num_labels, 10, server_pc, p, server_case2_cls, dataset, seed, flt_aggr)
+        server_data, server_label, each_worker_data, each_worker_label, server_add_data, server_add_label = self.assign_data(train_data, bias, num_labels, num_workers//num_labels, server_pc, p, server_case2_cls, dataset, seed, flt_aggr)
         ewd = [[] for _ in range(num_workers)]
         ewl = [[] for _ in range(num_workers)]
         # group_sizes = [np.random.randint(5, 16) for i in range(9)]
@@ -375,7 +375,7 @@ class ImageHelper(Helper):
             split_map_for_not_i = [0]
             for ii in range(1, group_size):
                 np.random.seed(42 + i)
-                split_ratio_for_i = np.random.normal(ii*group_frac, group_frac/10)
+                split_ratio_for_i = np.random.normal(ii*group_frac, group_frac//num_labels)
                 split_ratio_for_not_i = ii*group_frac*2 - split_ratio_for_i
                 split_map_for_i.append(int(split_ratio_for_i*len(i_indices)))
                 split_map_for_not_i.append(int(split_ratio_for_not_i*len(not_i_indices)))
@@ -389,8 +389,8 @@ class ImageHelper(Helper):
                     indice_map[iii] = ii 
                 for iii in not_i_indices_list[ii]:
                     indice_map[iii] = ii 
-            size_of_group = int(len(each_worker_data[i])/10)
-            stop_val = 10 * size_of_group
+            size_of_group = int(len(each_worker_data[i])//num_labels)
+            stop_val = num_labels * size_of_group
             for idx in range(len(each_worker_data[i])):
                 ewd[sum(group_sizes[:i]) + indice_map[idx]].append(each_worker_data[i][idx])
                 ewl[sum(group_sizes[:i]) + indice_map[idx]].append(each_worker_label[i][idx])
@@ -464,7 +464,7 @@ class ImageHelper(Helper):
                     # transforms.Normalize((0.1307,), (0.3081,))
                 ]))
         elif self.params['type'] == config.TYPE_CELEBA:
-
+            num_labels = 5
             _data_transforms = {
                 'train': transforms.Compose([
                     # transforms.Resize(224),
@@ -507,6 +507,7 @@ class ImageHelper(Helper):
         self.classes_dict = self.build_classes_dict()
 
         logger.info('build_classes_dict done')
+        num_labels = self.params['num_labels'] if self.params['num_labels'] else 10
         if self.params['sampling_dirichlet']:
             ## sample indices for participants using Dirichlet distribution
             indices_per_participant = self.sample_dirichlet_train_data(
@@ -584,7 +585,7 @@ class ImageHelper(Helper):
                 logger.info('reading data done')
 
             if self.params['noniid']:
-                sd, sl, ewd, ewl, sad, sal = self.assign_data_nonuniform(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1, num_workers=self.params['number_of_total_participants'])
+                sd, sl, ewd, ewl, sad, sal = self.assign_data_nonuniform(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1, num_workers=self.params['number_of_total_participants'], num_labels=num_labels)
                 if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
                     ewd.append(sd)
                     ewl.append(sl)
@@ -625,6 +626,7 @@ class ImageHelper(Helper):
                             train_loaders.append((id_worker, train_loader))
             else:
                 ## sample indices for participants that are equally
+                logger.info('sampling indices for participants that are equally')
                 all_range = list(range(len(self.train_dataset)))
                 random.seed(42)
                 random.shuffle(all_range)
@@ -656,7 +658,7 @@ class ImageHelper(Helper):
                 logger.info('saving data done')
 
             # self.classes_dict = self.build_classes_dict()
-            logger.info('build_classes_dict done')
+            # logger.info('build_classes_dict done')
         if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
             target_class_test_data=[]
             for _, (x, y) in enumerate(self.test_data.dataset):
@@ -668,12 +670,12 @@ class ImageHelper(Helper):
         # if self.params['noniid']:
         self.lsrs = []
 
-        for id in tqdm(range(len(self.train_data))):
-            (_, train_loader) = self.train_data[id]
-            lsr = self.get_label_skew_ratios(train_loader.dataset, id)
-            self.lsrs.append(lsr)
+        # for id in tqdm(range(len(self.train_data))):
+        #     (_, train_loader) = self.train_data[id]
+        #     lsr = self.get_label_skew_ratios(train_loader.dataset, id)
+        #     self.lsrs.append(lsr)
 
-        logger.info(f'lsrs ready: {self.lsrs}')
+        # logger.info(f'lsrs ready: {self.lsrs}')
 
 
         if self.params['is_random_namelist'] == False:
@@ -692,7 +694,7 @@ class ImageHelper(Helper):
             #         self.num_of_attackers_in_target_group = self.params['num_of_attackers_in_target_group']
             #     else:
             #         self.num_of_attackers_in_target_group = 4
-            if self.params['noniid']:
+            if self.params['noniid'] or True:
                 # group_sizes = self.get_group_sizes()
                 # cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
                 # target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
