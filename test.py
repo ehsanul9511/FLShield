@@ -28,7 +28,8 @@ def Mytest(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
-            or helper.params['type'] == config.TYPE_TINYIMAGENET:
+            or helper.params['type'] == config.TYPE_TINYIMAGENET\
+            or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data
         for batch_id, batch in enumerate(data_iterator):
             if batch_id > 0 and one_batch_only:
@@ -179,7 +180,8 @@ def Mytest_poison(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
-            or helper.params['type'] == config.TYPE_TINYIMAGENET:
+            or helper.params['type'] == config.TYPE_TINYIMAGENET\
+            or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data_poison
         for batch_id, batch in enumerate(data_iterator):
             data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=-1, evaluation=True)
@@ -248,7 +250,8 @@ def Mytest_poison_trigger(helper, model, adver_trigger_index):
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
-            or helper.params['type'] == config.TYPE_TINYIMAGENET:
+            or helper.params['type'] == config.TYPE_TINYIMAGENET\
+            or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data_poison
         adv_index = adver_trigger_index
         for batch_id, batch in enumerate(data_iterator):
@@ -308,7 +311,8 @@ def Mytest_poison_agent_trigger(helper, model, agent_name_key):
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
-            or helper.params['type'] == config.TYPE_TINYIMAGENET:
+            or helper.params['type'] == config.TYPE_TINYIMAGENET\
+            or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data_poison
         adv_index = -1
         for temp_index in range(0, len(helper.params['adversary_list'])):

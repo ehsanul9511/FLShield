@@ -16,14 +16,14 @@ with open(target_folder + 'val_annotations.txt', 'r') as f:
         val_dict[split_line[0]] = split_line[1]
         
 paths = glob.glob(target_folder + 'images/*')
-
+"""
 for path in paths:
     file = path.split('/')[-1]
     file=file.split('\\')[-1]
     folder = val_dict[file]
     if not os.path.exists(target_folder + str(folder)):
         os.mkdir(target_folder + str(folder))
-
+"""
 for path in paths:
     file = path.split('/')[-1]
     file=file.split('\\')[-1]

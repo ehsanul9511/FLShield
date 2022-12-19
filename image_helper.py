@@ -16,6 +16,7 @@ import numpy as np
 from models.resnet_cifar import ResNet18
 from models.MnistNet import MnistNet
 from models.resnet_tinyimagenet import resnet18
+from models.resnet_celebA import Resnet18
 logger = logging.getLogger("logger")
 import config
 from config import device
@@ -55,6 +56,13 @@ class ImageHelper(Helper):
             local_model= resnet18(name='Local',
                                    created_time=self.params['current_time'])
             target_model = resnet18(name='Target',
+                                    created_time=self.params['current_time'])
+
+        elif self.params['type']==config.TYPE_CELEBA:
+
+            local_model= Resnet18(name='Local',
+                                   created_time=self.params['current_time'])
+            target_model = Resnet18(name='Target',
                                     created_time=self.params['current_time'])
 
         local_model=local_model.to(device)
@@ -428,6 +436,84 @@ class ImageHelper(Helper):
         logger.info('Loading data')
         if 'load_data' in self.params:
             self.load_saved_data()
+        dataPath = './data'
+        if self.params['type'] == config.TYPE_CIFAR:
+            ### data load
+            transform_train = transforms.Compose([
+                transforms.ToTensor(),
+            ])
+
+            transform_test = transforms.Compose([
+                transforms.ToTensor(),
+            ])
+
+            self.train_dataset = datasets.CIFAR10(dataPath, train=True, download=True,
+                                             transform=transform_train)
+
+            self.test_dataset = datasets.CIFAR10(dataPath, train=False, transform=transform_test)
+
+        elif self.params['type'] == config.TYPE_MNIST:
+
+            self.train_dataset = datasets.MNIST('./data', train=True, download=True,
+                               transform=transforms.Compose([
+                                   transforms.ToTensor(),
+                                   # transforms.Normalize((0.1307,), (0.3081,))
+                               ]))
+            self.test_dataset = datasets.MNIST('./data', train=False, transform=transforms.Compose([
+                    transforms.ToTensor(),
+                    # transforms.Normalize((0.1307,), (0.3081,))
+                ]))
+        elif self.params['type'] == config.TYPE_CELEBA:
+
+            _data_transforms = {
+                'train': transforms.Compose([
+                    # transforms.Resize(224),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                ]),
+                'val': transforms.Compose([
+                    # transforms.Resize(224),
+                    transforms.ToTensor(),
+                ]),
+            }
+            _data_dir = './data/celebA/'
+            self.train_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'train'),
+                                                    _data_transforms['train'])
+            self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
+                                                   _data_transforms['val'])
+            logger.info('reading data done')
+
+
+        elif self.params['type'] == config.TYPE_TINYIMAGENET:
+
+            _data_transforms = {
+                'train': transforms.Compose([
+                    # transforms.Resize(224),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.ToTensor(),
+                ]),
+                'val': transforms.Compose([
+                    # transforms.Resize(224),
+                    transforms.ToTensor(),
+                ]),
+            }
+            _data_dir = './data/tiny-imagenet-200/'
+            self.train_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'train'),
+                                                    _data_transforms['train'])
+            self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
+                                                   _data_transforms['val'])
+            logger.info('reading data done')
+
+        self.classes_dict = self.build_classes_dict()
+
+        logger.info('build_classes_dict done')
+        if self.params['sampling_dirichlet']:
+            ## sample indices for participants using Dirichlet distribution
+            indices_per_participant = self.sample_dirichlet_train_data(
+                self.params['number_of_total_participants'], #100
+                alpha=self.params['dirichlet_alpha'])
+            train_loaders = [(pos, self.get_train(indices)) for pos, indices in
+                             indices_per_participant.items()]
         else:
             dataPath = './data'
             dataPath_emnist = '/dartfs-hpc/rc/home/9/f0059f9/OOD_Federated_Learning/data'
@@ -840,7 +926,7 @@ class ImageHelper(Helper):
                 poison_patterns = poison_patterns+ self.params[str(i) + '_poison_pattern']
         else :
             poison_patterns = self.params[str(adversarial_index%4) + '_poison_pattern']
-        if self.params['type'] == config.TYPE_CIFAR or self.params['type'] == config.TYPE_TINYIMAGENET:
+        if self.params['type'] == config.TYPE_CIFAR or self.params['type'] == config.TYPE_TINYIMAGENET or self.params['type'] == config.TYPE_CELEBA:
             for i in range(0,len(poison_patterns)):
                 pos = poison_patterns[i]
                 image[0][pos[0]][pos[1]] = 1
