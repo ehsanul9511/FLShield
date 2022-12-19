@@ -6,6 +6,9 @@ from sklearn.metrics import silhouette_score, confusion_matrix
 import logging
 from collections import defaultdict
 
+# import adjusted_rand_score
+from sklearn.metrics.cluster import adjusted_rand_score
+
 logger = logging.getLogger("logger")
 
 def cluster_fun(coses, k, clustering_method='Agglomerative'):
@@ -57,6 +60,33 @@ def cluster_grads(grads, clustering_method='Spectral'):
 
     return clustering.labels_, clusters
 
+def cluster_score_calc(clusters, labels):
+    # print(clusters)
+    # print(labels)
+    num_of_adversaries = sum(labels)
+    cluster_maliciousness = [0. for _ in range(len(clusters))]
+    for i, cluster in enumerate(clusters):
+        for j in cluster:
+            if labels[j]==1:
+                cluster_maliciousness[i] = 1
+                break
+    # print(cluster_maliciousness)
+
+    cluster_results = np.zeros(len(labels))
+    for i, cluster in enumerate(clusters):
+        if cluster_maliciousness[i]==0:
+            for j in cluster:
+                cluster_results[j] = 1
+        else:
+            for j in cluster:
+                cluster_results[j] = 0
+
+    score = adjusted_rand_score(labels, cluster_results)
+    logger.info(f'adjusted rand score: {score}')
+    return score
+
+    
+
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
@@ -67,6 +97,7 @@ if __name__ == '__main__':
     parser.add_argument('--location', type=str, default=None)
     parser.add_argument('--epoch', type=int, default=36)
     parser.add_argument('--clustering_method', type=str, default='Agglomerative')
+    parser.add_argument('--comparison_mode', type=bool, default=True)
 
     # parse args
     args = parser.parse_args()
@@ -82,12 +113,48 @@ if __name__ == '__main__':
 
     params = defaultdict(lambda: None, params)
 
-    clustering_method = params['clustering_method'] if params['clustering_method'] else 'Agglomerative'
+    num_of_adversaries = params['no_models'] * params[f'number_of_adversary_{params["attack_methods"]}'] / params['number_of_total_participants']
+    num_of_adversaries = int(num_of_adversaries)
+
+    actual_labels = np.array([1] * (num_of_adversaries) + [0] * (len(grads) - num_of_adversaries))
+
+    if not args.comparison_mode:
+
+        clustering_method = params['clustering_method'] if params['clustering_method'] else 'Agglomerative'
+        
+        clustering_method = args.clustering_method if args.clustering_method else clustering_method
+
+        # cluster
+        logger.info(f'Clustering Method: {clustering_method}')
+        _, clusters = cluster_grads(grads, clustering_method)
+
+        logger.info(f'Validator Groups: {clusters}')
     
-    clustering_method = args.clustering_method if args.clustering_method else clustering_method
+    else:
+        clustering_methods = ['Agglomerative', 'KMeans', 'Spectral']
+        markers = ['o', 'x', 's']
 
-    # cluster
-    logger.info(f'Clustering Method: {clustering_method}')
-    _, clusters = cluster_grads(grads, clustering_method)
+        scores = {}
+        for clustering_method in clustering_methods:
+            scores[clustering_method] = []
 
-    logger.info(f'Validator Groups: {clusters}')
+        for epoch in range(36, 71):
+            logger.info(f'Epoch: {epoch}')
+            grads = np.load(f'{args.location}/grads_{epoch}.npy')
+            names = np.load(f'{args.location}/names_{epoch}.npy')
+
+            for clustering_method in clustering_methods:
+                logger.info(f'Clustering Method: {clustering_method}')
+                _, clusters = cluster_grads(grads, clustering_method)
+                logger.info(f'Validator Groups: {clusters}')
+                score = cluster_score_calc(clusters, actual_labels)
+
+                scores[clustering_method].append(score)
+
+        # plot scores
+        import matplotlib.pyplot as plt
+        plt.figure()
+        for clustering_method in clustering_methods:
+            plt.plot(scores[clustering_method], label=clustering_method, marker=markers[clustering_methods.index(clustering_method)])
+        plt.legend()
+        plt.savefig(f'comparison.png')

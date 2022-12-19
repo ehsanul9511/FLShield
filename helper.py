@@ -27,6 +27,7 @@ import test
 from florida_utils.validation_processing import ValidationProcessor
 from florida_utils.cluster_grads import cluster_grads as cluster_function
 from florida_utils.validation_test import validation_test
+from florida_utils.impute_validation import impute_validation
 
 from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering, KMeans
@@ -56,109 +57,6 @@ from matplotlib import pyplot as plt
 
 import pickle
 
-class FCLUSTER:
-    def __init__(self) -> None:
-        super().__init__()
-        self.child = None
-        self.stability = 0.
-        pass
-
-def calc_clusters(node, min_samples, grads=None, stability=None, adv_list=None):
-    cluster = FCLUSTER()
-    cluster.node = node
-    stability_of_child = None
-    if grads is not None:
-        labels=[]
-        grads_subset = grads[node.points]
-        for idx, point in enumerate(node.points):
-            if point in node.left.points:
-                labels.append(0)
-            elif point in node.right.points:
-                labels.append(1)
-            else:
-                logger.info(f'error log: {point} {node.points} {node.left.points} {node.right.points}')
-        stability_of_child = silhouette_score(grads_subset, labels)
-    if len(node.left.points) >= min_samples:
-        cluster.child = calc_clusters(node.left, min_samples, grads, stability_of_child, adv_list)
-    if len(node.right.points) >= min_samples:
-        cluster.child = calc_clusters(node.right, min_samples, grads, stability_of_child, adv_list)
-    if stability is not None:
-        cluster.stability = stability
-    else:
-        cluster.stability = 0.
-    logger.info(f'cluster created with stability {cluster.stability}, mal count {len([point for point in node.points if point in adv_list])} with left {len(node.left.points)} and right {len(node.right.points)}')
-    return cluster
-
-def find_best_cluster(current_cluster):
-    if current_cluster.child is None:
-        return current_cluster
-    else:
-        child_cluster = find_best_cluster(current_cluster.child)
-        if child_cluster.stability > current_cluster.stability:
-            return child_cluster
-        else:
-            return current_cluster
-
-def calc_edge_weight(node):
-    if node.edge_weight is not None:
-        edge_weight = node.edge_weight
-    else:
-        edge_weight = 0
-    if node.left is not None:
-        edge_weight += calc_edge_weight(node.left)
-    if node.right is not None:
-        edge_weight += calc_edge_weight(node.right)
-    return edge_weight
-
-def modHDBSCAN(grads, min_samples, adv_list):
-    # clusterer = hdbscan.HDBSCAN(gen_min_span_tree=True)
-    # clusterer.fit(grads)
-
-    # mst = clusterer.minimum_spanning_tree_.to_numpy()
-    cos_matrix = cosine_distances(grads)
-    mst = minimum_spanning_tree(cos_matrix)
-    graph = nx.from_scipy_sparse_matrix(mst)
-    edge_list = list(nx.convert.to_edgelist(graph))
-    edge_list = sorted(edge_list, key=lambda x: x[2]['weight'])
-    # logger.info(f'edge_list: {edge_list}')
-    # logger.info(f'MST : {mst}')
-
-    leaf_nodes = []
-    parent_dict = {}
-
-    for i in range(len(grads)):
-        node = Node(i)
-        node.points = [i]
-        node.edge_weight = 0
-        leaf_nodes.append(node)
-        parent_dict[i] = node
-
-    last_node = None
-    for edge_idx in range(len(edge_list)):
-        u, v, w= edge_list[edge_idx]
-        w = w['weight']
-        try:
-            u_node = parent_dict[u]
-            v_node = parent_dict[v]
-        except:
-            print(parent_dict.keys())
-        node = Node(f'({int(u)}, {int(v)})')
-        node.points = u_node.points + v_node.points
-        node.left = u_node
-        node.right = v_node
-        node.edge_weight = w
-        for point in node.points:
-            parent_dict[point] = node
-        last_node = node
-        # print(node.points)
-
-    top_cluster = calc_clusters(last_node, min_samples, grads, adv_list=adv_list)
-    best_cluster = find_best_cluster(top_cluster)
-
-    wv = np.zeros(len(grads))
-    for i in best_cluster.node.points:
-        wv[i] = 1
-    return wv, best_cluster.node.points, edge_list, top_cluster
 
 class Helper:
     def __init__(self, current_time, params, name):
@@ -663,280 +561,10 @@ class Helper:
         # return np.sum(euclidean_distances(cluster, [candidate]))/(len(cluster)-1)
         return np.sum(cosine_distances(cluster, [candidate]))/(len(cluster)-1)
     
-    def validation_test_for_loan(self, network, test_loader, is_poisonous=False, adv_index=-1, tqdm_disable=True):
-        network.eval()
-        correct = 0
-        correct_by_class = {}
-
-        dataset_size_by_classes = {}
-        for cl in range(9):
-            dataset_size_by_classes[cl] = 0
-            correct_by_class[cl] = 0
-
-        with torch.no_grad():
-            for batch_id, batch in enumerate(test_loader):
-                if is_poisonous:
-                    for index in range(0, len(batch[1])):
-                        if batch[1][index] == self.source_class:
-                            batch[1][index] = self.target_class
-                data, targets = self.allStateHelperList[adv_index].get_batch(test_loader, batch, evaluation=True)
-                output = network(data)
-                # total_loss += nn.functional.cross_entropy(output, targets,
-                #                                           reduction='sum').item()  # sum up batch loss
-                pred = output.data.max(1)[1]  # get the index of the max log-probability
-                correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
-                # checking attack success rate
-                for cl in range(9):
-                    class_indices = np.where(targets.cpu().data.numpy()==cl)
-                    dataset_size_by_classes[cl] += len(class_indices[0])
-                    correct_by_class[cl] += pred.eq(targets.data.view_as(pred)).cpu().data.numpy()[class_indices].sum()
-
-            for cl in range(9):
-                if dataset_size_by_classes[cl] == 0:
-                    correct_by_class[cl] = 100. * correct
-
-            for class_label in dataset_size_by_classes.keys():
-                if dataset_size_by_classes[class_label] != 0:
-                    correct_by_class[class_label] = 100. * correct_by_class[class_label]/ dataset_size_by_classes[class_label]
-                    correct_by_class[class_label] = correct_by_class[class_label].item()
-            # print(correct_by_class)
-        return 100. * correct / len(test_loader.dataset), correct_by_class        
-
-    def validation_test(self, network, test_loader, is_poisonous=False, adv_index=-1, tqdm_disable=True):
-        network.eval()
-        correct = 0
-        correct_by_class = {}
-
-        dataset_classes = {}
-        validation_dataset = test_loader.dataset
-
-        for ind, x in enumerate(validation_dataset):
-            _, label = x
-            #if ind in self.params['poison_images'] or ind in self.params['poison_images_test']:
-            #    continue
-            if label in dataset_classes:
-                dataset_classes[label].append(ind)
-            else:
-                dataset_classes[label] = [ind]
-
-        with torch.no_grad():
-            for data, target in tqdm(test_loader, disable=tqdm_disable):
-                if is_poisonous:
-                    data, target, poison_num = self.get_poison_batch((data, target), adv_index)
-                else:
-                    data, target = self.get_batch(None, (data, target))
-                output = network(data)
-                loss_func=torch.nn.CrossEntropyLoss()
-                pred = output.data.max(1, keepdim=True)[1]
-                correct += pred.eq(target.data.view_as(pred)).sum()
-
-            for class_label in dataset_classes.keys():
-                correct_by_class[class_label] = 0
-                one_class_test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=100, sampler=SubsetRandomSampler(indices=dataset_classes[class_label]))
-
-                # for data, target in tqdm(one_class_test_loader, disable=tqdm_disable):
-                for data, target in one_class_test_loader:
-                    if is_poisonous:
-                        data, target, poison_num = self.get_poison_batch((data, target), adv_index)
-                    else:
-                        data, target = self.get_batch(None, (data, target))
-                    output = network(data)
-                    loss_func=torch.nn.CrossEntropyLoss()
-                    pred = output.data.max(1, keepdim=True)[1]
-                    correct_by_class[class_label] += pred.eq(target.data.view_as(pred)).sum()
-
-                correct_by_class[class_label] = 100. * correct_by_class[class_label]/ len(dataset_classes[class_label])
-                correct_by_class[class_label] = correct_by_class[class_label].item()
-
-            for c in range(10):
-                if c not in correct_by_class:
-                    correct_by_class[c] = 100. * correct / len(test_loader.dataset)
-                    correct_by_class[c] = correct_by_class[c].item()
-            # print(correct_by_class)
-        return 100. * correct / len(test_loader.dataset), correct_by_class
 
     def print_util(self, a, b):
         return str(a) + ': ' + str(b)
 
-    def validation_test_v2(self, network, given_test_loader=None, is_poisonous=False, adv_index=-1, tqdm_disable=True, num_classes=10):
-        network.eval()
-        correct = 0
-        correct_by_class = {}
-        loss_by_class = {}
-        loss_by_class_per_example = {}
-        count_per_class = {}
-        loss = 0.
-
-        dataset_classes = {}
-        if given_test_loader is not None:
-            validation_dataset = copy.deepcopy(given_test_loader.dataset)
-            test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=len(validation_dataset))
-
-        for c in range(num_classes):
-            count_per_class[c] = 0
-            loss_by_class[c] = []
-            loss_by_class_per_example[c] = 0.
-            correct_by_class[c] = []
-        
-        with torch.no_grad():
-            for batch_id, batch in enumerate(test_loader):
-                if self.params['type'] != config.TYPE_LOAN:
-                    if is_poisonous and self.params['attack_methods']==config.ATTACK_TLF and False:
-                        data, targets, _ = self.get_poison_batch_for_targeted_label_flip(batch, 4)
-                    else:
-                        data, targets = self.get_batch(None, batch)
-                else:
-                    data, targets = self.allStateHelperList[adv_index].get_batch(test_loader, batch, evaluation=True)
-                output = network(data)
-                loss_func=torch.nn.CrossEntropyLoss(reduction='none')
-                pred = output.data.max(1, keepdim=True)[1]
-                correct_array = pred.eq(targets.data.view_as(pred))
-                correct += correct_array.sum()
-                loss_array = loss_func(output, targets)
-                loss += loss_array.sum().item()
-                class_indices = {}
-                for cl in range(num_classes):
-                    class_indices[cl] = (targets==cl)
-                    count_per_class[cl] += (class_indices[cl]).sum().item()
-
-                    # loss_by_class[cl] += loss_array[class_indices[cl]].sum().item()
-                    # correct_by_class[cl] += correct_array[class_indices[cl]].sum().item()     
-                    loss_by_class[cl] += [loss_val.item() for loss_val in loss_array[class_indices[cl]]]
-                    correct_by_class[cl] += [correct_val.item() for correct_val in correct_array[class_indices[cl]]]
-                
-        for class_label in range(num_classes):
-            cap_on_per_class = True
-            if count_per_class[class_label] > 30 and cap_on_per_class:
-                count_per_class[class_label] = 30
-                loss_by_class[class_label] = loss_by_class[class_label][:30]
-                correct_by_class[class_label] = correct_by_class[class_label][:30]
-
-            loss_by_class[class_label] = np.sum(loss_by_class[class_label])
-            correct_by_class[class_label] = np.sum(correct_by_class[class_label])
-            
-            if count_per_class[class_label] == 0:
-                correct_by_class[class_label] = 0
-                loss_by_class[class_label] = 0.
-                loss_by_class_per_example[class_label] = np.nan
-            else:
-                correct_by_class[class_label] = 100. * correct_by_class[class_label]/ count_per_class[class_label]
-                loss_by_class_per_example[class_label] = loss_by_class[class_label]/ count_per_class[class_label]
-
-            # try:
-            #     correct_by_class[class_label] = 100. * correct_by_class[class_label]/ count_per_class[class_label]
-            # except:
-            #     correct_by_class[class_label] = 0.
-            #     pass
-
-
-            # try:
-            #     loss_by_class_per_example[class_label] = loss_by_class[class_label]/ count_per_class[class_label]
-            # except:
-            #     loss_by_class_per_example[class_label] = 0.
-            #     # loss_by_class_per_example[class_label] = loss / len(test_loader.dataset)
-            #     pass
-
-        return 100. * correct / len(test_loader.dataset), loss_by_class, loss_by_class_per_example, count_per_class
-
-
-
-    def validation_test_v3(self, network, test_loader, is_poisonous=False, adv_index=-1, tqdm_disable=True, num_classes=10):
-        network.eval()
-        correct = 0
-        correct_by_class = {}
-        loss_by_class = {}
-        loss_by_class_per_example = {}
-        count_per_class = {}
-        loss = 0.
-
-        dataset_classes = {}
-        validation_dataset = copy.deepcopy(test_loader.dataset)
-        val_dataset = []
-
-        #poison validation dataset
-        # if is_poisonous and self.params['attack_methods'] == config.ATTACK_TLF:
-        #     for ind, (x, y) in enumerate(validation_dataset):
-        #         if y == self.source_class:
-        #             val_dataset.append((x, self.target_class))
-        #         else:
-        #             val_dataset.append((x, y))
-
-        #     validation_dataset = val_dataset
-
-        for ind, (x, y) in enumerate(validation_dataset):
-            if is_poisonous and self.params['attack_methods'] == config.ATTACK_TLF and y == self.source_class:
-                val_dataset.append((x, self.target_class))
-            else:
-                val_dataset.append((x, y))
-
-        validation_dataset = val_dataset
-
-        for ind, x in enumerate(validation_dataset):
-            _, label = x
-            #if ind in self.params['poison_images'] or ind in self.params['poison_images_test']:
-            #    continue
-            if label in dataset_classes:
-                dataset_classes[label].append(ind)
-            else:
-                dataset_classes[label] = [ind]
-
-        with torch.no_grad():
-            for data, target in tqdm(test_loader, disable=tqdm_disable):
-                data, target = self.get_batch(None, (data, target))
-                output = network(data)
-                loss_func=torch.nn.CrossEntropyLoss(reduction='sum')
-                pred = output.data.max(1, keepdim=True)[1]
-                correct += pred.eq(target.data.view_as(pred)).sum()
-                loss += loss_func(output, target).item()
-
-            loss = loss / len(test_loader.dataset)
-
-            for class_label in dataset_classes.keys():
-                correct_by_class[class_label] = 0
-                loss_by_class[class_label] = 0
-                one_class_test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=100, sampler=SubsetRandomSampler(indices=dataset_classes[class_label]))
-
-                # for data, target in tqdm(one_class_test_loader, disable=tqdm_disable):
-                for data, target in one_class_test_loader:
-                    data, target = self.get_batch(None, (data, target))
-                    output = network(data)
-                    loss_func=torch.nn.CrossEntropyLoss(reduction = 'sum')
-                    pred = output.data.max(1, keepdim=True)[1]
-                    correct_by_class[class_label] += pred.eq(target.data.view_as(pred)).sum()
-                    loss_by_class[class_label] += loss_func(output, target, ).item()
-                    
-
-                correct_by_class[class_label] = 100. * correct_by_class[class_label]/ len(dataset_classes[class_label])
-                correct_by_class[class_label] = correct_by_class[class_label].item()
-
-                loss_by_class_per_example[class_label] = loss_by_class[class_label]/ len(dataset_classes[class_label])
-                count_per_class[class_label] = len(dataset_classes[class_label])
-
-            for c in range(10):
-                if c not in correct_by_class:
-                    correct_by_class[c] = 100. * correct / len(test_loader.dataset)
-                    correct_by_class[c] = correct_by_class[c].item()
-
-                if c not in loss_by_class:
-                    loss_by_class[c] = 0.
-                    loss_by_class_per_example[c] = 0.
-                    count_per_class[c] = 0.
-            # print(correct_by_class)
-        return 100. * correct / len(test_loader.dataset), loss_by_class, loss_by_class_per_example, count_per_class
-
-    def mal_pcnt(self, cluster, names, wv=None):
-        mal_count = 0
-        for idx, client_id in enumerate(cluster):
-            # if names[client_id] in self.adversarial_namelist:
-            if client_id in self.adversarial_namelist:
-                if wv is None:
-                    mal_count += 1
-                else:
-                    mal_count += wv[idx]
-        if wv is None:
-            return mal_count / len(cluster)
-        else:
-            return mal_count
 
     def ipm_attack(self, delta_models, names):
         bad_idx = [idx for idx, name in enumerate(names) if name in self.adversarial_namelist]
@@ -1009,6 +637,10 @@ class Helper:
         if self.params['injective_florida']:
             no_clustering = True
 
+        no_ensemble = False
+        if self.params['no_ensemble']:
+            no_ensemble = True
+
         if self.params['no_models'] < 10 or no_clustering:
             self.clusters_agg = [[i] for i in range(len(names))]
         else:
@@ -1060,7 +692,7 @@ class Helper:
             agg_model.copy_params(self.target_model.state_dict())
             weight_vec = np.zeros(len(names), dtype=np.float32)
 
-            if len(cluster) != 1:
+            if len(cluster) != 1 or no_ensemble:
                 for i in range(len(names)):
                     if names[i] in cluster:
                         weight_vec[i] = 1/len(cluster)
@@ -1088,7 +720,7 @@ class Helper:
                 except:
                     data.add_(update_per_layer.to(data.dtype))
                     
-                    
+
             for iidx, val_idx in enumerate(tqdm(names, disable=True)):
                 val_score_by_class, val_score_by_class_per_example, count_of_class = validation_test(self, agg_model, val_idx if self.params['type'] != config.TYPE_LOAN else iidx)
                 val_score_by_class_per_example = [val_score_by_class_per_example[i] for i in range(num_of_classes)]
@@ -1106,18 +738,39 @@ class Helper:
         # all_validator_evaluations = [all_validator_evaluations[val_idx] for val_idx in range(len(names))]
 
         # need to fix imputation steps
-        all_validator_evaluations = [all_validator_evaluations[names[val_idx]] for val_idx in range(len(names))]
-        imputer = IterativeImputer(n_nearest_features = 5, initial_strategy = 'median', random_state = 42)
-        all_validator_evaluations = imputer.fit_transform(all_validator_evaluations)
-
-        all_validator_evaluations_dict = dict()
-        for val_idx in range(len(names)):
-            all_validator_evaluations_dict[names[val_idx]] = all_validator_evaluations[val_idx]
-
-        all_validator_evaluations = all_validator_evaluations_dict
+        # all_validator_evaluations = [all_validator_evaluations[names[val_idx]] for val_idx in range(len(names))]
+        # imputer = IterativeImputer(n_nearest_features = 5, initial_strategy = 'median', random_state = 42)
+        # all_validator_evaluations = imputer.fit_transform(all_validator_evaluations)
 
         cluster_maliciousness = [len([idx for idx in cluster if idx in self.adversarial_namelist])/len(cluster) for cluster in clusters_agg]
         logger.info(f'cluster maliciousness: {cluster_maliciousness}')
+        
+        validation_container = {
+            'evaluations_of_clusters': evaluations_of_clusters,
+            'count_of_class_for_validator': count_of_class_for_validator,
+            'names': names,
+            'num_of_classes': num_of_classes,
+            'num_of_clusters': num_of_clusters,
+            'all_validator_evaluations': all_validator_evaluations,
+            'epoch': epoch,
+            'params': dict(self.params),
+            'cluster_maliciousness': cluster_maliciousness,
+            'benign_namelist': self.benign_namelist,
+            'adversarial_namelist': self.adversarial_namelist,
+        }
+
+        with open(f'{self.folder_path}/validation_container_{epoch}.pkl', 'wb') as f:
+            logger.info(f'saving validation container to {self.folder_path}/validation_container_{epoch}.pkl with params type {type(self.params)}')
+            pickle.dump(validation_container, f)
+
+        evaluations_of_clusters = impute_validation(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes)
+
+        # all_validator_evaluations_dict = dict()
+        # for val_idx in range(len(names)):
+        #     all_validator_evaluations_dict[names[val_idx]] = all_validator_evaluations[val_idx]
+
+        # all_validator_evaluations = all_validator_evaluations_dict
+
             
         #validation scores tabulation
         # for iidx in range(1):
