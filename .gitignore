@@ -1,8 +1,11 @@
 __pycache__/
+__pycache__/*
 data/
 models/__pycache__/
+models/__pycache__/*
 saved_models/
 utils/__pycache__/
+utils/__pycache__/*
 plots/
 *.err
 *.out

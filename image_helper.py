@@ -504,8 +504,8 @@ class ImageHelper(Helper):
                 self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
                                                     _data_transforms['val'])
                 logger.info('reading data done')
-            elif self.params['type'] == config.TYPE_TINYIMAGENET:
-
+            elif self.params['type'] == config.TYPE_CELEBA:
+                num_labels = 5
                 _data_transforms = {
                     'train': transforms.Compose([
                         # transforms.Resize(224),
@@ -517,7 +517,7 @@ class ImageHelper(Helper):
                         transforms.ToTensor(),
                     ]),
                 }
-                _data_dir = './data/tiny-imagenet-200/'
+                _data_dir = './data/celebA/'
                 self.train_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'train'),
                                                         _data_transforms['train'])
                 self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
@@ -571,7 +571,7 @@ class ImageHelper(Helper):
                 random.seed(42)
                 random.shuffle(all_range)
                 train_loaders = [(pos, self.get_train_old(all_range, pos))
-                                for pos in range(self.params['number_of_total_participants'])]
+                                for pos in tqdm(range(self.params['number_of_total_participants']))]
 
             logger.info('train loaders done')
             self.train_data = train_loaders
@@ -737,10 +737,17 @@ class ImageHelper(Helper):
 
         data_len = int(len(self.train_dataset) / self.params['number_of_total_participants'])
         sub_indices = all_range[model_no * data_len: (model_no + 1) * data_len]
-        train_loader = torch.utils.data.DataLoader(self.train_dataset,
-                                           batch_size=self.params['batch_size'],
-                                           sampler=torch.utils.data.sampler.SubsetRandomSampler(
-                                               sub_indices))
+        # train_subset = []
+        # for idx in sub_indices:
+        #     train_subset.append(self.train_dataset[idx])
+        train_subset = torch.utils.data.Subset(self.train_dataset, sub_indices)
+        # train_loader = torch.utils.data.DataLoader(self.train_dataset,
+                                        #    batch_size=self.params['batch_size'],
+                                        #    sampler=torch.utils.data.sampler.SubsetRandomSampler(
+                                        #        sub_indices))
+        train_loader = torch.utils.data.DataLoader(train_subset,
+                                                batch_size=self.params['batch_size'],
+                                                shuffle=True)
         return train_loader
 
     def get_test(self):

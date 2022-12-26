@@ -11,6 +11,7 @@ import copy
 import config
 
 import numpy as np
+from tqdm import tqdm
 
 from random import shuffle
 
@@ -34,7 +35,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
             current_number_of_adversaries+=1
 
     helper.local_models = {}
-    for model_id in range(helper.params['no_models']):
+    for model_id in tqdm(range(helper.params['no_models']), disable=True):
         if psuedo_train_mode:
             target_model = base_model[helper.validation_assignments[model_id]]
 
@@ -98,7 +99,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     correct = 0
                     dataset_size = 0
                     dis2global_list=[]
-                    for batch_id, batch in enumerate(data_iterator):
+                    for batch_id, batch in tqdm(enumerate(data_iterator)):
                         if helper.params['attack_methods'] == config.ATTACK_DBA:
                             #will set adversarial_index to -1 for centralized attack
                             data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
@@ -110,7 +111,8 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
 
                         output = model(data)
                         class_loss = nn.functional.cross_entropy(output, targets)
-                        distance_loss = helper.model_dist_norm_var(model, target_params_variables)
+                        # distance_loss = helper.model_dist_norm_var(model, target_params_variables)
+                        distance_loss = 0
                         # Lmodel = αLclass + (1 − α)Lano; alpha_loss =1 fixed
                         loss = helper.params['alpha_loss'] * class_loss + \
                             (1 - helper.params['alpha_loss']) * distance_loss
@@ -241,7 +243,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     correct = 0
                     dataset_size = 0
                     dis2global_list = []
-                    for batch_id, batch in enumerate(data_iterator):
+                    for batch_id, batch in tqdm(enumerate(data_iterator)):
 
                         optimizer.zero_grad()
                         data, targets = helper.get_batch(data_iterator, batch,evaluation=False)

@@ -1,0 +1,15 @@
+binarytree
+hdbscan
+matplotlib
+numpy
+pandas
+pathlib
+scipy
+sklearn
+tabulate
+termcolor
+tqdm
+visdom
+opencv-python
+sympy
+pyyaml
