@@ -109,6 +109,7 @@ def Mytest_poison_label_flip(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
+            or helper.params['type'] == config.TYPE_CELEBA \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.target_class_test_loader
         # data_iterator = helper.get_test()

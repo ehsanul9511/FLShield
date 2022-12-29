@@ -49,6 +49,11 @@ target_class_dict = {
         'medium': [1, 0],
         'hard': [5, 1]
     },
+    TYPE_CELEBA : {
+        'easy': [1, 2],
+        'medium': [1, 0],
+        'hard': [4, 1]
+    }
 }
 
 random_group_size_dict = {

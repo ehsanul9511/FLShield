@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
-import main
+# import main
 import loan_train
 import image_train
 import config

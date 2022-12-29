@@ -35,7 +35,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
             current_number_of_adversaries+=1
 
     helper.local_models = {}
-    for model_id in tqdm(range(helper.params['no_models']), disable=True):
+    for model_id in tqdm(range(helper.params['no_models']), disable=False):
         if psuedo_train_mode:
             target_model = base_model[helper.validation_assignments[model_id]]
 
@@ -99,7 +99,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     correct = 0
                     dataset_size = 0
                     dis2global_list=[]
-                    for batch_id, batch in tqdm(enumerate(data_iterator)):
+                    for batch_id, batch in tqdm(enumerate(data_iterator), disable=True):
                         if helper.params['attack_methods'] == config.ATTACK_DBA:
                             #will set adversarial_index to -1 for centralized attack
                             data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
@@ -243,7 +243,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     correct = 0
                     dataset_size = 0
                     dis2global_list = []
-                    for batch_id, batch in tqdm(enumerate(data_iterator)):
+                    for batch_id, batch in tqdm(enumerate(data_iterator), disable=True):
 
                         optimizer.zero_grad()
                         data, targets = helper.get_batch(data_iterator, batch,evaluation=False)

@@ -220,6 +220,23 @@ class ImageHelper(Helper):
         logger.info(f'id: {id}, dataset_dict: {dataset_dict}')
 
 
+    def get_label_skew_ratios_v2(self, dataloader, id, num_of_classes=10):
+        # get y labels
+        # y_labels = dataset.targets
+        # y_labels = np.array(y_labels)
+        dataset_dict = OrderedDict({i: 0 for i in range(num_of_classes)})
+
+        # count non-zero labels
+        for _, y_labels in dataloader:
+            y = y_labels.numpy()
+            for i in range(num_of_classes):
+                dataset_dict[i] += np.count_nonzero(y == i)
+
+        dataset_classes = np.array(list(dataset_dict.values()))
+        dataset_classes = dataset_classes/np.sum(dataset_classes)
+        return dataset_classes
+
+
     def get_label_skew_ratios(self, dataset, id, num_of_classes=10):
         dataset_classes = {}
         # for ind, x in enumerate(dataset):
@@ -439,6 +456,7 @@ class ImageHelper(Helper):
         else:
             dataPath = './data'
             dataPath_emnist = '/dartfs-hpc/rc/home/9/f0059f9/OOD_Federated_Learning/data'
+            num_labels = 10
             if self.params['type'] == config.TYPE_CIFAR:
                 ### data load
                 transform_train = transforms.Compose([
@@ -523,6 +541,9 @@ class ImageHelper(Helper):
                 self.test_dataset = datasets.ImageFolder(os.path.join(_data_dir, 'val'),
                                                     _data_transforms['val'])
                 logger.info('reading data done')
+                logger.info(f'train data size: {len(self.train_dataset)}')
+
+            self.lsrs = []
 
             if self.params['noniid']:
                 sd, sl, ewd, ewl, sad, sal = self.assign_data_nonuniform(self.train_dataset, bias=self.params['bias'], p=0.1, flt_aggr=1, num_workers=self.params['number_of_total_participants'], num_labels=num_labels)
@@ -573,6 +594,8 @@ class ImageHelper(Helper):
                 train_loaders = [(pos, self.get_train_old(all_range, pos))
                                 for pos in tqdm(range(self.params['number_of_total_participants']))]
 
+                self.lsrs = [[1/num_labels for _ in range(num_labels)] for _ in range(self.params['number_of_total_participants'])]
+
             logger.info('train loaders done')
             self.train_data = train_loaders
 
@@ -608,14 +631,15 @@ class ImageHelper(Helper):
 
         # if self.params['noniid'] or self.params['sampling_dirichlet']:
         # if self.params['noniid']:
-        self.lsrs = []
+        # self.lsrs = []
 
-        # for id in tqdm(range(len(self.train_data))):
-        #     (_, train_loader) = self.train_data[id]
-        #     lsr = self.get_label_skew_ratios(train_loader.dataset, id)
-        #     self.lsrs.append(lsr)
+        if len(self.lsrs) == 0:
+            for id in tqdm(range(len(self.train_data))):
+                (_, train_loader) = self.train_data[id]
+                lsr = self.get_label_skew_ratios_v2(train_loader, id, num_of_classes=num_labels)
+                self.lsrs.append(lsr)
 
-        # logger.info(f'lsrs ready: {self.lsrs}')
+        logger.info(f'lsrs ready: {self.lsrs}')
 
 
         if self.params['is_random_namelist'] == False:
@@ -891,30 +915,44 @@ class ImageHelper(Helper):
 
         return image
 
+# if __name__ == '__main__':
+#     np.random.seed(1)
+#     with open(f'./utils/cifar_params.yaml', 'r') as f:
+#         params_loaded = yaml.load(f)
+#     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
+#     helper = ImageHelper(current_time=current_time, params=params_loaded,
+#                         name=params_loaded.get('name', 'mnist'))
+#     helper.load_data()
+
+#     pars= list(range(100))
+#     # show the data distribution among all participants.
+#     count_all= 0
+#     for par in pars:
+#         cifar_class_count = dict()
+#         for i in range(10):
+#             cifar_class_count[i] = 0
+#         count=0
+#         _, data_iterator = helper.train_data[par]
+#         for batch_id, batch in enumerate(data_iterator):
+#             data, targets= batch
+#             for t in targets:
+#                 cifar_class_count[t.item()]+=1
+#             count += len(targets)
+#         count_all+=count
+#         print(par, cifar_class_count,count,max(zip(cifar_class_count.values(), cifar_class_count.keys())))
+
+#     print('avg', count_all*1.0/100)
+
+
 if __name__ == '__main__':
-    np.random.seed(1)
-    with open(f'./utils/cifar_params.yaml', 'r') as f:
+    with open(f'./utils/celebA_params_temp.yaml', 'r') as f:
         params_loaded = yaml.load(f)
+
     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
     helper = ImageHelper(current_time=current_time, params=params_loaded,
                         name=params_loaded.get('name', 'mnist'))
     helper.load_data()
 
-    pars= list(range(100))
-    # show the data distribution among all participants.
-    count_all= 0
-    for par in pars:
-        cifar_class_count = dict()
-        for i in range(10):
-            cifar_class_count[i] = 0
-        count=0
-        _, data_iterator = helper.train_data[par]
-        for batch_id, batch in enumerate(data_iterator):
-            data, targets= batch
-            for t in targets:
-                cifar_class_count[t.item()]+=1
-            count += len(targets)
-        count_all+=count
-        print(par, cifar_class_count,count,max(zip(cifar_class_count.values(), cifar_class_count.keys())))
+    
 
-    print('avg', count_all*1.0/100)
+    
