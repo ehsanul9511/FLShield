@@ -74,7 +74,7 @@ class Helper:
         self.name = name
         self.best_loss = math.inf
 
-        if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+        if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_DBA]:
             if self.params['type'] in config.target_class_dict.keys():
                 self.source_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][0]
                 self.target_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][1]
@@ -88,56 +88,12 @@ class Helper:
         # else:
         #     self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_DBA}']
         self.num_of_adv = self.params[f'number_of_adversary_{self.params["attack_methods"]}']
-        if 'src_grp_mal' in self.params.keys():
-            self.src_grp_mal = self.params['src_grp_mal']
-        else:
-            self.src_grp_mal = 4
 
-        name_of_defense = self.params['aggregation_methods']
-        if self.params["aggregation_methods"] == config.AGGR_OURS:
-            if 'injective_florida' in self.params.keys() and self.params['injective_florida']:
-                name_of_defense = 'floridaV2'
-            else:
-                name_of_defense = 'floridaV1'
-        elif self.params["aggregation_methods"] == config.AGGR_MEAN:
-            if 'oracle_mode' in self.params.keys() and self.params['oracle_mode']:
-                name_of_defense += 'Oracle'
-
-        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
-            name_of_attack = 'ipm_attack'
-        else:
-            name_of_attack = self.params["attack_methods"]
-
-        self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
+        # self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
 
         hash_value = get_hash_from_param_file(self.params)
         self.folder_path = f'saved_models/{current_time}_{hash_value}'
 
-        # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
-        # if 'save_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
-        #     if self.params['bias'] != 0.1 or self.params['sampling_dirichlet']:
-        #         if self.params['sampling_dirichlet']:
-        #             noniid_type = 'dirichlet'
-        #         else:
-        #             noniid_type = 'noniid'
-        #         self.folder_path = f'final_outputs/specialized_{self.name}_{name_of_defense}_{noniid_type}'
-        #     elif self.params['is_poison']:
-        #         self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
-        #         if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
-        #             self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
-        #         elif self.params['attack_methods'] == config.ATTACK_DBA and 'scaling_attack' in self.params.keys() and self.params['scaling_attack']:
-        #             self.folder_path = f'final_outputs/{self.name}_scaling_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
-        #     else:
-        #         self.folder_path = f'final_outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
-        # elif 'ablation_study' in self.params.keys():
-        #     self.folder_path = f'outputs/ablation_study/{self.name}_{self.params["ablation_study"]}_{self.params["no_models"]}'
-        # else:
-        #     self.folder_path = f'saved_models/model_{self.name}_{current_time}'
-
-        # try:
-        #     os.mkdir(self.folder_path)
-        # except FileExistsError:
-        #     logger.info('Folder already exists')
         if not os.path.exists(self.folder_path):
             os.mkdir(self.folder_path)
         else:

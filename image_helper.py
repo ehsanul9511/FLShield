@@ -659,17 +659,6 @@ class ImageHelper(Helper):
             #     else:
             #         self.num_of_attackers_in_target_group = 4
             if self.params['noniid'] or True:
-                # group_sizes = self.get_group_sizes()
-                # cumulative_group_sizes = [sum(group_sizes[:i]) for i in range(len(group_sizes) + 1)]
-                # target_group_indices = list(np.arange(cumulative_group_sizes[self.source_class], cumulative_group_sizes[self.source_class + 1]))
-                # logger.info(f'Target group indices: {target_group_indices}')
-                # random.seed(42)
-                # self.target_group_attackers = random.sample(self.participants_list[cumulative_group_sizes[self.source_class]: cumulative_group_sizes[self.source_class + 1]], self.src_grp_mal)
-                # other_group_indices = list(np.arange(cumulative_group_sizes[self.source_class])) + list(np.arange(cumulative_group_sizes[self.source_class + 1], cumulative_group_sizes[-1]))
-                # other_group_participants = [self.participants_list[i] for i in other_group_indices]
-                # other_group_participants = other_group_participants[:-1]
-                # random.seed(666)
-                # self.adversarial_namelist = self.target_group_attackers + random.sample(other_group_participants, self.params[f'number_of_adversary_{self.params["attack_methods"]}'] - self.src_grp_mal)
                 random.seed(42)
                 self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
             else:
