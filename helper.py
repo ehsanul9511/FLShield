@@ -1,4 +1,3 @@
-from re import I
 from shutil import copyfile
 
 import math
@@ -21,6 +20,8 @@ import numpy as np
 import config
 import copy
 import utils.csv_record
+
+from utils.utils import get_hash_from_param_file
 # import train
 # import test
 
@@ -108,29 +109,30 @@ class Helper:
             name_of_attack = self.params["attack_methods"]
 
         self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
+
+        hash_value = get_hash_from_param_file(self.params)
+        self.folder_path = f'saved_models/{current_time}_{hash_value}'
+
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_targetclass_{self.params["tlf_label"]}_no_models_{self.params["no_models"]}'
-        if 'save_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
-            # self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
-            # if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
-            #     self.folder_path = f'outputs/{self.name}/{self.params["attack_methods"]}/total_mal_{self.num_of_adv}/hardness_{self.params["tlf_label"]}/src_grp_mal_{self.src_grp_mal}/aggr_{self.params["aggregation_methods"]}/new_adaptive_attack_alpha_{self.params["alpha_loss"]}/no_models_{self.params["no_models"]}/distrib_var_{self.params["save_data"]}'
-            if self.params['bias'] != 0.1 or self.params['sampling_dirichlet']:
-                if self.params['sampling_dirichlet']:
-                    noniid_type = 'dirichlet'
-                else:
-                    noniid_type = 'noniid'
-                self.folder_path = f'final_outputs/specialized_{self.name}_{name_of_defense}_{noniid_type}'
-            elif self.params['is_poison']:
-                self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
-                if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
-                    self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
-                elif self.params['attack_methods'] == config.ATTACK_DBA and 'scaling_attack' in self.params.keys() and self.params['scaling_attack']:
-                    self.folder_path = f'final_outputs/{self.name}_scaling_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
-            else:
-                self.folder_path = f'final_outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
-        elif 'ablation_study' in self.params.keys():
-            self.folder_path = f'outputs/ablation_study/{self.name}_{self.params["ablation_study"]}_{self.params["no_models"]}'
-        else:
-            self.folder_path = f'saved_models/model_{self.name}_{current_time}'
+        # if 'save_data' in self.params.keys() and 'camera_ready' in self.params.keys() and self.params['camera_ready']:
+        #     if self.params['bias'] != 0.1 or self.params['sampling_dirichlet']:
+        #         if self.params['sampling_dirichlet']:
+        #             noniid_type = 'dirichlet'
+        #         else:
+        #             noniid_type = 'noniid'
+        #         self.folder_path = f'final_outputs/specialized_{self.name}_{name_of_defense}_{noniid_type}'
+        #     elif self.params['is_poison']:
+        #         self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
+        #         if self.params['attack_methods'] == config.ATTACK_SIA and self.params['new_adaptive_attack']:
+        #             self.folder_path = f'final_outputs/{self.name}_{name_of_attack}_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["alpha_loss"]}_{self.params["save_data"]}'
+        #         elif self.params['attack_methods'] == config.ATTACK_DBA and 'scaling_attack' in self.params.keys() and self.params['scaling_attack']:
+        #             self.folder_path = f'final_outputs/{self.name}_scaling_{self.num_of_adv}_{self.params["tlf_label"]}_{self.src_grp_mal}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
+        #     else:
+        #         self.folder_path = f'final_outputs/{self.name}_nopoison_{self.params["tlf_label"]}_{name_of_defense}_{self.params["no_models"]}_{self.params["save_data"]}'
+        # elif 'ablation_study' in self.params.keys():
+        #     self.folder_path = f'outputs/ablation_study/{self.name}_{self.params["ablation_study"]}_{self.params["no_models"]}'
+        # else:
+        #     self.folder_path = f'saved_models/model_{self.name}_{current_time}'
 
         # try:
         #     os.mkdir(self.folder_path)
