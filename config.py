@@ -11,6 +11,7 @@ AGGR_AFA = 'afa'
 ATTACK_DBA = 'dba'
 ATTACK_TLF = 'targeted_label_flip'
 ATTACK_SIA = 'server_imitation_attack'
+ATTACK_IPM = 'inner_product_manipulation'
 MAX_UPDATE_NORM = 1000  # reject all updates larger than this amount
 patience_iter=20
 

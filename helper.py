@@ -83,10 +83,6 @@ class Helper:
                 self.target_class = 9 - self.source_class
         else:
             self.source_class = int(self.params['poison_label_swap'])
-        # if self.params['attack_methods'] == config.ATTACK_TLF:
-        #     self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_TLF}']
-        # else:
-        #     self.num_of_adv = self.params[f'number_of_adversary_{config.ATTACK_DBA}']
         self.num_of_adv = self.params[f'number_of_adversary_{self.params["attack_methods"]}']
 
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
@@ -116,8 +112,6 @@ class Helper:
             self.good_count = [0 for _ in range(self.params['number_of_total_participants'])]
             self.bad_count = [0 for _ in range(self.params['number_of_total_participants'])]
             self.prob_good_model = [0. for _ in range(self.params['number_of_total_participants'])]
-        elif self.params['aggregation_methods'] == config.AGGR_OURS and 'adaptive_grad_attack' in self.params.keys() and self.params['adaptive_grad_attack']:
-            self.prev_epoch_val_model_params = []
 
     def color_print_wv(self, wv, names):
         wv_print_str= '['
@@ -433,67 +427,6 @@ class Helper:
         grad = np.hstack(grad)
         return grad
 
-    def snapshot(self, grads, names, alphas, epoch, cluster=None):
-        # if len(names) < self.params['number_of_total_participants']:
-        #     return
-
-        grads = np.array(grads)
-        # output_layer_grads = np.delete(grads, slice(-5010,0), axis=1)
-        # inner_layer_grads = np.delete(grads, slice(0, -5010), axis=1)
-        # grad_dict = dict()
-        # grad_dict['grads'] = grads
-        # grad_dict['output_layer_grads'] = output_layer_grads
-        # grad_dict['inner_layer_grads'] = inner_layer_grads
-
-        # for grad_name in grad_dict.keys():
-        #     iter_grads = grad_dict[grad_name]
-        #     pca = PCA(n_components=2)
-        #     reduced_grads = pca.fit(iter_grads.T)
-        #     adv_inds = [i for i in range(len(names)) if names[i] in self.adversarial_namelist]
-        #     benign_inds = [i for i in range(len(names)) if names[i] in self.benign_namelist]
-
-        #     if cluster is None:
-
-        #         plt.figure(figsize=(5, 3))
-        #         # colors = ['red' if x in adv_inds else 'blue' for x in range(len(iter_grads))]
-        #         color_mapping = [self.lsrs[adv_inds[x]][self.source_class] for x in range(len(adv_inds))]
-        #         colors = ['blue' if color_mapping[x] < 0.05 else 'black' if color_mapping[x] < 0.1 else 'red' for x in range(len(color_mapping))]
-        #         plt.scatter(reduced_grads.components_[0][adv_inds], reduced_grads.components_[1][adv_inds], c=colors, marker='x')
-        #         plt.scatter(reduced_grads.components_[0][benign_inds], reduced_grads.components_[1][benign_inds], c='blue', marker='o')
-        #         plt.title(f'Epoch {epoch}')
-        #         plt.savefig(f'{self.folder_path}/epoch_{epoch}_{grad_name}.png')
-
-        #     else:
-        #         plt.figure(figsize=(5, 3))
-        #         markers = ['o', 'x', '^', 'v', '<', '>', 's', 'p', '*', 'h', 'H', 'D', 'd', 'P', 'X', '+', '.', ',']
-
-        #         for idx, group in enumerate(cluster):
-        #             colors = ['red' if x in adv_inds else 'blue' for x in group]
-        #             plt.scatter(reduced_grads.components_[0][group], reduced_grads.components_[1][group], c=colors, marker=markers[idx])
-        #         plt.title(f'Epoch {epoch}')
-        #         plt.savefig(f'{self.folder_path}/epoch_{epoch}_{grad_name}.png')
-        #         plt.close()
-
-                
-
-
-        # del grad_dict
-
-        save_grads = False
-        if epoch > 40 or not save_grads:
-            return
-
-        prefix = 'dirichelt_' if not self.params['noniid'] else ''
-        prefix = self.params['type'] + '_' + prefix
-        basepath = 'utils/temp_grads'
-        np.save(f'{basepath}/{prefix}grads_{epoch}.npy', grads)
-        np.save(f'{basepath}/{prefix}names_{epoch}.npy', names)
-        np.save(f'{basepath}/{prefix}advs_{epoch}.npy', self.adversarial_namelist)
-        np.save(f'{basepath}/{prefix}alphas_{epoch}.npy', alphas)
-        np.save(f'{basepath}/{prefix}lsrs_{epoch}.npy', [self.lsrs[name] for name in names])
-
-        return True
-
     def convert_model_to_param_list(self, model):
         idx=0
         params_to_copy_group=[]
@@ -523,25 +456,29 @@ class Helper:
     def print_util(self, a, b):
         return str(a) + ': ' + str(b)
 
+    def ipm_attack(self, updates):
+        names = []
+        delta_models = []
+        for name, data in updates.items():
+            delta_models.append(data[2])
+            names.append(name)
 
-    def ipm_attack(self, delta_models, names):
+        ipm_val = self.params['ipm_val']
+        if ipm_val is None:
+            ipm_val = 1.6
+
         bad_idx = [idx for idx, name in enumerate(names) if name in self.adversarial_namelist]
         benign_delta_models = [dm for idx, dm in enumerate(delta_models) if idx not in bad_idx]
 
         weights = np.ones(len(benign_delta_models), dtype=np.float32)
-        weights = [-w * self.params['ipm_val']/len(benign_delta_models) for w in weights]
+        weights = [-w * ipm_val/len(benign_delta_models) for w in weights]
         ipm_delta_models = self.weighted_sum_oracle(benign_delta_models, torch.tensor(weights))
 
-        new_delta_models = []
-
-        for idx in range(len(delta_models)):
-            if idx in bad_idx:
-                new_delta_models.append(copy.deepcopy(ipm_delta_models))
-            else:
-                new_delta_models.append(delta_models[idx])
-
-        return new_delta_models
-
+        for idx in bad_idx:
+            if names[idx] in self.adversarial_namelist:
+                updates[names[idx]] = (updates[names[idx]][0], updates[names[idx]][1], ipm_delta_models)
+                
+        return updates
 
 
     def combined_clustering_guided_aggregation_v2(self, target_model, updates, epoch, weight_accumulator):
@@ -561,9 +498,6 @@ class Helper:
             alphas.append(data[0])  # num_samples
             delta_models.append(data[2])
             names.append(name)
-
-        if self.params['ipm_attack']:
-            delta_models = self.ipm_attack(delta_models, names)
         
         wv = np.zeros(len(names), dtype=np.float32)
         # grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
@@ -960,8 +894,6 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
-        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
-            delta_models = self.ipm_attack(delta_models, names)
         logger.info(f'names: {names}')
         adv_indices = [idx for idx, name in enumerate(names) if name in self.adversarial_namelist]
         benign_indices = [idx for idx, name in enumerate(names) if name in self.benign_namelist]
@@ -1117,29 +1049,12 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
-        grads_old = [self.flatten_gradient(client_grad) for client_grad in client_grads]
         grads = [self.flatten_gradient_v2(delta_model) for delta_model in delta_models]
 
-        logger.info(f'grads: {grads[0][:20]}, grads_old: {grads_old[0][:20]}')
-        logger.info(f'len(grads): {len(grads[0])}')
-
-        save_grads = True
-        if save_grads:
-            self.snapshot(grads, names, alphas, epoch)
         adv_list = [i for i in range(len(grads)) if names[i] in self.adversarial_namelist]
         # wv, good_clients, edge_list, _ = modHDBSCAN(np.array(grads), min_samples=self.params['no_models']//2 + 1, adv_list=adv_list)
         clusterer = hdbscan.HDBSCAN(min_cluster_size=self.params['no_models']//2 + 1, min_samples=1, allow_single_cluster=True, metric = 'precomputed')
         cluster_result = clusterer.fit_predict(np.array(cosine_distances(grads), dtype=np.float64))
-
-        cluster_attack_on = False
-
-        if cluster_attack_on:
-            bad_count = len([name for name in names if name in self.adversarial_namelist])
-            ref_idx = np.argwhere(cluster_result[bad_count:]==0)[0][0] + bad_count
-            new_delta_models = self.cluster_attack(delta_models, bad_count, ref_idx)
-            new_grads = [self.flatten_gradient_v2(delta_model) for delta_model in new_delta_models]
-            cluster_result = clusterer.fit_predict(np.array(cosine_distances(new_grads), dtype=np.float64))
-            delta_models = new_delta_models
 
         wv = np.array([res+1 for res in cluster_result])
         actual_labels = [1 if names[idx] in self.adversarial_namelist else 0 for idx in range(len(names))]
@@ -1190,8 +1105,6 @@ class Helper:
             delta_models.append(data[2])
             names.append(name)
 
-        if 'ipm_attack' in self.params.keys() and self.params['ipm_attack']:
-            delta_models = self.ipm_attack(delta_models, names)
         grads = [self.flatten_gradient(client_grad) for client_grad in client_grads]
         # wv = modHDBSCAN(grads)
 

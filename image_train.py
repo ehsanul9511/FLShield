@@ -105,6 +105,9 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                             data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
                         elif helper.params['attack_methods'] == config.ATTACK_TLF:
                             data, targets, poison_num = helper.get_poison_batch_for_targeted_label_flip(batch)
+                        elif helper.params['attack_methods'] == config.ATTACK_IPM:
+                            data, targets = helper.get_batch(None, batch)
+                            poison_num = 0
                         poison_optimizer.zero_grad()
                         dataset_size += len(data)
                         poison_data_count += poison_num

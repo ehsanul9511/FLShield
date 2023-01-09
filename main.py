@@ -222,6 +222,9 @@ if __name__ == '__main__':
         weight_accumulator, updates = helper.accumulate_weight(weight_accumulator, epochs_submit_update_dict,
                                                                agent_name_keys, num_samples_dict)
 
+        if helper.params['attack_methods'] == config.ATTACK_IPM:
+            updates = helper.ipm_attack(updates)
+
         is_updated = True
         if helper.params['aggregation_methods'] == config.AGGR_OURS:
             # helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
@@ -268,7 +271,7 @@ if __name__ == '__main__':
         if len(csv_record.scale_temp_one_row)>0:
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
 
-        if helper.params['is_poison']:
+        if helper.params['is_poison'] and helper.params['attack_methods'] in [config.ATTACK_DBA, config.ATTACK_TLF]:
             if helper.params['attack_methods'] == config.ATTACK_DBA:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
                                                                                         epoch=temp_global_epoch,
@@ -276,7 +279,7 @@ if __name__ == '__main__':
                                                                                         is_poison=True,
                                                                                         visualize=False,
                                                                                         agent_name_key="global")
-            elif helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+            elif helper.params['attack_methods'] in [config.ATTACK_TLF]:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
                                                                                         epoch=temp_global_epoch,
                                                                                         model=helper.target_model,
