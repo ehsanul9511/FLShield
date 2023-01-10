@@ -12,6 +12,8 @@ def impute_validation(evaluations_of_clusters, count_of_class_for_validator, num
     all_validator_evaluations = [[] for _ in range(num_of_validators)]
     inverse_mapping = [[] for _ in range(num_of_validators)]
 
+    nan_flag = False
+
     for cluster_idx in range(num_of_clusters):
         for class_idx in range(num_of_classes):
             for validator_idx in range(num_of_validators):
@@ -19,9 +21,14 @@ def impute_validation(evaluations_of_clusters, count_of_class_for_validator, num
                     all_validator_evaluations[validator_idx].append(evaluations_of_clusters[cluster_idx][names[validator_idx]][class_idx]/count_of_class_for_validator[names[validator_idx]][class_idx])
                 except:
                     all_validator_evaluations[validator_idx].append(np.nan)
+                    nan_flag = True
                     pass
 
                 inverse_mapping[validator_idx].append((cluster_idx, class_idx))
+
+    if not nan_flag:
+        logger.info('No nan values found. Returning original evaluations_of_clusters')
+        return evaluations_of_clusters
 
     # logger.info(f'All validator evaluations: {all_validator_evaluations[1]}')
     
