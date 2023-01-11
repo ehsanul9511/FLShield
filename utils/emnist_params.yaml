@@ -13,11 +13,11 @@ internal_poison_epochs: 1
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'our_aggr', 'afa', 'foolsgold']
-aggregation_methods: our_aggr
+aggregation_methods: mean
 injective_florida: true
 oracle_mode: false
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
-attack_methods: 'targeted_label_flip'
+attack_methods: 'attack_of_the_tails'
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
@@ -51,7 +51,8 @@ poison_label_swap: 2
 random_adversary_for_label_flip: true
 number_of_adversary_dba: 30
 number_of_adversary_targeted_label_flip: 40
-number_of_adversary_server_imitation_attack: 40
+number_of_adversary_inner_product_manipulation: 40
+number_of_adversary_attack_of_the_tails: 40
 src_grp_mal: 0
 skip_iteration_in_tlf: false
 adaptive_grad_attack: False
@@ -111,7 +112,7 @@ environment_name: mnist_DBA
 save_model: false
 save_on_epochs: [10, 15, 20, 25, 30, 35]
 
-resumed_model: true
+resumed_model: false
 resumed_model_name: utils/model_bank/emnist/model_last.pt.tar.epoch_35
 resumed_model_path: utils/model_bank/emnist
 

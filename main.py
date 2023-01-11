@@ -271,7 +271,7 @@ if __name__ == '__main__':
         if len(csv_record.scale_temp_one_row)>0:
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
 
-        if helper.params['is_poison'] and helper.params['attack_methods'] in [config.ATTACK_DBA, config.ATTACK_TLF]:
+        if helper.params['is_poison'] and helper.params['attack_methods'] in [config.ATTACK_DBA, config.ATTACK_TLF, config.ATTACK_AOTT]:
             if helper.params['attack_methods'] == config.ATTACK_DBA:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
                                                                                         epoch=temp_global_epoch,
@@ -294,6 +294,9 @@ if __name__ == '__main__':
                                                                                         is_poison=True,
                                                                                         visualize=False,
                                                                                         agent_name_key="global")
+            elif helper.params['attack_methods'] in [config.ATTACK_AOTT]:
+                epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_edge_test(helper=helper,model=helper.target_model)
+                epoch_acc_p = np.nan        
 
             csv_record.posiontest_result.append(
                 ["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])

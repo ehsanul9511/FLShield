@@ -20,6 +20,8 @@ from models.resnet_celebA import Resnet18
 logger = logging.getLogger("logger")
 import config
 from config import device
+from attack_of_the_tails.utils import load_poisoned_dataset
+
 import copy
 import cv2
 
@@ -497,12 +499,17 @@ class ImageHelper(Helper):
                 self.train_dataset = datasets.EMNIST(dataPath_emnist, split='digits', train=True, download=True,
                                 transform=transforms.Compose([
                                     transforms.ToTensor(),
-                                    # transforms.Normalize((0.1307,), (0.3081,))
+                                    transforms.Normalize((0.1307,), (0.3081,))
                                 ]))
                 self.test_dataset = datasets.EMNIST(dataPath_emnist, split='digits', train=False, transform=transforms.Compose([
                         transforms.ToTensor(),
-                        # transforms.Normalize((0.1307,), (0.3081,))
+                        transforms.Normalize((0.1307,), (0.3081,))
                     ]))
+
+                if self.params['attack_methods'] == config.ATTACK_AOTT:
+                    self.poison_trainloader, _, self.poison_testloader, _, _ = load_poisoned_dataset(dataset = self.params['type'], fraction = 0.15, batch_size = self.params['batch_size'], test_batch_size = self.params['test_batch_size'], poison_type='ardis')
+
+                    logger.info('poison train and test data from ARDIS loaded')
             elif self.params['type'] == config.TYPE_TINYIMAGENET:
 
                 _data_transforms = {
@@ -601,7 +608,7 @@ class ImageHelper(Helper):
 
             # split train_data into validation data
             # if self.params['validation']:
-            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data)
+            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data, val_pcnt=0.1)
 
             self.test_data = self.get_test()
             self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()

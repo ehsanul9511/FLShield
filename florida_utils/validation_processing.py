@@ -223,7 +223,7 @@ class ValidationProcessor:
         if mal_val_type == 'adaptive':
             mal_cluster_score_decreases = []
 
-            for dist_sim_coeff in np.arange(0.1, 1., 0.1):
+            for dist_sim_coeff in np.arange(0.5, 0.6, 0.1):
                 logger.info(f'dist_sim_coeff: {dist_sim_coeff}')
                 evaluations_of_clusters_temp = self.adaptive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, dist_sim_coeff)
 
