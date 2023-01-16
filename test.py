@@ -363,3 +363,30 @@ def Mytest_edge_test(helper, model, print_flag=True):
                                                         acc))
     model.train()
     return (total_l, acc, correct, dataset_size)
+
+
+def Mytest_semantic_test(helper, model, print_flag=True):
+    model.eval()
+    total_loss = 0
+    correct = 0
+    dataset_size = 0
+    data_iterator = helper.semantic_dataloader
+    for batch_id, batch in enumerate(data_iterator):
+        data, targets = helper.get_batch(data_iterator, batch, evaluation=True)
+        dataset_size += len(data)
+        output = model(data)
+        total_loss += nn.functional.cross_entropy(output, targets,
+                                                    reduction='sum').item()  # sum up batch loss
+        pred = output.data.max(1)[1]  # get the index of the max log-probability
+        correct += pred.eq(targets.data.view_as(pred)).cpu().sum().item()
+
+    acc = 100.0 * (float(correct) / float(dataset_size))  if dataset_size!=0 else 0
+    total_l = total_loss / dataset_size if dataset_size!=0 else 0
+
+    if print_flag:
+        main.logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
+                     'Accuracy: {}/{} ({:.4f}%)'.format(model.name, True, -1,
+                                                        total_l, correct, dataset_size,
+                                                        acc))
+    model.train()
+    return (total_l, acc, correct, dataset_size)

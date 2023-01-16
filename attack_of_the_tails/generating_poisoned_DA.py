@@ -94,6 +94,8 @@ def create_ardis_poisoned_dataset(emnist_dataset, fraction=1, num_gdps_sampled=1
         images_seven_cut = images_seven[:(int)(fraction*images_seven.size()[0])]
         print('size of images_seven_cut: ', images_seven_cut.size())
         poisoned_labels_cut = torch.ones(images_seven_cut.size()[0]).long()
+        poisoned_labels_cut = poisoned_labels_cut * 7
+        print(poisoned_labels_cut)
 
     else:
         images_seven_DA = copy.deepcopy(images_seven)
@@ -115,6 +117,9 @@ def create_ardis_poisoned_dataset(emnist_dataset, fraction=1, num_gdps_sampled=1
                 print(images_seven_DA.size())
 
         poisoned_labels_DA = torch.ones(images_seven_DA.size()[0]).long()
+        poisoned_labels_DA = poisoned_labels_DA * 7
+
+        print(poisoned_labels_DA)
 
 
     poisoned_emnist_dataset = copy.deepcopy(emnist_dataset)
@@ -124,6 +129,8 @@ def create_ardis_poisoned_dataset(emnist_dataset, fraction=1, num_gdps_sampled=1
     samped_emnist_data_indices = np.random.choice(poisoned_emnist_dataset.data.shape[0], num_sampled_data_points, replace=False)
     poisoned_emnist_dataset.data = poisoned_emnist_dataset.data[samped_emnist_data_indices, :, :]
     poisoned_emnist_dataset.targets = poisoned_emnist_dataset.targets[samped_emnist_data_indices]
+
+    
     ########################################################################
 
     if fraction < 1:
@@ -134,8 +141,8 @@ def create_ardis_poisoned_dataset(emnist_dataset, fraction=1, num_gdps_sampled=1
         poisoned_emnist_dataset.data = torch.cat((poisoned_emnist_dataset.data, images_seven_DA))
         poisoned_emnist_dataset.targets = torch.cat((poisoned_emnist_dataset.targets, poisoned_labels_DA))
 
-    #poisoned_emnist_dataset.data = images_seven_DA
-    #poisoned_emnist_dataset.targets = poisoned_labels_DA
+    poisoned_emnist_dataset.data = images_seven_DA
+    poisoned_emnist_dataset.targets = poisoned_labels_DA
 
     print("Shape of poisoned dataset: {}, shape of poisoned labels: {}".format(poisoned_emnist_dataset.data.size(),
                                                         poisoned_emnist_dataset.targets.size()))
@@ -167,6 +174,7 @@ def create_ardis_test_dataset(emnist_dataset):
 if __name__ == '__main__':
     ### Hyper-params:
     fraction=0.15 #0.0334 #0.01 #0.1 #0.0168 #10
+    fraction = 1
     num_gdps_sampled = 100
     poison = 'ardis'
 

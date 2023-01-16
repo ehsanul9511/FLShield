@@ -19,6 +19,8 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
     dataset_classes = {}
     if given_test_loader is not None:
         validation_dataset = copy.deepcopy(given_test_loader.dataset)
+        if helper.params['attack_methods'] in [config.ATTACK_AOTT, config.ATTACK_SEMANTIC]:
+            validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.semantic_dataloader_correct.dataset])
         test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=len(validation_dataset))
 
     for c in range(num_classes):

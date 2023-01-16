@@ -13,6 +13,7 @@ ATTACK_TLF = 'targeted_label_flip'
 ATTACK_SIA = 'server_imitation_attack'
 ATTACK_IPM = 'inner_product_manipulation'
 ATTACK_AOTT = 'attack_of_the_tails'
+ATTACK_SEMANTIC = 'semantic_attack'
 MAX_UPDATE_NORM = 1000  # reject all updates larger than this amount
 patience_iter=20
 
@@ -76,3 +77,5 @@ random_group_size_dict = {
         3: [14, 11, 12, 6, 6, 14, 6, 10, 10, 11],
     }
 }
+
+green_car_indices = [874, 49163, 34287, 21422, 48003, 47001, 48030, 22984, 37533, 41336, 3678, 37365, 19165, 34385, 41861, 39824, 561, 49588, 4528, 3378, 38658, 38735, 19500,  9744, 47026, 1605, 389] + [32941, 36005, 40138]

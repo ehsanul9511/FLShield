@@ -458,6 +458,7 @@ class ImageHelper(Helper):
         else:
             dataPath = './data'
             dataPath_emnist = '/dartfs-hpc/rc/home/9/f0059f9/OOD_Federated_Learning/data'
+            dataPath_emnist = './data'
             num_labels = 10
             if self.params['type'] == config.TYPE_CIFAR:
                 ### data load
@@ -473,6 +474,37 @@ class ImageHelper(Helper):
                                                 transform=transform_train)
 
                 self.test_dataset = datasets.CIFAR10(dataPath, train=False, transform=transform_test)
+
+                if self.params['attack_methods'] == config.ATTACK_AOTT:
+                    self.poison_trainloader, _, self.poison_testloader, _, _ = load_poisoned_dataset(dataset = self.params['type'], fraction = 1, batch_size = self.params['batch_size'], test_batch_size = self.params['test_batch_size'], poison_type='southwest', attack_case='edge-case')
+
+                    logger.info('poison train and test data from southwest loaded')
+
+                elif self.params['attack_methods'] == config.ATTACK_SEMANTIC:
+                    green_car_indices = config.green_car_indices
+                    cifar10_whole_range = np.arange(self.train_dataset.data.shape[0])
+                    semantic_dataset = []
+                    semantic_dataset_correct = []
+                    remaining_dataset = []
+                    for ind, (data, target) in enumerate(self.train_dataset):
+                        if ind in green_car_indices:
+                            semantic_dataset.append((data, 2))
+                            # semantic_dataset.append((data, target))
+                            semantic_dataset_correct.append((data, target))
+                        else:
+                            remaining_dataset.append((data, target))
+                    
+                    self.semantic_dataloader = torch.utils.data.DataLoader(semantic_dataset, batch_size=self.params['batch_size'], shuffle=True)
+                    self.semantic_dataloader_correct = torch.utils.data.DataLoader(semantic_dataset_correct, batch_size=self.params['batch_size'], shuffle=True)
+                    self.train_dataset = remaining_dataset
+
+
+                    # remaining_indices = [i for i in cifar10_whole_range if i not in green_car_indices]
+                    # self.semantic_dataset = torch.utils.data.Subset(self.train_dataset, green_car_indices)
+                    # sampled_targets_array_train = 2 * np.ones((len(self.semantic_dataset),), dtype =int) # green car -> label as bird
+                    # self.semantic_dataset.targets = torch.from_numpy(sampled_targets_array_train)
+                    # self.train_dataset = torch.utils.data.Subset(self.train_dataset, remaining_indices)
+
 
             elif self.params['type'] == config.TYPE_MNIST:
 
@@ -507,7 +539,7 @@ class ImageHelper(Helper):
                     ]))
 
                 if self.params['attack_methods'] == config.ATTACK_AOTT:
-                    self.poison_trainloader, _, self.poison_testloader, _, _ = load_poisoned_dataset(dataset = self.params['type'], fraction = 0.15, batch_size = self.params['batch_size'], test_batch_size = self.params['test_batch_size'], poison_type='ardis')
+                    self.poison_trainloader, _, self.poison_testloader, _, _ = load_poisoned_dataset(dataset = self.params['type'], fraction = 1, batch_size = self.params['batch_size'], test_batch_size = self.params['test_batch_size'], poison_type='ardis')
 
                     logger.info('poison train and test data from ARDIS loaded')
             elif self.params['type'] == config.TYPE_TINYIMAGENET:
@@ -608,7 +640,7 @@ class ImageHelper(Helper):
 
             # split train_data into validation data
             # if self.params['validation']:
-            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data, val_pcnt=0.1)
+            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data, val_pcnt=0.3)
 
             self.test_data = self.get_test()
             self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
@@ -646,7 +678,7 @@ class ImageHelper(Helper):
                 lsr = self.get_label_skew_ratios_v2(train_loader, id, num_of_classes=num_labels)
                 self.lsrs.append(lsr)
 
-        logger.info(f'lsrs ready: {self.lsrs}')
+        # logger.info(f'lsrs ready: {self.lsrs}')
 
 
         if self.params['is_random_namelist'] == False:
