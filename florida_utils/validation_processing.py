@@ -258,7 +258,7 @@ class ValidationProcessor:
                 mal_cluster_score_decrease = np.mean(new_val_score_by_cluster[self.mal_cluster_indices])
                 benign_cluster_score_decrease = np.mean(new_val_score_by_cluster[self.benign_cluster_indices])
 
-                mal_cluster_score_decreases.append(mal_cluster_score_decrease)
+                mal_cluster_score_decreases.append(mal_cluster_score_decrease-benign_cluster_score_decrease)
 
                 logger.info(f'malicious validation score decrease: {np.mean(new_val_score_by_cluster[self.mal_cluster_indices])}')
                 logger.info(f'benign validation score decrease: {np.mean(new_val_score_by_cluster[self.benign_cluster_indices])}')
