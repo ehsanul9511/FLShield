@@ -45,7 +45,7 @@ momentum: 0.9
 new_adaptive_attack: false
 no_models: 10
 noniid: true
-number_of_adversary_dba: 40
+number_of_adversary_dba: 30
 number_of_adversary_inner_product_manipulation: 40
 number_of_adversary_targeted_label_flip: 40
 number_of_adversary_semantic_attack: 30
