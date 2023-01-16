@@ -88,13 +88,29 @@ class Helper:
         # self.folder_path = f'saved_models/model_{self.name}_{current_time}_no_models_{self.params["no_models"]}'
 
         hash_value = get_hash_from_param_file(self.params)
-        self.folder_path = f'saved_models/{current_time}_{hash_value}'
+        # self.folder_path = f'saved_models/{current_time}_{hash_value}'
+        self.folder_path = f'saved_models/{hash_value}'
 
-        if not os.path.exists(self.folder_path):
-            os.mkdir(self.folder_path)
+        # if folder exists and a result_dict.pkl exists, then abort
+        if os.path.exists(self.folder_path):
+            if os.path.exists(f'{self.folder_path}/result_dict.pkl'):
+                print(f'{self.folder_path} already exists, aborting')
+                exit(0)
+            else:
+                shutil.rmtree(self.folder_path)
+                os.makedirs(self.folder_path)
         else:
-            shutil.rmtree(self.folder_path)
-            os.makedirs(self.folder_path)
+            os.mkdir(self.folder_path)
+
+        # write a dummy file to the folder with the name as time
+        with open(f'{self.folder_path}/{current_time}', 'w') as f:
+            f.write('dummy file')
+
+        # if not os.path.exists(self.folder_path):
+        #     os.mkdir(self.folder_path)
+        # else:
+        #     shutil.rmtree(self.folder_path)
+        #     os.makedirs(self.folder_path)
         logger.addHandler(logging.FileHandler(filename=f'{self.folder_path}/log.txt'))
         logger.addHandler(logging.StreamHandler())
         logger.setLevel(logging.DEBUG)
@@ -719,9 +735,12 @@ class Helper:
         t = time.time()
 
         validation_container['params'] = defaultdict(lambda: None, validation_container['params'])
-        validation_container['params']['mal_val_type'] = 'adaptive'
+        # validation_container['params']['mal_val_type'] = 'adaptive'
         valProcessor = ValidationProcessor(validation_container=validation_container)
         wv_by_cluster = valProcessor.run()
+
+        # calculate the percentage of ensemble model accepted is malicious
+        self.result_dict['benign_pcnt_in_accepted_ensemble'].append(1-np.dot(wv_by_cluster, cluster_maliciousness)/len(wv_by_cluster))
 
 
         norm_median = np.median(norms)
@@ -1090,7 +1109,7 @@ class Helper:
 
         noise_level = self.params['sigma'] * norm_median
         noise_level = noise_level ** 2
-        # self.add_noise(target_model, noise_level=noise_level)
+        self.add_noise(target_model, noise_level=noise_level)
         
         return
 

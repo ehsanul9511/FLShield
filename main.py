@@ -27,6 +27,7 @@ import config
 import copy
 import sys
 import os
+import pickle
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 logger = logging.getLogger("logger")
@@ -153,6 +154,9 @@ if __name__ == '__main__':
     submit_update_dict = None
     num_no_progress = 0
 
+    # dictionary object to store test results and pickle it
+    helper.result_dict = defaultdict(lambda: [])
+
     # print(helper.params['0_poison_epochs'])
 
     for epoch in range(helper.start_epoch, helper.params['epochs'] + 1, helper.params['aggr_epoch_interval']):
@@ -271,7 +275,7 @@ if __name__ == '__main__':
         if len(csv_record.scale_temp_one_row)>0:
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
 
-        if helper.params['is_poison'] and helper.params['attack_methods'] in [config.ATTACK_DBA, config.ATTACK_TLF]:
+        if (helper.params['is_poison'] or True) and helper.params['attack_methods'] in [config.ATTACK_DBA, config.ATTACK_TLF, config.ATTACK_AOTT, config.ATTACK_SEMANTIC]:
             if helper.params['attack_methods'] == config.ATTACK_DBA:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison(helper=helper,
                                                                                         epoch=temp_global_epoch,
@@ -287,17 +291,24 @@ if __name__ == '__main__':
                                                                                         visualize=False,
                                                                                         agent_name_key="global",
                                                                                         get_recall=True)
-                csv_record.recall_result.append(["global", temp_global_epoch, epoch_acc_p, epoch_corret, epoch_total])
+                csv_record.recall_result.append(["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
+                helper.result_dict['recall'].append(epoch_acc_p)
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
                                                                                         epoch=temp_global_epoch,
                                                                                         model=helper.target_model,
                                                                                         is_poison=True,
                                                                                         visualize=False,
                                                                                         agent_name_key="global")
+            elif helper.params['attack_methods'] in [config.ATTACK_AOTT]:
+                epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_edge_test(helper=helper,model=helper.target_model)
+                # epoch_acc_p = np.nan        
+            elif helper.params['attack_methods'] in [config.ATTACK_SEMANTIC]:
+                epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_semantic_test(helper=helper,model=helper.target_model)
+                # epoch_acc_p = np.nan        
 
             csv_record.posiontest_result.append(
                 ["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
-
+            helper.result_dict['poison_test_acc'].append(epoch_acc_p)
 
             # test on local triggers
             csv_record.poisontriggertest_result.append(
@@ -325,6 +336,10 @@ if __name__ == '__main__':
         logger.info(f"This run has a label: {helper.params['current_time']}. ")
         csv_record.save_result_csv(epoch, helper.params['is_poison'], helper.folder_path)
 
+
+    # save the result dictionary to a pickle file
+    # pickle.dump(helper.result_dict, open(os.path.join(helper.folder_path, 'result_dict.pkl'), 'wb'))
+    pickle.dump(dict(helper.result_dict), open(os.path.join(helper.folder_path, 'result_dict.pkl'), 'wb'))
 
 
     logger.info('Saving all the graphs.')

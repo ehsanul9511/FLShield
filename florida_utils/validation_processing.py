@@ -98,6 +98,9 @@ class ValidationProcessor:
                 for k in range(num_of_classes):
                     eval_tensor[i][j][k] = evaluations_of_clusters[j][names[i]][k]/count_of_class_for_validator[names[i]][k] if count_of_class_for_validator[names[i]][k] !=0 else 0
 
+
+        torch.save(eval_tensor, 'eval_tensor.pt')
+
         # logger.info(f'eval_tensor: {eval_tensor}')
 
         # split into two tensors
@@ -132,11 +135,14 @@ class ValidationProcessor:
 
         loss_fun(mal_eval_tensor, benign_eval_tensor)
 
+        mal_cluster_weight_tensor = torch.ones((len(self.mal_cluster_indices)), requires_grad=True)
+        benign_cluster_weight_tensor = torch.ones((len(self.benign_cluster_indices)), requires_grad=True)
+
         # autograd
         for _ in tqdm(range(1000), disable=False):
             mean_tensor = torch.mean(torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0), dim=0)
-            mal_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.mal_cluster_indices], dim=0).T
-            benign_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.benign_cluster_indices], dim=0).T
+            mal_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.mal_cluster_indices], dim=0)
+            benign_cluster_tensor = torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.benign_cluster_indices], dim=0)
             mean_benign_eval_tensor = torch.mean(benign_eval_tensor, dim=0)
 
             mal_cluster_tensor_mean_by_class = torch.mean(torch.cat([mean_tensor[i].reshape(1, num_of_classes) for i in self.mal_cluster_indices], dim=0).T, dim=0)
@@ -144,10 +150,21 @@ class ValidationProcessor:
 
             # loss =  torch.nn.functional.mse_loss(mal_eval_tensor, torch.cat([mean_benign_eval_tensor.reshape(1, num_of_clusters, num_of_classes) for _ in range(len(mal_eval_tensor))], dim=0)) + torch.linalg.norm(mal_cluster_tensor_mean_by_class) -  torch.linalg.norm(benign_cluster_tensor_mean_by_class)
 
-            loss = dist_sim_coeff * torch.nn.functional.mse_loss(mal_eval_tensor, torch.cat([mean_benign_eval_tensor.reshape(1, num_of_clusters, num_of_classes) for _ in range(len(mal_eval_tensor))], dim=0)) + (1-dist_sim_coeff)*(torch.linalg.norm(mal_cluster_tensor) -  torch.linalg.norm(benign_cluster_tensor))
+            # loss = dist_sim_coeff * torch.nn.functional.mse_loss(mal_eval_tensor, torch.cat([mean_benign_eval_tensor.reshape(1, num_of_clusters, num_of_classes) for _ in range(len(mal_eval_tensor))], dim=0)) + (1-dist_sim_coeff)*(torch.linalg.norm(mal_cluster_tensor) -  torch.linalg.norm(benign_cluster_tensor))
+
+            loss = (1-dist_sim_coeff)*(torch.mul(torch.cat([torch.linalg.norm(mal_cluster_tensor[i]).reshape(1) for i in range(mal_cluster_tensor.shape[0])], dim=0), mal_cluster_weight_tensor/mal_cluster_weight_tensor.sum()).sum()
+                     -  torch.mul(torch.cat([torch.linalg.norm(benign_cluster_tensor[i]).reshape(1) for i in range(benign_cluster_tensor.shape[0])], dim=0), benign_cluster_weight_tensor/benign_cluster_weight_tensor.sum()).sum())
+
+            for i in range(mal_eval_tensor.shape[0]):
+                loss +=  dist_sim_coeff * torch.nn.functional.mse_loss(mal_eval_tensor[i], mean_benign_eval_tensor)
 
             # logger.info(f'loss: {loss}')
             d_loss = torch.autograd.grad(loss, mal_eval_tensor, create_graph=True)[0]
+            d_loss_2 = torch.autograd.grad(loss, mal_cluster_weight_tensor, create_graph=True)[0]
+            d_loss_3 = torch.autograd.grad(loss, benign_cluster_weight_tensor, create_graph=True)[0]
+            benign_cluster_weight_tensor = benign_cluster_weight_tensor - 0.5 * d_loss_3
+            mal_cluster_weight_tensor = mal_cluster_weight_tensor - 0.5 * d_loss_2
+            # logger.info(f'mal_cluster_weight_tensor: {mal_cluster_weight_tensor}')
             mal_eval_tensor = mal_eval_tensor - 0.5 * d_loss   
 
         loss_fun(mal_eval_tensor, benign_eval_tensor)
@@ -223,7 +240,7 @@ class ValidationProcessor:
         if mal_val_type == 'adaptive':
             mal_cluster_score_decreases = []
 
-            for dist_sim_coeff in np.arange(0.1, 1., 0.1):
+            for dist_sim_coeff in np.arange(0.1, 1, 0.1):
                 logger.info(f'dist_sim_coeff: {dist_sim_coeff}')
                 evaluations_of_clusters_temp = self.adaptive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, dist_sim_coeff)
 
@@ -250,8 +267,10 @@ class ValidationProcessor:
             logger.info(f'best_sim_coeff: {best_sim_coeff}')
 
             evaluations_of_clusters = self.adaptive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, best_sim_coeff)
-        else:
+        elif mal_val_type == 'naive':
             evaluations_of_clusters = self.naive_malicious_val_crafting(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names)
+        else:
+            evaluations_of_clusters = evaluations_of_clusters
 
         logger.info(f'after malicious validation crafting')
         s = self.fed_validation(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)

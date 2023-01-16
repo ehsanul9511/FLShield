@@ -94,6 +94,18 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
                     main_logger_info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
                     _, data_iterator = helper.train_data[agent_name_key]
+                    if helper.params['attack_methods'] == config.ATTACK_AOTT:
+                        own_dataset = data_iterator.dataset
+                        edge_dataset = helper.poison_trainloader.dataset
+                        data_iterator = torch.utils.data.DataLoader(
+                            torch.utils.data.ConcatDataset([own_dataset, edge_dataset]),
+                            batch_size=helper.params['batch_size'], shuffle=True)
+                    elif helper.params['attack_methods'] == config.ATTACK_SEMANTIC:
+                        own_dataset = data_iterator.dataset
+                        green_car_as_bird_dataset = helper.semantic_dataloader.dataset
+                        data_iterator = torch.utils.data.DataLoader(
+                            torch.utils.data.ConcatDataset([own_dataset, green_car_as_bird_dataset]),
+                            batch_size=helper.params['batch_size'], shuffle=True)
                     poison_data_count = 0
                     total_loss = 0.
                     correct = 0
@@ -105,7 +117,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                             data, targets, poison_num = helper.get_poison_batch(batch, adversarial_index=adversarial_index,evaluation=False)
                         elif helper.params['attack_methods'] == config.ATTACK_TLF:
                             data, targets, poison_num = helper.get_poison_batch_for_targeted_label_flip(batch)
-                        elif helper.params['attack_methods'] == config.ATTACK_IPM:
+                        elif helper.params['attack_methods'] in [config.ATTACK_AOTT, config.ATTACK_IPM, config.ATTACK_SEMANTIC]:
                             data, targets = helper.get_batch(None, batch)
                             poison_num = 0
                         poison_optimizer.zero_grad()
@@ -241,6 +253,12 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
 
                     _, data_iterator = helper.train_data[agent_name_key]
+                    if helper.params['attack_methods'] == config.ATTACK_SEMANTIC:
+                        own_dataset = data_iterator.dataset
+                        green_car_dataset = helper.semantic_dataloader_correct.dataset
+                        data_iterator = torch.utils.data.DataLoader(
+                            torch.utils.data.ConcatDataset([own_dataset, green_car_dataset]),
+                            batch_size=helper.params['batch_size'], shuffle=True)
 
                     total_loss = 0.
                     correct = 0
