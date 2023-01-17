@@ -11,6 +11,30 @@ import copy
 import logging
 logger = logging.getLogger("logger")
 
+class KMeans_Torch(torch.nn.Module):
+    def __init__(self, n_clusters=2, max_iter=100):
+        super(KMeans_Torch, self).__init__()
+        self.n_clusters = n_clusters
+        self.max_iter = max_iter
+        self.cluster_centers = None
+
+    def forward(self, x):
+        # initialize cluster centers randomly
+        self.cluster_centers = x[torch.randperm(x.size(0))[:self.n_clusters]]
+        for i in range(self.max_iter):
+            # compute distances to cluster centers
+            distances = torch.norm(x[:, None] - self.cluster_centers, dim=2)
+            # assign data points to closest cluster
+            cluster_assignments = torch.argmin(distances, dim=1)
+            # recompute cluster centers as mean of assigned data points
+            for j in range(self.n_clusters):
+                cluster_points = x[cluster_assignments == j]
+                if cluster_points.size(0) > 0:
+                    self.cluster_centers[j] = torch.mean(cluster_points, dim=0)
+        maj_assignment = (cluster_assignments.float().mean() > 0.5).long()
+        x = torch.mean(x[cluster_assignments==maj_assignment], dim=0)
+        return x
+
 class ValidationProcessor:
     def __init__(self, validation_container):
         self.params = validation_container['params']
@@ -49,24 +73,46 @@ class ValidationProcessor:
         return outlier_prediction
 
 
+    # def fed_validation(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator):
+    #     s = np.zeros((num_of_clusters, num_of_classes))
+    #     for cluster_idx in range(num_of_clusters):
+
+    #         for c_idx in range(len(evaluations_of_clusters[cluster_idx][names[0]])):
+    #             # val_array = np.array([evaluations_of_clusters[cluster_idx][name][c_idx] for name in names])
+    #             val_array_normalized = np.array([evaluations_of_clusters[cluster_idx][name][c_idx]/count_of_class_for_validator[name][c_idx] if count_of_class_for_validator[name][c_idx] !=0 else 0 for name in names])
+
+    #             val_array_normalized[np.isnan(val_array_normalized)] = 0
+
+    #             outlier_prediction = self.filter_LIPC(val_array_normalized)
+
+    #             # eval_sum = np.sum([val_array[i] for i in range(len(val_array)) if outlier_prediction[i]!=-1])
+    #             # total_count_of_class.append(np.sum([count_of_class_for_validator[names[i]][c_idx] for i in range(len(names)) if outlier_prediction[i]!=-1]))
+
+    #             s[cluster_idx][c_idx] = np.mean([val_array_normalized[i] for i in range(len(val_array_normalized)) if outlier_prediction[i]!=-1])
+
+    #     return s
+
     def fed_validation(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator):
-        s = np.zeros((num_of_clusters, num_of_classes))
-        for cluster_idx in range(num_of_clusters):
+        eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
-            for c_idx in range(len(evaluations_of_clusters[cluster_idx][names[0]])):
-                # val_array = np.array([evaluations_of_clusters[cluster_idx][name][c_idx] for name in names])
-                val_array_normalized = np.array([evaluations_of_clusters[cluster_idx][name][c_idx]/count_of_class_for_validator[name][c_idx] if count_of_class_for_validator[name][c_idx] !=0 else 0 for name in names])
+        eval_tensor = eval_tensor.reshape(len(names), -1)
 
-                val_array_normalized[np.isnan(val_array_normalized)] = 0
+        filter_layer = KMeans_Torch(n_clusters=2)
 
-                outlier_prediction = self.filter_LIPC(val_array_normalized)
+        eval_tensor = filter_layer(eval_tensor)
 
-                # eval_sum = np.sum([val_array[i] for i in range(len(val_array)) if outlier_prediction[i]!=-1])
-                # total_count_of_class.append(np.sum([count_of_class_for_validator[names[i]][c_idx] for i in range(len(names)) if outlier_prediction[i]!=-1]))
+        eval_tensor = eval_tensor.reshape(num_of_clusters, num_of_classes)
 
-                s[cluster_idx][c_idx] = np.mean([val_array_normalized[i] for i in range(len(val_array_normalized)) if outlier_prediction[i]!=-1])
+        return eval_tensor.detach().numpy()
 
-        return s
+    def generate_tensor(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator):
+        eval_tensor = torch.zeros((len(names), num_of_clusters, num_of_classes))
+        for i in range(len(names)):
+            for j in range(num_of_clusters):
+                for k in range(num_of_classes):
+                    eval_tensor[i][j][k] = evaluations_of_clusters[j][names[i]][k]/count_of_class_for_validator[names[i]][k] if count_of_class_for_validator[names[i]][k] !=0 else 0
+
+        return eval_tensor
 
     def naive_malicious_val_crafting(self, evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names):
         for cluster_i in range(num_of_clusters):
@@ -89,6 +135,11 @@ class ValidationProcessor:
                 for val_idx in set(names).intersection(set(self.adversarial_namelist)):
                     evaluations_of_clusters[cluster_i][val_idx][cl] = mod_val * count_of_class_for_validator[val_idx][cl]
 
+        
+        eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
+
+        torch.save(eval_tensor, 'eval_tensor.pt')
+
         return evaluations_of_clusters
 
     def adaptive_malicious_val_crafting(self, evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names, dist_sim_coeff=0.5):
@@ -96,12 +147,7 @@ class ValidationProcessor:
         distance_losses = []
         mal_val_impacts = []
         # create a torch tensor for the evaluation_of_clusters
-        eval_tensor = torch.zeros((len(names), num_of_clusters, num_of_classes))
-        for i in range(len(names)):
-            for j in range(num_of_clusters):
-                for k in range(num_of_classes):
-                    eval_tensor[i][j][k] = evaluations_of_clusters[j][names[i]][k]/count_of_class_for_validator[names[i]][k] if count_of_class_for_validator[names[i]][k] !=0 else 0
-
+        eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
         torch.save(eval_tensor, 'eval_tensor.pt')
 
@@ -141,15 +187,27 @@ class ValidationProcessor:
             # logger.info(f'x: {x}')
             return x.T/x.sum()
 
+        best_cluster_loss_min = np.inf
+        best_mal_eval_tensor = None
+
         # autograd
-        for e in tqdm(range(1001), disable=True):
-            mean_tensor = torch.mean(torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0), dim=0)
+        for e in tqdm(range(5001), disable=False):
+            # mean_tensor = torch.mean(torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0), dim=0)
 
             all_tensor = torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0).reshape(len(names), -1)
             mean_distance_tensor = mean_euclidean_distance_layer(all_tensor)
             validation_filtering_tensor = validation_filtering_simulation_layer(mean_distance_tensor)
+
+            all_flat_tensor = all_tensor.reshape(len(names), -1)
+            mean_distance_tensor = mean_euclidean_distance_layer(all_flat_tensor)
+
+            filter_layer = KMeans_Torch(n_clusters=2)
+
+            mean_tensor = filter_layer(all_flat_tensor)
+
+            mean_tensor_2 = mean_tensor.reshape(num_of_clusters, num_of_classes)
             # logger.info(f'validation_filtering_tensor: {validation_filtering_tensor}')
-            mean_tensor_2 = torch.mul(all_tensor, validation_filtering_tensor).sum(dim=0).reshape(num_of_classes, num_of_clusters)
+            # mean_tensor_2 = torch.mul(all_tensor, validation_filtering_tensor).sum(dim=0).reshape(num_of_classes, num_of_clusters)
 
             # logger.info(f'mean_tensor_2: {mean_tensor_2}')
 
@@ -167,6 +225,10 @@ class ValidationProcessor:
             # loss = - mal_cluster_min_score_by_class_tensor.sum() + benign_cluster_min_score_by_class_tensor.sum() 
 
             loss = torch.linalg.norm(- mal_cluster_min_score_by_class_tensor.mean() + benign_cluster_min_score_by_class_tensor.mean())
+
+            if loss < best_cluster_loss_min:
+                best_cluster_loss_min = loss
+                best_mal_eval_tensor = mal_eval_tensor.clone().detach()
 
             cluster_losses.append(loss.clone().detach().numpy().reshape(1)[0])
             mal_val_impacts.append((validation_filtering_tensor[:num_of_mal_validators].clone().detach().numpy().reshape(num_of_mal_validators)!=0).sum())
@@ -191,21 +253,24 @@ class ValidationProcessor:
             mal_eval_tensor = mal_eval_tensor - 0.1 * d_loss   
 
         from matplotlib import pyplot as plt
-        print(cluster_losses)
+        print(cluster_losses[400:500])
         print(mal_val_impacts[400:500])
-        # plt.plot(cluster_losses)
-        # plt.savefig('cluster_losses.png')
+        plt.plot(np.mean(np.array(cluster_losses).reshape(-1, 10), axis=1))
+        plt.savefig('cluster_losses.png')
         # plt.clf()
-        plt.plot(mal_val_impacts[400:500])
-        plt.savefig('mal_val_impacts.png')
+        # plt.plot(mal_val_impacts[400:500])
+        # plt.savefig('mal_val_impacts.png')
         # loss_fun(mal_eval_tensor, benign_eval_tensor)
 
+        # eval_tensor = torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0)
+        # torch.save(eval_tensor, 'eval_tensor.pt')
+
         evaluations_of_clusters_new = copy.deepcopy(evaluations_of_clusters)
-        for i in range(len(mal_eval_tensor)):
+        for i in range(len(best_mal_eval_tensor)):
             # for j in range(len(self.adversarial_namelist)):
             for j in range(num_of_clusters):
                 for k in range(num_of_classes):
-                    evaluations_of_clusters_new[j][names[i]][k] = mal_eval_tensor[i][j][k].detach().numpy()*count_of_class_for_validator[names[i]][k]
+                    evaluations_of_clusters_new[j][names[i]][k] = best_mal_eval_tensor[i][j][k].detach().numpy()*count_of_class_for_validator[names[i]][k]
 
         return evaluations_of_clusters_new
             
