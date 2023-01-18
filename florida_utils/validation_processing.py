@@ -117,7 +117,7 @@ class ValidationProcessor:
 
         return eval_tensor.detach().numpy()
 
-    def generate_tensor(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator):
+    def generate_tensor(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator, null_value=0):
         eval_tensor = torch.zeros((len(names), num_of_clusters, num_of_classes))
         for i in range(len(names)):
             for j in range(num_of_clusters):
