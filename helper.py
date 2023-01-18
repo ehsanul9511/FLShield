@@ -671,7 +671,7 @@ class Helper:
             logger.info(f'saving validation container to {self.folder_path}/validation_container_{epoch}.pkl with params type {type(self.params)}')
             pickle.dump(validation_container, f)
 
-        evaluations_of_clusters, count_of_class_for_validator = impute_validation(evaluations_of_clusters, names, num_of_clusters, num_of_classes, impute_method='iterative')
+        evaluations_of_clusters, count_of_class_for_validator = impute_validation(evaluations_of_clusters, count_of_class_for_validator, names, num_of_clusters, num_of_classes, impute_method='iterative')
 
         # all_validator_evaluations_dict = dict()
         # for val_idx in range(len(names)):

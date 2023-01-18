@@ -2,6 +2,7 @@
 # import EllipticEnvelope, KMeans, numpy, torch
 from sklearn.covariance import EllipticEnvelope
 from sklearn.cluster import KMeans
+from scipy.stats import zscore
 import numpy as np
 import torch
 from torchmetrics.functional import pairwise_cosine_similarity, pairwise_euclidean_distance
@@ -398,6 +399,8 @@ class ValidationProcessor:
         self.lowest_performing_classes = [np.argmin(s[i]) for i in range(len(s))]
         logger.info(f'self.lowest_performing_classes: {self.lowest_performing_classes}')
         logger.info(f'lowest_score_for_each_cluster: {[np.min(s[i]) for i in range(len(s))]}')
+        # compute zscores
+        logger.info(f'zscores: {zscore([np.min(s[i]) for i in range(len(s))])}')
         # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
         logger.info(f'self.argsort_result: {self.argsort_result}')
 

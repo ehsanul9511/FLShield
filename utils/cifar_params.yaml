@@ -26,7 +26,7 @@ decay: 0.0005
 diff_privacy: false
 dirichlet_alpha: 0.5
 environment_name: cifar
-epochs: 301
+epochs: 305
 eta: 1
 fg_use_memory: true
 geom_median_maxiter: 10
@@ -39,15 +39,15 @@ is_random_adversary: true
 is_random_namelist: true
 log_interval: 2
 lr: 0.1
-mal_val_type: adaptive
+mal_val_type: None
 minimize_logging: true
 momentum: 0.9
 new_adaptive_attack: false
-no_models: 25
+no_models: 10
 noniid: true
 number_of_adversary_dba: 30
 number_of_adversary_inner_product_manipulation: 40
-number_of_adversary_targeted_label_flip: 40
+number_of_adversary_targeted_label_flip: 30
 number_of_adversary_semantic_attack: 30
 number_of_adversary_attack_of_the_tails: 30
 number_of_total_participants: 100

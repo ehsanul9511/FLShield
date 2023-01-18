@@ -19,8 +19,13 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
     dataset_classes = {}
     if given_test_loader is not None:
         validation_dataset = copy.deepcopy(given_test_loader.dataset)
-        if helper.params['attack_methods'] in [config.ATTACK_AOTT, config.ATTACK_SEMANTIC]:
+        if helper.params['attack_methods'] in [config.ATTACK_SEMANTIC]:
             validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.semantic_dataloader_correct.dataset])
+        if helper.params['attack_methods'] in [config.ATTACK_AOTT] and False:
+            if not is_poisonous:
+                validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.clean_val_loader.dataset])
+            else:
+                validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.poison_trainloader.dataset])
         test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=len(validation_dataset))
 
     for c in range(num_classes):
@@ -79,6 +84,12 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
 
     if validation_metric == 'LIPC':
         return loss_by_class, loss_by_class_per_example, count_per_class
+    elif validation_metric == 'loss_impact_only':
+        total_loss = np.sum([loss_by_class[cl] for cl in range(num_classes)])
+        for cl in range(num_classes):
+            loss_by_class[cl] = total_loss/num_classes
+            count_per_class[cl] = 1
+            loss_by_class_per_example[cl] = total_loss/num_classes
     elif validation_metric == 'accuracy':
         return correct_by_class, correct_by_class_per_example, count_per_class
 

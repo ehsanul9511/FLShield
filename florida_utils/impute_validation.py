@@ -43,7 +43,7 @@ def impute(eval_tensor, impute_method='iterative'):
     return eval_tensor
 
 
-def impute_validation(evaluations_of_clusters, names, num_of_clusters, num_of_classes, impute_method='iterative'):
+def impute_validation(evaluations_of_clusters, count_of_class_for_validator, names, num_of_clusters, num_of_classes, impute_method='iterative'):
     eval_tensor = convert_to_numpy(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names)
 
     eval_tensor = eval_tensor.reshape((len(names), num_of_clusters*num_of_classes))
@@ -161,7 +161,7 @@ if __name__ == '__main__':
             df.loc[val, method_name] = mse
 
     logger.info(f'df: {df}')
-    df.plot(marker='o')
+    df.plot(style=['o', 's' , 'v', 'x', 'd', 'p', 'h', '8'])
     plt.savefig('imputation.pdf')
 
     # logger.info(f'evaluations_of_clusters: {evaluations_of_clusters[0]}')

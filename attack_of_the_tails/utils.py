@@ -108,8 +108,10 @@ def load_poisoned_dataset(*args, **kwaargs):
             poisoned_trainset = copy.deepcopy(trainset)
 
             if attack_case == "edge-case":
+                edge_split = kwaargs['edge_split']
                 with open('attack_of_the_tails/southwest_images_new_train.pkl', 'rb') as train_f:
                     saved_southwest_dataset_train = pickle.load(train_f)
+                    total_num_images = len(saved_southwest_dataset_train)
 
                 with open('attack_of_the_tails/southwest_images_new_test.pkl', 'rb') as test_f:
                     saved_southwest_dataset_test = pickle.load(test_f)
@@ -122,6 +124,7 @@ def load_poisoned_dataset(*args, **kwaargs):
             else:
                 raise NotImplementedError("Not Matched Attack Case ...")  
 
+            target_label_correct = 0
             target_label_train = 2
             target_label_test = 2
 
@@ -129,7 +132,8 @@ def load_poisoned_dataset(*args, **kwaargs):
             # logger.info("OOD (Southwest Airline) train-data shape we collected: {}".format(saved_southwest_dataset_train.shape))
             # sampled_targets_array_train = 2 * np.ones((saved_southwest_dataset_train.shape[0],), dtype =int) # southwest airplane -> label as bird
             # sampled_targets_array_train = 9 * np.ones((saved_southwest_dataset_train.shape[0],), dtype =int) # southwest airplane -> label as truck
-            sampled_targets_array_train = target_label_train * np.ones((saved_southwest_dataset_train.shape[0],), dtype =int) # southwest airplane -> label as truck
+            sampled_targets_array_train = target_label_correct * np.ones((saved_southwest_dataset_train.shape[0],), dtype =int) # southwest airplane -> label as truck
+            poisoned_target_array_train = target_label_train * np.ones((saved_southwest_dataset_train.shape[0],), dtype =int) # southwest airplane -> label as truck
             
             # logger.info("OOD (Southwest Airline) test-data shape we collected: {}".format(saved_southwest_dataset_test.shape))
             # sampled_targets_array_test = 2 * np.ones((saved_southwest_dataset_test.shape[0],), dtype =int) # southwest airplane -> label as bird
@@ -139,12 +143,15 @@ def load_poisoned_dataset(*args, **kwaargs):
 
             # downsample the poisoned dataset #################
             if attack_case == "edge-case":
-                num_sampled_poisoned_data_points = 100 # N
+                num_sampled_poisoned_data_points = int((1-edge_split) * saved_southwest_dataset_train.shape[0])
                 samped_poisoned_data_indices = np.random.choice(saved_southwest_dataset_train.shape[0],
                                                                 num_sampled_poisoned_data_points,
                                                                 replace=False)
+                remaining_indices = np.setdiff1d(np.arange(saved_southwest_dataset_train.shape[0]), samped_poisoned_data_indices)
+                clean_southwest_dataset_train = saved_southwest_dataset_train[remaining_indices, :, :, :]
+                clean_targets_array_train = np.array(sampled_targets_array_train)[remaining_indices]
                 saved_southwest_dataset_train = saved_southwest_dataset_train[samped_poisoned_data_indices, :, :, :]
-                sampled_targets_array_train = np.array(sampled_targets_array_train)[samped_poisoned_data_indices]
+                sampled_targets_array_train = np.array(poisoned_target_array_train)[samped_poisoned_data_indices]
                 # logger.info("!!!!!!!!!!!Num poisoned data points in the mixed dataset: {}".format(num_sampled_poisoned_data_points))
             elif attack_case == "normal-case" or attack_case == "almost-edge-case":
                 num_sampled_poisoned_data_points = 100 # N
@@ -162,6 +169,9 @@ def load_poisoned_dataset(*args, **kwaargs):
             # logger.info("!!!!!!!!!!!Num clean data points in the mixed dataset: {}".format(num_sampled_data_points))
             # keep a copy of clean data
             clean_trainset = copy.deepcopy(poisoned_trainset)
+
+            clean_trainset.data = clean_southwest_dataset_train
+            clean_trainset.targets = clean_targets_array_train
             ########################################################
 
 
