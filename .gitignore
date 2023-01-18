@@ -11,6 +11,9 @@ plots/
 *.out
 *.ipynb
 *.sh
+*.pt
+*.pdf
+*.png
 utils/*temp*
 outputs/
 final_outputs/

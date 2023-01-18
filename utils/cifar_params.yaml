@@ -39,11 +39,11 @@ is_random_adversary: true
 is_random_namelist: true
 log_interval: 2
 lr: 0.1
-mal_val_type: None
+mal_val_type: adaptive
 minimize_logging: true
 momentum: 0.9
 new_adaptive_attack: false
-no_models: 10
+no_models: 25
 noniid: true
 number_of_adversary_dba: 30
 number_of_adversary_inner_product_manipulation: 40

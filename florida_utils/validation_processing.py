@@ -41,6 +41,18 @@ class ValidationProcessor:
         logger.info(f'params type {type(self.params)}')
         self.validation_container = validation_container
 
+    def plot_PCA(self, val_tensor):
+        mean = torch.mean(val_tensor, dim=0)
+        data_centered = val_tensor - mean
+        U, S, V = torch.svd(data_centered)
+
+        # Project data to 2 dimensions
+        components = V[:, :2]
+        data_2d = data_centered @ components
+        torch.save(torch.tensor(data_2d), 'val_tensor.pt')
+        # plt.scatter(val_tensor[:,0], val_tensor[:,1])
+        # plt.show()
+
     def filter_LIPC(self, val_array_normalized):
         outlier_prediction = [1 for _ in range(len(val_array_normalized))]
         outlier_detector_type = self.params['outlier_detector_type']
@@ -139,6 +151,7 @@ class ValidationProcessor:
         eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
         torch.save(eval_tensor, 'eval_tensor.pt')
+        self.plot_PCA(eval_tensor.reshape(len(names), -1))
 
         return evaluations_of_clusters
 
@@ -191,7 +204,7 @@ class ValidationProcessor:
         best_mal_eval_tensor = None
 
         # autograd
-        for e in tqdm(range(5001), disable=False):
+        for e in tqdm(range(1000), disable=False):
             # mean_tensor = torch.mean(torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0), dim=0)
 
             all_tensor = torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0).reshape(len(names), -1)
@@ -252,11 +265,12 @@ class ValidationProcessor:
             # logger.info(f'mal_cluster_weight_tensor: {mal_cluster_weight_tensor}')
             mal_eval_tensor = mal_eval_tensor - 0.1 * d_loss   
 
-        from matplotlib import pyplot as plt
-        print(cluster_losses[400:500])
-        print(mal_val_impacts[400:500])
-        plt.plot(np.mean(np.array(cluster_losses).reshape(-1, 10), axis=1))
-        plt.savefig('cluster_losses.png')
+        # from matplotlib import pyplot as plt
+        # print(cluster_losses[400:500])
+        # print(mal_val_impacts[400:500])
+        # torch.save(torch.tensor(cluster_losses), 'cluster_losses.pt')
+        # plt.plot(np.convolve(cluster_losses, np.ones(10)/10, mode='valid'))
+        # plt.savefig('cluster_losses.png')
         # plt.clf()
         # plt.plot(mal_val_impacts[400:500])
         # plt.savefig('mal_val_impacts.png')

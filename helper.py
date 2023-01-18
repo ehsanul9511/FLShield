@@ -549,7 +549,7 @@ class Helper:
         if self.params['no_ensemble']:
             no_ensemble = True
 
-        if self.params['no_models'] < 10 or no_clustering:
+        if self.params['no_models'] < 10 or no_clustering or no_ensemble:
             self.clusters_agg = [[i] for i in range(len(names))]
         else:
             clustering_method = self.params['clustering_method'] if self.params['clustering_method'] is not None else 'Agglomerative'

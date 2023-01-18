@@ -272,6 +272,7 @@ if __name__ == '__main__':
                                                                        model=helper.target_model, is_poison=False,
                                                                        visualize=False, agent_name_key="global")
         csv_record.test_result.append(["global", temp_global_epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+        helper.result_dict['mainacc'].append(epoch_acc)
         if len(csv_record.scale_temp_one_row)>0:
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
 
