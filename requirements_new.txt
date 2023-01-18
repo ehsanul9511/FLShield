@@ -15,3 +15,4 @@ opencv-python
 sympy
 pyyaml
 torchmetrics
+fancyimpute
