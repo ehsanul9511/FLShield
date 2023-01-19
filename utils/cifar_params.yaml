@@ -26,7 +26,7 @@ decay: 0.0005
 diff_privacy: false
 dirichlet_alpha: 0.5
 environment_name: cifar
-epochs: 305
+epochs: 310
 eta: 1
 fg_use_memory: true
 geom_median_maxiter: 10
@@ -39,7 +39,7 @@ is_random_adversary: true
 is_random_namelist: true
 log_interval: 2
 lr: 0.1
-mal_val_type: None
+mal_val_type: adaptive
 minimize_logging: true
 momentum: 0.9
 new_adaptive_attack: false
@@ -67,6 +67,7 @@ resumed_model_name: utils/model_bank/cifar/model_last.pt.tar.epoch_300
 resumed_model_path: mnist_pretrain/
 sampling_dirichlet: false
 save_data: 1
+save_grads: true
 save_model: false
 save_on_epochs: [100, 200, 300]
 scale_weights_poison: 10

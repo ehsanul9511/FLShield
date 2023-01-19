@@ -13,22 +13,22 @@ internal_poison_epochs: 3
 poisoning_per_batch: 20
 aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'our_aggr', 'afa', 'foolsgold']
-aggregation_methods: mean
+aggregation_methods: our_aggr
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
 attack_methods: 'targeted_label_flip'
-injective_florida: true
+injective_florida: false
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]
-no_models: 25
+no_models: 100
 number_of_total_participants: 100
 is_random_namelist: true
 is_random_adversary: true
-is_poison: false
+is_poison: true
 
 save_grads: true
 
-mal_val_type: naive
+mal_val_type: None
 
 validation_metric: 'LIPC'
 
@@ -37,7 +37,7 @@ camera_ready: false
 no_ensemble: false
 
 noniid: true
-bias: 0.1
+bias: 0.5
 sampling_dirichlet: true
 dirichlet_alpha: 0.5
 baseline: true # single-shot: false; multi-shot:true

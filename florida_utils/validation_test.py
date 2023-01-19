@@ -90,6 +90,7 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
             loss_by_class[cl] = total_loss/num_classes
             count_per_class[cl] = 1
             loss_by_class_per_example[cl] = total_loss/num_classes
+        return loss_by_class, loss_by_class_per_example, count_per_class
     elif validation_metric == 'accuracy':
         return correct_by_class, correct_by_class_per_example, count_per_class
 

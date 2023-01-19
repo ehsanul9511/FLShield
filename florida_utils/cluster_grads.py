@@ -5,11 +5,15 @@ from sklearn.metrics.pairwise import cosine_distances, euclidean_distances, cosi
 from sklearn.metrics import silhouette_score, confusion_matrix
 import logging
 from collections import defaultdict
+import hdbscan
 
 # import adjusted_rand_score
 from sklearn.metrics.cluster import adjusted_rand_score
 
 logger = logging.getLogger("logger")
+
+filepath = ""
+epoch_global = 0
 
 def cluster_fun(coses, k, clustering_method='Agglomerative'):
     if clustering_method=='Agglomerative':
@@ -18,6 +22,10 @@ def cluster_fun(coses, k, clustering_method='Agglomerative'):
         clustering = KMeans(n_clusters=k).fit(coses)
     elif clustering_method=='Spectral':
         clustering = SpectralClustering(n_clusters=k, affinity='precomputed').fit(coses)
+    elif clustering_method=='hdbscan':
+        clustering = hdbscan.HDBSCAN(min_cluster_size=k, metric='precomputed').fit(np.array(coses, dtype=np.float64))
+    else:
+        raise NotImplementedError
     return clustering
 
 def get_optimal_k_for_clustering(grads, clustering_method='Agglomerative'):
@@ -48,6 +56,9 @@ def cluster_grads(grads, clustering_method='Spectral'):
     X = nets
 
     k, coses = get_optimal_k_for_clustering(grads, clustering_method)
+
+    logger.info(f'{filepath}')
+    np.save(f'{filepath}/coses_{epoch_global}.npy', coses)
 
     clustering = cluster_fun(coses, k, clustering_method)
 
@@ -131,14 +142,22 @@ if __name__ == '__main__':
         logger.info(f'Validator Groups: {clusters}')
     
     else:
+        filepath = f'{args.location}'
         clustering_methods = ['Agglomerative', 'KMeans', 'Spectral']
         markers = ['o', 'x', 's']
+
+        import pandas as pd
+
+        df = pd.DataFrame(columns=['epoch']+clustering_methods)
+
+        df.index = df['epoch']
 
         scores = {}
         for clustering_method in clustering_methods:
             scores[clustering_method] = []
 
-        for epoch in range(36, 71):
+        for epoch in range(args.epoch, args.epoch+10):
+            epoch_global = epoch
             logger.info(f'Epoch: {epoch}')
             grads = np.load(f'{args.location}/grads_{epoch}.npy')
             names = np.load(f'{args.location}/names_{epoch}.npy')
@@ -150,6 +169,10 @@ if __name__ == '__main__':
                 score = cluster_score_calc(clusters, actual_labels)
 
                 scores[clustering_method].append(score)
+
+                df.loc[epoch, clustering_method] = score
+
+        df.to_csv(f'cluster_comparison.csv')
 
         # plot scores
         import matplotlib.pyplot as plt

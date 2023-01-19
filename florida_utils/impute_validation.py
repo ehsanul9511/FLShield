@@ -161,7 +161,8 @@ if __name__ == '__main__':
             df.loc[val, method_name] = mse
 
     logger.info(f'df: {df}')
-    df.plot(style=['o', 's' , 'v', 'x', 'd', 'p', 'h', '8'])
+    df.to_csv('imputation.csv')
+    df.plot(style=['o', 's' , 'v', 'x', 'd', 'p', 'h', '8'], figsize=(10, 10))
     plt.savefig('imputation.pdf')
 
     # logger.info(f'evaluations_of_clusters: {evaluations_of_clusters[0]}')
