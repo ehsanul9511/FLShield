@@ -445,16 +445,23 @@ class ImageHelper(Helper):
             train_size = int((1 - val_pcnt) * len(train_data))
             val_size = len(train_data) - train_size
             train_data, val_data = torch.utils.data.random_split(train_data, [train_size, val_size], generator=torch.Generator().manual_seed(seed))
-            if self.params['attack_methods'] == config.ATTACK_AOTT and False:
-                if i > self.params[f'number_of_adversary_{self.params["attack_methods"]}'] or True:
+            if self.params['attack_methods'] == config.ATTACK_AOTT:
+                if i > self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
                     edge_data = self.clean_val_loader.dataset
                 else:
                     edge_data = self.poison_trainloader.dataset
-                samp_indices = np.random.choice(len(edge_data), int(self.params['edge_split']*len(val_data)), replace=False)
-                samp_indices_2 = np.random.choice(len(val_data), int((1-self.params['edge_split'])*len(val_data)), replace=False)
-                val_data = torch.utils.data.Subset(val_data, samp_indices_2)
-                edge_data = torch.utils.data.Subset(edge_data, samp_indices)
-                val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
+                    samp_indices = np.random.choice(len(edge_data), int(self.params['edge_split']*len(val_data)), replace=False)
+                    samp_indices_2 = np.random.choice(len(val_data), int((1-self.params['edge_split'])*len(val_data)), replace=False)
+                    val_data = torch.utils.data.Subset(val_data, samp_indices_2)
+                    edge_data = torch.utils.data.Subset(edge_data, samp_indices)
+                    val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
+            # if self.params['attack_methods'] == config.ATTACK_AOTT:
+            #     if i < self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
+            #         edge_data = self.poison_trainloader.dataset
+            #         samp_indices = np.random.choice(len(edge_data), int(0.4*len(train_data)), replace=False)
+            #         edge_data = torch.utils.data.Subset(edge_data, samp_indices)
+            #         train_data = torch.utils.data.ConcatDataset([train_data, edge_data])
+            #         val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
             reused_val_data = train_data + val_data
             train_loaders[i] = (i, torch.utils.data.DataLoader(train_data, batch_size=self.params['batch_size'], shuffle=True))
             val_loaders.append(torch.utils.data.DataLoader(val_data, batch_size=self.params['batch_size'], shuffle=True))

@@ -15,7 +15,7 @@ afa_epsilon: 2
 aggr_epoch_interval: 1
 aggregation_methods: our_aggr
 alpha_loss: 1
-attack_methods: targeted_label_flip
+attack_methods: attack_of_the_tails
 baseline: true
 batch_size: 64
 batch_track_distance: false
@@ -25,6 +25,7 @@ centralized_test_trigger: true
 decay: 0.0005
 diff_privacy: false
 dirichlet_alpha: 0.5
+edge_split: 0.5
 environment_name: cifar
 epochs: 310
 eta: 1
@@ -33,7 +34,7 @@ geom_median_maxiter: 10
 internal_epochs: 2
 internal_poison_clean_epochs: 0
 internal_poison_epochs: 6
-injective_florida: true
+injective_florida: false
 is_poison: true
 is_random_adversary: true
 is_random_namelist: true
@@ -43,7 +44,7 @@ mal_val_type: adaptive
 minimize_logging: true
 momentum: 0.9
 new_adaptive_attack: false
-no_models: 10
+no_models: 25
 noniid: true
 number_of_adversary_dba: 30
 number_of_adversary_inner_product_manipulation: 40
@@ -67,7 +68,7 @@ resumed_model_name: utils/model_bank/cifar/model_last.pt.tar.epoch_300
 resumed_model_path: mnist_pretrain/
 sampling_dirichlet: false
 save_data: 1
-save_grads: true
+save_grads: false
 save_model: false
 save_on_epochs: [100, 200, 300]
 scale_weights_poison: 10

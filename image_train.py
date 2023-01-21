@@ -94,10 +94,10 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                     temp_local_epoch += 1
                     main_logger_info(f'fetching poison data for agent: {agent_name_key} epoch: {temp_local_epoch}')
                     _, data_iterator = helper.train_data[agent_name_key]
-                    if helper.params['attack_methods'] == config.ATTACK_AOTT and False:
+                    if helper.params['attack_methods'] == config.ATTACK_AOTT:
                         own_dataset = data_iterator.dataset
                         edge_dataset = helper.poison_trainloader.dataset
-                        samp_indices = np.random.choice(len(edge_dataset), int(0.1*len(own_dataset)), replace=False)
+                        samp_indices = np.random.choice(len(edge_dataset), int(0.2*len(own_dataset)), replace=False)
                         edge_dataset = torch.utils.data.Subset(edge_dataset, samp_indices)
                         data_iterator = torch.utils.data.DataLoader(
                             torch.utils.data.ConcatDataset([own_dataset, edge_dataset]),
