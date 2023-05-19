@@ -1,4 +1,4 @@
-binarytree
+#binarytree
 hdbscan
 matplotlib
 numpy
@@ -15,4 +15,5 @@ opencv-python
 sympy
 pyyaml
 torchmetrics
-fancyimpute
+#fancyimpute
+torchvision

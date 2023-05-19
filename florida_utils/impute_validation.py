@@ -1,7 +1,7 @@
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 import numpy as np
-from fancyimpute import KNN, SoftImpute, SimilarityWeightedAveraging, SimpleFill
+# from fancyimpute import KNN, SoftImpute, SimilarityWeightedAveraging, SimpleFill
 import logging
 
 logger = logging.getLogger("logger")

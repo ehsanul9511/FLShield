@@ -45,7 +45,7 @@ from tabulate import tabulate
 from collections import defaultdict
 
 import hdbscan
-from binarytree import Node
+# from binarytree import Node
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 import networkx as nx

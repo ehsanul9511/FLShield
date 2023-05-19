@@ -57,8 +57,8 @@ def cluster_grads(grads, clustering_method='Spectral'):
 
     k, coses = get_optimal_k_for_clustering(grads, clustering_method)
 
-    logger.info(f'{filepath}')
-    np.save(f'{filepath}/coses_{epoch_global}.npy', coses)
+    # logger.info(f'{filepath}')
+    # np.save(f'{filepath}/coses_{epoch_global}.npy', coses)
 
     clustering = cluster_fun(coses, k, clustering_method)
 

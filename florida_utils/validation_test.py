@@ -7,7 +7,9 @@ import config
 
 
 def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=False, adv_index=-1, tqdm_disable=True, num_classes=10):
+    device2 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     network.eval()
+    network.to(device2)
     correct = 0
     correct_by_class = {}
     correct_by_class_per_example = {}
@@ -44,6 +46,7 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
                     data, targets = helper.get_batch(None, batch)
             else:
                 data, targets = helper.allStateHelperList[adv_index].get_batch(test_loader, batch, evaluation=True)
+            data, targets = data.to(device2), targets.to(device2)
             output = network(data)
             loss_func=torch.nn.CrossEntropyLoss(reduction='none')
             pred = output.data.max(1, keepdim=True)[1]
@@ -60,6 +63,11 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
                 # correct_by_class[cl] += correct_array[class_indices[cl]].sum().item()     
                 loss_by_class[cl] += [loss_val.item() for loss_val in loss_array[class_indices[cl]]]
                 correct_by_class[cl] += [correct_val.item() for correct_val in correct_array[class_indices[cl]]]
+
+            data, targets = data.to(config.device), targets.to(config.device)
+                                                          
+    network.to(config.device)
+                                                        
             
     for class_label in range(num_classes):
         cap_on_per_class = True

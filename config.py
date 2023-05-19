@@ -1,5 +1,11 @@
 import torch
-device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+import platform
+
+arm64 = platform.machine() == 'arm64'
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'mps' if arm64 else 'cpu')
+# device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 
 AGGR_MEAN = 'mean'
 AGGR_GEO_MED = 'geom_median'

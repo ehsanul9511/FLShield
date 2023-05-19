@@ -2,7 +2,7 @@ from collections import defaultdict
 import shutil
 from typing import OrderedDict
 import matplotlib.pyplot as plt
-from prometheus_client import Counter
+#from prometheus_client import Counter
 
 import torch
 import torch.utils.data

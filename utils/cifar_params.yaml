@@ -15,7 +15,7 @@ afa_epsilon: 2
 aggr_epoch_interval: 1
 aggregation_methods: our_aggr
 alpha_loss: 1
-attack_methods: attack_of_the_tails
+attack_methods: targeted_label_flip
 baseline: true
 batch_size: 64
 batch_track_distance: false
@@ -34,7 +34,7 @@ geom_median_maxiter: 10
 internal_epochs: 2
 internal_poison_clean_epochs: 0
 internal_poison_epochs: 6
-injective_florida: false
+injective_florida: true
 is_poison: true
 is_random_adversary: true
 is_random_namelist: true
