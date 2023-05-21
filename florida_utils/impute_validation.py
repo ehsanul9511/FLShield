@@ -48,6 +48,12 @@ def impute_validation(evaluations_of_clusters, count_of_class_for_validator, nam
 
     eval_tensor = eval_tensor.reshape((len(names), num_of_clusters*num_of_classes))
 
+    # find indices in axis 1 where all values are nan
+    missing_mask = np.isnan(eval_tensor).all(axis=0)
+    if sum(missing_mask) > 0:
+        # replace with a very large number
+        eval_tensor[:, missing_mask] = 1e6
+
     eval_tensor = impute(eval_tensor, impute_method)
 
     eval_tensor = eval_tensor.reshape((len(names), num_of_clusters, num_of_classes))

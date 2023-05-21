@@ -74,14 +74,14 @@ class Helper:
         self.name = name
         self.best_loss = math.inf
 
-        if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_DBA]:
+        if self.params['attack_methods'] in [config.ATTACK_TLF]:
             if self.params['type'] in config.target_class_dict.keys():
                 self.source_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][0]
                 self.target_class = config.target_class_dict[self.params['type']][self.params['tlf_label']][1]
             else:
                 self.source_class = int(self.params['tlf_label'])
                 self.target_class = 9 - self.source_class
-        else:
+        elif self.params['attack_methods'] in [config.ATTACK_DBA]:
             self.source_class = int(self.params['poison_label_swap'])
         self.num_of_adv = self.params[f'number_of_adversary_{self.params["attack_methods"]}']
 

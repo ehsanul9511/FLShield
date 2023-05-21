@@ -1,9 +1,10 @@
 #binarytree
+git+https://github.com/ehsanul9511/GradAttack.git
 hdbscan
 matplotlib
 numpy
 pandas
-pathlib
+#pathlib
 scipy
 #sklearn
 scikit-learn
@@ -17,3 +18,9 @@ pyyaml
 torchmetrics
 #fancyimpute
 torchvision
+#gradattack
+colorama
+opacus
+pytorch_lightning
+scikit_learn
+#torchcsprng

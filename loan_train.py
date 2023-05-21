@@ -43,27 +43,28 @@ def LoanTrain(helper, start_epoch, local_model, target_model, is_poison,state_ke
 
         adversarial_index = -1
         localmodel_poison_epochs = helper.params['poison_epochs']
-        if is_poison and state_key in helper.params['adversary_list']:
-            for adver_index in range(0, len(helper.params['adversary_list'])):
-                if state_key == helper.params['adversary_list'][adver_index]:
-                    localmodel_poison_epochs = helper.params[str(adver_index%3) + '_poison_epochs']
-                    adversarial_index= adver_index
-                    main.logger.info(f'poison local model {state_key} will poison epochs: {localmodel_poison_epochs}')
-                    break
-            if len(helper.params['adversary_list']) == 1:
-                adversarial_index = -1  # attack the global trigger
+        # if is_poison and state_key in helper.params['adversary_list']:
+        #     for adver_index in range(0, len(helper.params['adversary_list'])):
+        #         if state_key == helper.params['adversary_list'][adver_index]:
+        #             localmodel_poison_epochs = helper.params[str(adver_index%3) + '_poison_epochs']
+        #             adversarial_index= adver_index
+        #             main.logger.info(f'poison local model {state_key} will poison epochs: {localmodel_poison_epochs}')
+        #             break
+        #     if len(helper.params['adversary_list']) == 1:
+        #         adversarial_index = -1  # attack the global trigger
 
-        trigger_names = []
-        trigger_values = []
-        if adversarial_index == -1:
-            for j in range(0, helper.params['trigger_num']):
-                for name in helper.params[str(j) + '_poison_trigger_names']:
-                    trigger_names.append(name)
-                for value in helper.params[str(j) + '_poison_trigger_values']:
-                    trigger_values.append(value)
-        else:
-            trigger_names = helper.params[str(adversarial_index%3) + '_poison_trigger_names']
-            trigger_values = helper.params[str(adversarial_index%3) + '_poison_trigger_values']
+        if helper.params['attack_methods'] == config.ATTACK_DBA:
+            trigger_names = []
+            trigger_values = []
+            if adversarial_index == -1:
+                for j in range(0, helper.params['trigger_num']):
+                    for name in helper.params[str(j) + '_poison_trigger_names']:
+                        trigger_names.append(name)
+                    for value in helper.params[str(j) + '_poison_trigger_values']:
+                        trigger_values.append(value)
+            else:
+                trigger_names = helper.params[str(adversarial_index%3) + '_poison_trigger_names']
+                trigger_values = helper.params[str(adversarial_index%3) + '_poison_trigger_values']
 
         for epoch in range(start_epoch, start_epoch + helper.params['aggr_epoch_interval']):
             ### This is for calculating distances

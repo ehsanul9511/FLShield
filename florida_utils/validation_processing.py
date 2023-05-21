@@ -409,8 +409,8 @@ class ValidationProcessor:
         # logger.info(f's: {s}')
         wv_by_cluster = np.zeros(num_of_clusters)
         for i in range(num_of_clusters):
-            # if i < len(self.argsort_result)//2:
-            if i < 0.75 * len(self.argsort_result):
+            if i < len(self.argsort_result)//2:
+            # if i < 0.75 * len(self.argsort_result):
                 wv_by_cluster[self.argsort_result[i]] = 0
             else:
                 wv_by_cluster[self.argsort_result[i]] = 1

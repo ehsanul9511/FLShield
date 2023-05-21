@@ -199,10 +199,13 @@ class ImageHelper(Helper):
                 test_classes[label] = [ind]
 
         range_no_id = list(range(0, len(self.test_dataset)))
-        for image_ind in test_classes[self.params['poison_label_swap']]:
-            if image_ind in range_no_id:
-                range_no_id.remove(image_ind)
-        poison_label_inds = test_classes[self.params['poison_label_swap']]
+        if self.params['attack_methods'] in [config.ATTACK_DBA]:
+            for image_ind in test_classes[self.params['poison_label_swap']]:
+                if image_ind in range_no_id:
+                    range_no_id.remove(image_ind)
+            poison_label_inds = test_classes[self.params['poison_label_swap']]
+        else:
+            poison_label_inds = range_no_id
 
         return torch.utils.data.DataLoader(self.test_dataset,
                            batch_size=self.params['batch_size'],
@@ -310,8 +313,6 @@ class ImageHelper(Helper):
                 samp_dis[other_num] += 1
                 sum_res -= 1
         samp_dis[num_labels - 1] = server_pc - np.sum(samp_dis[:num_labels - 1])
-
-        logger.info('samp_dis: {}'.format(samp_dis))
 
         # privacy experiment only
         server_additional_label_0_samples_counter = 0    
@@ -450,8 +451,9 @@ class ImageHelper(Helper):
                     edge_data = self.clean_val_loader.dataset
                 else:
                     edge_data = self.poison_trainloader.dataset
-                    samp_indices = np.random.choice(len(edge_data), int(self.params['edge_split']*len(val_data)), replace=False)
-                    samp_indices_2 = np.random.choice(len(val_data), int((1-self.params['edge_split'])*len(val_data)), replace=False)
+                    edge_split = int(self.params['edge_split']) if 'edge_split' in self.params else 0.
+                    samp_indices = np.random.choice(len(edge_data), int(edge_split*len(val_data)), replace=False)
+                    samp_indices_2 = np.random.choice(len(val_data), int((1-edge_split)*len(val_data)), replace=False)
                     val_data = torch.utils.data.Subset(val_data, samp_indices_2)
                     edge_data = torch.utils.data.Subset(edge_data, samp_indices)
                     val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
@@ -723,11 +725,12 @@ class ImageHelper(Helper):
         else:
             self.adversarial_namelist = self.params['adversary_list']
         for idx, id in enumerate(self.adversarial_namelist):
-            if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
-                self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
-            else:
-                mod_idx = idx%4
-                self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs'][10:]
+            self.poison_epochs_by_adversary[idx] = self.params[f'poison_epochs']
+            # if self.params['attack_methods'] in [config.ATTACK_TLF]:
+            #     self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
+            # else:
+            #     mod_idx = idx%4
+            #     self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs'][10:]
 
         # self.adversarial_namelist = [name for name in self.adversarial_namelist if self.lsrs[name][self.source_class] > 0]
 

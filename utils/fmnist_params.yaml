@@ -15,6 +15,10 @@ aggr_epoch_interval: 1 # aggregate every round
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'our_aggr', 'afa', 'foolsgold']
 aggregation_methods: our_aggr
 # attack_methods Allowed values are: ['targeted_label_flip', 'dba', 'server_imitation_attack' ]
+attack_method_options:
+  - targeted_label_flip
+  - dba
+  - server_imitation_attack
 attack_methods: 'targeted_label_flip'
 injective_florida: false
 geom_median_maxiter: 10

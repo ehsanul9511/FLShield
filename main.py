@@ -33,72 +33,14 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 logger = logging.getLogger("logger")
 # logger.setLevel("ERROR")
 
-# vis = visdom.Visdom(port=8098)
-vis = None
 criterion = torch.nn.CrossEntropyLoss()
 torch.manual_seed(1)
 torch.cuda.manual_seed(1)
 random.seed(1)
-def trigger_test_byindex(helper, index, vis, epoch):
-    return
-    epoch_loss, epoch_acc, epoch_corret, epoch_total = \
-        test.Mytest_poison_trigger(helper=helper, model=helper.target_model,
-                                   adver_trigger_index=index)
-    csv_record.poisontriggertest_result.append(
-        ['global', "global_in_index_" + str(index) + "_trigger", "", epoch,
-         epoch_loss, epoch_acc, epoch_corret, epoch_total])
-    if helper.params['vis_trigger_split_test']:
-        helper.target_model.trigger_agent_test_vis(vis=vis, epoch=epoch, acc=epoch_acc, loss=None,
-                                                   eid=helper.params['environment_name'],
-                                                   name="global_in_index_" + str(index) + "_trigger")
-def trigger_test_byname(helper, agent_name_key, vis, epoch):
-    return
-    epoch_loss, epoch_acc, epoch_corret, epoch_total = \
-        test.Mytest_poison_agent_trigger(helper=helper, model=helper.target_model, agent_name_key=agent_name_key)
-    csv_record.poisontriggertest_result.append(
-        ['global', "global_in_" + str(agent_name_key) + "_trigger", "", epoch,
-         epoch_loss, epoch_acc, epoch_corret, epoch_total])
-    if helper.params['vis_trigger_split_test']:
-        helper.target_model.trigger_agent_test_vis(vis=vis, epoch=epoch, acc=epoch_acc, loss=None,
-                                                   eid=helper.params['environment_name'],
-                                                   name="global_in_" + str(agent_name_key) + "_trigger")
-def vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys):
-    return
-    print(names)
-    print(adversarial_name_keys)
-    for i in range(0,len(names)):
-        _name= names[i]
-        _weight=weights[i]
-        _is_poison=False
-        if _name in adversarial_name_keys:
-            _is_poison=True
-        helper.target_model.weight_vis(vis=vis,epoch=epoch,weight=_weight, eid=helper.params['environment_name'],
-                                       name=_name,is_poisoned=_is_poison)
 
-def vis_fg_alpha(helper,names,alphas,epoch,vis,adversarial_name_keys):
-    return
-    print(names)
-    print(adversarial_name_keys)
-    for i in range(0,len(names)):
-        _name= names[i]
-        _alpha=alphas[i]
-        _is_poison=False
-        if _name in adversarial_name_keys:
-            _is_poison=True
-        helper.target_model.alpha_vis(vis=vis,epoch=epoch,alpha=_alpha, eid=helper.params['environment_name'],
-                                       name=_name,is_poisoned=_is_poison)
 
-if __name__ == '__main__':
-    print('Start training')
-    np.random.seed(1)
-    time_start_load_everything = time.time()
-    parser = argparse.ArgumentParser(description='PPDL')
-    parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
-    args = parser.parse_args()
-    with open(f'./{args.params}', 'r') as f:
-        # params_loaded = yaml.load(f)
-        params_loaded = yaml.safe_load(f)
-    parmas_loaded = defaultdict(lambda: None, params_loaded)
+def run(params_loaded):
+    params_loaded = defaultdict(lambda: None, params_loaded)
     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
     if params_loaded['type'] == config.TYPE_LOAN:
         helper = LoanHelper(current_time=current_time, params=params_loaded,
@@ -139,25 +81,14 @@ if __name__ == '__main__':
     if helper.params['is_poison']:
         logger.info(f"Poisoned following participants: {(helper.adversarial_namelist)}")
 
-    best_loss = float('inf')
-
-    # vis.text(text=dict_html(helper.params, current_time=helper.params["current_time"]),
-    #          env=helper.params['environment_name'], opts=dict(width=300, height=400))
-    logger.info(f"We use following environment for graphs:  {helper.params['environment_name']}")
-
     weight_accumulator = helper.init_weight_accumulator(helper.target_model)
 
     # save parameters:
     with open(f'{helper.folder_path}/params.yaml', 'w') as f:
         yaml.dump(dict(helper.params), f)
 
-    submit_update_dict = None
-    num_no_progress = 0
-
     # dictionary object to store test results and pickle it
     helper.result_dict = defaultdict(lambda: [])
-
-    # print(helper.params['0_poison_epochs'])
 
     for epoch in range(helper.start_epoch, helper.params['epochs'] + 1, helper.params['aggr_epoch_interval']):
         start_time = time.time()
@@ -238,7 +169,6 @@ if __name__ == '__main__':
             is_updated, names, weights = helper.afa_method(helper.target_model, updates)
         elif helper.params['aggregation_methods'] == config.AGGR_FLTRUST:
             is_updated, names, weights = helper.fltrust(helper.target_model, updates, epoch)
-            # vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
         elif helper.params['aggregation_methods'] == config.AGGR_MEAN:
             # Average the models
             # is_updated = helper.average_shrink_models(weight_accumulator=weight_accumulator,
@@ -250,14 +180,9 @@ if __name__ == '__main__':
             
             maxiter = helper.params['geom_median_maxiter']
             num_oracle_calls, is_updated, names, weights, alphas = helper.geometric_median_update(helper.target_model, updates, maxiter=maxiter)
-            # vis_agg_weight(helper, names, weights, epoch, vis, adversarial_name_keys)
-            # vis_fg_alpha(helper, names, alphas, epoch, vis, adversarial_name_keys)
 
         elif helper.params['aggregation_methods'] == config.AGGR_FLAME:
-            # is_updated, names, weights, alphas = helper.foolsgold_update(helper.target_model, updates)
             helper.flame(helper.target_model, updates, epoch)
-            # vis_agg_weight(helper,names,weights,epoch,vis,adversarial_name_keys)
-            # vis_fg_alpha(helper,names,alphas,epoch,vis,adversarial_name_keys )
             num_oracle_calls = 1
 
         logger.info(f'time spent on aggregation: {time.time() - t}')
@@ -311,24 +236,6 @@ if __name__ == '__main__':
                 ["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
             helper.result_dict['poison_test_acc'].append(epoch_acc_p)
 
-            # test on local triggers
-            csv_record.poisontriggertest_result.append(
-                ["global", "combine", "", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
-            if helper.params['vis_trigger_split_test'] and False:
-                helper.target_model.trigger_agent_test_vis(vis=vis, epoch=epoch, acc=epoch_acc_p, loss=None,
-                                                           eid=helper.params['environment_name'],
-                                                           name="global_combine")
-            if len(helper.adversarial_namelist) == 1:  # centralized attack
-                if helper.params['centralized_test_trigger'] == True:  # centralized attack test on local triggers
-                    for j in range(0, helper.params['trigger_num']):
-                        break
-                        trigger_test_byindex(helper, j, vis, epoch)
-            else:  # distributed attack
-                if helper.params['speed_boost'] == False:
-                    for agent_name_key in helper.adversarial_namelist:
-                        break
-                        trigger_test_byname(helper, agent_name_key, vis, epoch)
-
         logger.info(f'time spent on testing: {time.time() - t}')
         t = time.time()
 
@@ -343,9 +250,21 @@ if __name__ == '__main__':
     pickle.dump(dict(helper.result_dict), open(os.path.join(helper.folder_path, 'result_dict.pkl'), 'wb'))
 
 
-    logger.info('Saving all the graphs.')
-    logger.info(f"This run has a label: {helper.params['current_time']}. "
-                f"Visdom environment: {helper.params['environment_name']}")
+    logger.info(f"This run has a label: {helper.params['current_time']}. ")
 
 
-    # vis.save([helper.params['environment_name']])
+
+
+
+if __name__ == '__main__':
+    print('Start training')
+    np.random.seed(1)
+    time_start_load_everything = time.time()
+    parser = argparse.ArgumentParser(description='PPDL')
+    parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
+    args = parser.parse_args()
+    with open(f'./{args.params}', 'r') as f:
+        # params_loaded = yaml.load(f)
+        params_loaded = yaml.safe_load(f)
+
+    run(params_loaded)

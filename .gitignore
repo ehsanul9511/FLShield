@@ -9,7 +9,7 @@ utils/__pycache__/*
 plots/
 *.err
 *.out
-*.ipynb
+# *.ipynb
 *.sh
 *.pt
 *.pdf
