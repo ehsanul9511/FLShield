@@ -297,25 +297,25 @@ class Helper:
                  number of training samples corresponding to the update, and update
                  is a list of variable weights
          """
-        # if self.params['aggregation_methods'] == config.AGGR_FLAME or self.params['aggregation_methods'] == config.AGGR_FLTRUST:
         if self.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0][0] # agg 1 interval
                 num_samples = num_samples_dict[state_keys[i]]
-                try:
-                    local_model_update_list = epochs_submit_update_dict[state_keys[i]][1]
-                except:
-                    logger.info("epochs_submit_update_dict[state_keys[i]][1] is None")
-                    logger.info(f'length of epochs_submit_update_dict is {len(epochs_submit_update_dict.keys())}')
-                    logger.info(f'state_keys[i] is {state_keys[i]}')
-                    logger.info(f'length of epochs_submit_update_dict[state_keys[i]] is {len(epochs_submit_update_dict[state_keys[i]])}')
+                local_model_update_list = epochs_submit_update_dict[state_keys[i]][1]
+                # try:
+                #     local_model_update_list = epochs_submit_update_dict[state_keys[i]][1]
+                # except:
+                #     logger.info("epochs_submit_update_dict[state_keys[i]][1] is None")
+                #     logger.info(f'length of epochs_submit_update_dict is {len(epochs_submit_update_dict.keys())}')
+                #     logger.info(f'state_keys[i] is {state_keys[i]}')
+                #     logger.info(f'length of epochs_submit_update_dict[state_keys[i]] is {len(epochs_submit_update_dict[state_keys[i]])}')
                 update= dict()
 
                 for name, data in local_model_update_list[0].items():
                     if not torch.is_tensor(data):
                         # logger.info(f'name: {name}, data: {data}')
-                        data = torch.FloatTensor(data)
+                        data = torch.FloatTensor(data).to(config.device)
                     update[name] = torch.zeros_like(data)
 
                 for j in range(0, len(local_model_update_list)):
@@ -323,7 +323,7 @@ class Helper:
                     for name, data in local_model_update_dict.items():
                         if not torch.is_tensor(data):
                             # logger.info(f'name: {name}, data: {data}')
-                            data = torch.FloatTensor(data)
+                            data = torch.FloatTensor(data).to(config.device)
                         # weight_accumulator[name].add_(local_model_update_dict[name])
                         # update[name].add_(local_model_update_dict[name])
                         weight_accumulator[name].add_(data)
@@ -1004,7 +1004,9 @@ class Helper:
         # logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
         # logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
 
-        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+        logger.info(f'Number of delta models: {len(delta_models)}')
+        logger.info(f'Lenght of wv: {len(wv)}')
+        aggregate_weights = self.weighted_average_oracle(delta_models[:-1], torch.tensor(wv))
 
         for name, data in target_model.state_dict().items():
             update_per_layer = aggregate_weights[name] * (self.params["eta"])

@@ -210,7 +210,7 @@ def ImageTrain(helper, start_epoch, local_model, target_model, is_poison,agent_n
                                                                                                 is_poison=True,
                                                                                                 visualize=False,
                                                                                                 agent_name_key=agent_name_key)
-                        elif helper.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+                        elif helper.params['attack_methods'] in [config.ATTACK_TLF]:
                             epoch_loss, epoch_acc, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
                                                                                                 epoch=epoch,
                                                                                                 model=model,

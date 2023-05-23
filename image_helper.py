@@ -447,16 +447,17 @@ class ImageHelper(Helper):
             val_size = len(train_data) - train_size
             train_data, val_data = torch.utils.data.random_split(train_data, [train_size, val_size], generator=torch.Generator().manual_seed(seed))
             if self.params['attack_methods'] == config.ATTACK_AOTT:
-                if i > self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
-                    edge_data = self.clean_val_loader.dataset
-                else:
-                    edge_data = self.poison_trainloader.dataset
-                    edge_split = int(self.params['edge_split']) if 'edge_split' in self.params else 0.
-                    samp_indices = np.random.choice(len(edge_data), int(edge_split*len(val_data)), replace=False)
-                    samp_indices_2 = np.random.choice(len(val_data), int((1-edge_split)*len(val_data)), replace=False)
-                    val_data = torch.utils.data.Subset(val_data, samp_indices_2)
-                    edge_data = torch.utils.data.Subset(edge_data, samp_indices)
-                    val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
+                # if i > self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
+                #     edge_data = self.clean_val_loader.dataset
+                # else:
+                # edge_data = self.poison_trainloader.dataset
+                edge_data = self.clean_val_loader.dataset
+                edge_split = int(self.params['edge_split']) if 'edge_split' in self.params else 0.1
+                samp_indices = np.random.choice(len(edge_data), int(edge_split*len(val_data)), replace=False)
+                samp_indices_2 = np.random.choice(len(val_data), int((1-edge_split)*len(val_data)), replace=False)
+                val_data = torch.utils.data.Subset(val_data, samp_indices_2)
+                edge_data = torch.utils.data.Subset(edge_data, samp_indices)
+                val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
             # if self.params['attack_methods'] == config.ATTACK_AOTT:
             #     if i < self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
             #         edge_data = self.poison_trainloader.dataset
@@ -680,7 +681,7 @@ class ImageHelper(Helper):
 
             # self.classes_dict = self.build_classes_dict()
             # logger.info('build_classes_dict done')
-        if self.params['attack_methods'] in [config.ATTACK_TLF, config.ATTACK_SIA]:
+        if self.params['attack_methods'] in [config.ATTACK_TLF]:
             target_class_test_data=[]
             for _, (x, y) in enumerate(self.test_data.dataset):
                 if y==self.source_class:
@@ -709,19 +710,13 @@ class ImageHelper(Helper):
         self.variable_poison_rates = [4, 8, 16, 24, 32] * 6
 
         self.poison_epochs_by_adversary = {}
-        # if self.params['random_adversary_for_label_flip']:
         if self.params['is_random_adversary']:
-            # if self.params['attack_methods'] == config.ATTACK_TLF:
-            #     if 'num_of_attackers_in_target_group' in self.params.keys():
-            #         self.num_of_attackers_in_target_group = self.params['num_of_attackers_in_target_group']
-            #     else:
-            #         self.num_of_attackers_in_target_group = 4
-            if self.params['noniid'] or True:
+            if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+                random.seed(42)
+                self.adversarial_namelist = random.sample(self.participants_list[:-1], self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+            else:
                 random.seed(42)
                 self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
-            else:
-                eligible_list = [name for name in range(self.params['number_of_total_participants']) if self.lsrs[name][self.source_class] > 0.07]
-                self.adversarial_namelist = random.sample(eligible_list, min(self.params[f'number_of_adversary_{self.params["attack_methods"]}'], len(eligible_list)))
         else:
             self.adversarial_namelist = self.params['adversary_list']
         for idx, id in enumerate(self.adversarial_namelist):
@@ -736,10 +731,10 @@ class ImageHelper(Helper):
 
         self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
-        if 'ablation_study' in self.params.keys() and 'with_lsr' in self.params['ablation_study']:
-            for idx, id in enumerate(self.adversarial_namelist):
-                self.lsrs[id] = self.lsrs[target_group_indices[0]]
-                # self.lsrs[id] = self.lsrs[0]
+        # if 'ablation_study' in self.params.keys() and 'with_lsr' in self.params['ablation_study']:
+        #     for idx, id in enumerate(self.adversarial_namelist):
+        #         self.lsrs[id] = self.lsrs[target_group_indices[0]]
+        #         self.lsrs[id] = self.lsrs[0]
 
         logger.info(f'adversarial_namelist: {self.adversarial_namelist}')
         logger.info(f'benign_namelist: {self.benign_namelist}')
