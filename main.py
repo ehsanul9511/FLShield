@@ -38,6 +38,50 @@ torch.manual_seed(1)
 torch.cuda.manual_seed(1)
 random.seed(1)
 
+from jinja2 import Template
+import yaml
+
+def get_context(type='cifar',
+                aggregation_methods='our_aggr',
+                injective_florida=False,
+                attack_methods='targeted_label_flip',
+                noniid=False,
+                resumed_model=True,
+                mal_pcnt=0.4,
+                *args,
+                **kwargs):
+    context = {
+        'type': type,
+        'aggregation_methods': aggregation_methods,
+        'injective_florida': injective_florida,
+        'attack_methods': attack_methods,
+        'noniid': noniid,
+        'resumed_model': resumed_model,
+        'mal_pcnt': mal_pcnt
+    }
+    ## add other kwargs
+    for key, value in kwargs.items():
+        context[key] = value
+    return context
+
+def get_param_for_context(context=None):
+    # Define the dynamic values
+    if context is None:
+        context = get_context()
+
+    # Load the template file
+    with open('utils/jinja.yaml') as file:
+        template = Template(file.read())
+
+    # Render the template with the dynamic values
+    rendered_config = template.render(context)
+
+    # The rendered_config now contains the final YAML configuration
+    # convert it into a dictionary
+    params = yaml.load(rendered_config, Loader=yaml.FullLoader)
+
+    return params
+
 
 def run(params_loaded):
     params_loaded = defaultdict(lambda: None, params_loaded)
@@ -249,9 +293,31 @@ if __name__ == '__main__':
     time_start_load_everything = time.time()
     parser = argparse.ArgumentParser(description='PPDL')
     parser.add_argument('--params', dest='params', default='utils/fmnist_params.yaml')
-    args = parser.parse_args()
-    with open(f'./{args.params}', 'r') as f:
-        # params_loaded = yaml.load(f)
-        params_loaded = yaml.safe_load(f)
+    # args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    print(f'args: {args}')
+    print(f'unknown: {unknown}')
+    if len(unknown) == 0:
+        with open(f'./{args.params}', 'r') as f:
+            # params_loaded = yaml.load(f)
+            params_loaded = yaml.safe_load(f)
+    else:
+        # parse unknown arguments
+        for arg in unknown:
+            if arg.startswith(("-", "--")):
+                k, v = arg.split("=")
+                setattr(args, k.strip("-"), v)
+        print(f'args: {args}')
+
+        # convert args to dictionary
+        args = vars(args)
+        del args['params']
+        print(f'args: {args}')
+
+        context = get_context(**args)
+        print(f'context: {context}')
+
+        params_loaded = get_param_for_context(context)
+
 
     run(params_loaded)

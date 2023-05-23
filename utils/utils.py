@@ -23,16 +23,16 @@ def dict_html(dict_obj, current_time):
 
 
 def get_hash_from_param_file(param):
-    hash_md5 = hashlib.md5()
+    if 'hash' not in param:
+        hash_md5 = hashlib.md5()
 
-    # with open(param_file, 'r') as f:
-    #     param = yaml.safe_load(f)
-
-    param = dict(param)
-    
-    # generate hash from yaml file
-    hash_md5.update(pickle.dumps(param))
-    return hash_md5.hexdigest()
+        param = dict(param)
+        
+        # generate hash from yaml file
+        hash_md5.update(pickle.dumps(param))
+        return hash_md5.hexdigest()
+    else:
+        return param['hash']
 
 
 if __name__ == '__main__':

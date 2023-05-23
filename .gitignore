@@ -10,7 +10,7 @@ plots/
 *.err
 *.out
 # *.ipynb
-*.sh
+# *.sh
 *.pt
 *.pdf
 *.png
