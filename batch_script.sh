@@ -29,7 +29,8 @@ generate_hash() {
 aggregation_methods=("mean" "our_aggr")
 
 # alias sha256sum="shasum -a 256"
-
+export PATH="/scratch/ejk5818/miniconda3/bin/python:$PATH"
+source /scratch/ejk5818/miniconda3/bin/activate fl
 
 for str in "${aggregation_methods[@]}"; do
     command="python main.py --aggregation_method=\"$str\" --type=cifar"
@@ -37,11 +38,12 @@ for str in "${aggregation_methods[@]}"; do
     sha256_hash=$(echo -n "$command" | sha256sum | awk '{ print $1 }')
     echo "SHA-256 hash for \"$str\": $sha256_hash"
 
-    # "$command" &> "$str.log"
-    "which python" &> "$str.log"
+    $command &
 
     echo
 done
+
+echo "Waiting"
 
 wait
 
