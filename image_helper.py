@@ -20,6 +20,7 @@ from models.resnet_celebA import Resnet18
 logger = logging.getLogger("logger")
 import config
 from config import device
+import utils.csv_record as csv_record
 from attack_of_the_tails.utils import load_poisoned_dataset
 
 import copy
@@ -450,13 +451,18 @@ class ImageHelper(Helper):
                 # if i > self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
                 #     edge_data = self.clean_val_loader.dataset
                 # else:
-                # edge_data = self.poison_trainloader.dataset
+                #     edge_data = self.poison_trainloader.dataset
+                # if i in self.adversarial_namelist:
+                #     edge_data = self.poison_trainloader.dataset
+                # else:
+                #     edge_data = self.clean_val_loader.dataset
                 edge_data = self.clean_val_loader.dataset
-                edge_split = int(self.params['edge_split']) if 'edge_split' in self.params else 0.1
+                edge_split = float(self.params['edge_split']) if 'edge_split' in self.params else 0.1
                 samp_indices = np.random.choice(len(edge_data), int(edge_split*len(val_data)), replace=False)
                 samp_indices_2 = np.random.choice(len(val_data), int((1-edge_split)*len(val_data)), replace=False)
                 val_data = torch.utils.data.Subset(val_data, samp_indices_2)
                 edge_data = torch.utils.data.Subset(edge_data, samp_indices)
+                # train_data = torch.utils.data.ConcatDataset([train_data, edge_data])
                 val_data = torch.utils.data.ConcatDataset([val_data, edge_data])
             # if self.params['attack_methods'] == config.ATTACK_AOTT:
             #     if i < self.params[f'number_of_adversary_{self.params["attack_methods"]}']:
@@ -473,6 +479,36 @@ class ImageHelper(Helper):
 
     def load_data(self):
         logger.info('Loading data')
+
+        if self.params['is_random_namelist'] == False:
+            self.participants_list = self.params['participants_namelist']
+        else:
+            self.participants_list = list(range(self.params['number_of_total_participants']))
+        # random.shuffle(self.participants_list)
+
+        self.variable_poison_rates = [4, 8, 16, 24, 32] * 6
+
+        self.poison_epochs_by_adversary = {}
+        if self.params['is_random_adversary']:
+            if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+                random.seed(42)
+                self.adversarial_namelist = random.sample(self.participants_list[:-1], self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+            else:
+                random.seed(42)
+                self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+        else:
+            self.adversarial_namelist = self.params['adversary_list']
+        for idx, id in enumerate(self.adversarial_namelist):
+            self.poison_epochs_by_adversary[idx] = self.params[f'poison_epochs']
+
+        self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
+
+        logger.info(f'adversarial_namelist: {self.adversarial_namelist}')
+        logger.info(f'benign_namelist: {self.benign_namelist}')
+
+        csv_record.epoch_reports['adversarial_namelist'] = self.adversarial_namelist
+        csv_record.epoch_reports['benign_namelist'] = self.benign_namelist
+
         if 'load_data' in self.params:
             self.load_saved_data()
         else:
@@ -516,14 +552,14 @@ class ImageHelper(Helper):
                     
                     self.semantic_dataloader = torch.utils.data.DataLoader(semantic_dataset, batch_size=self.params['batch_size'], shuffle=True)
                     self.semantic_dataloader_correct = torch.utils.data.DataLoader(semantic_dataset_correct, batch_size=self.params['batch_size'], shuffle=True)
-                    self.train_dataset = remaining_dataset
+                    # self.train_dataset = remaining_dataset
 
-
+                    remaining_indices = np.setdiff1d(cifar10_whole_range, np.array(green_car_indices))
                     # remaining_indices = [i for i in cifar10_whole_range if i not in green_car_indices]
                     # self.semantic_dataset = torch.utils.data.Subset(self.train_dataset, green_car_indices)
                     # sampled_targets_array_train = 2 * np.ones((len(self.semantic_dataset),), dtype =int) # green car -> label as bird
                     # self.semantic_dataset.targets = torch.from_numpy(sampled_targets_array_train)
-                    # self.train_dataset = torch.utils.data.Subset(self.train_dataset, remaining_indices)
+                    self.train_dataset = torch.utils.data.Subset(self.train_dataset, remaining_indices)
 
 
             elif self.params['type'] == config.TYPE_MNIST:
@@ -698,46 +734,36 @@ class ImageHelper(Helper):
                 lsr = self.get_label_skew_ratios_v2(train_loader, id, num_of_classes=num_labels)
                 self.lsrs.append(lsr)
 
+        csv_record.epoch_reports["lsrs"] = self.lsrs
+
         # logger.info(f'lsrs ready: {self.lsrs}')
 
 
-        if self.params['is_random_namelist'] == False:
-            self.participants_list = self.params['participants_namelist']
-        else:
-            self.participants_list = list(range(self.params['number_of_total_participants']))
-        # random.shuffle(self.participants_list)
+        # if self.params['is_random_namelist'] == False:
+        #     self.participants_list = self.params['participants_namelist']
+        # else:
+        #     self.participants_list = list(range(self.params['number_of_total_participants']))
+        # # random.shuffle(self.participants_list)
 
-        self.variable_poison_rates = [4, 8, 16, 24, 32] * 6
+        # self.variable_poison_rates = [4, 8, 16, 24, 32] * 6
 
-        self.poison_epochs_by_adversary = {}
-        if self.params['is_random_adversary']:
-            if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
-                random.seed(42)
-                self.adversarial_namelist = random.sample(self.participants_list[:-1], self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
-            else:
-                random.seed(42)
-                self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
-        else:
-            self.adversarial_namelist = self.params['adversary_list']
-        for idx, id in enumerate(self.adversarial_namelist):
-            self.poison_epochs_by_adversary[idx] = self.params[f'poison_epochs']
-            # if self.params['attack_methods'] in [config.ATTACK_TLF]:
-            #     self.poison_epochs_by_adversary[idx] = list(np.arange(1, self.params['epochs']+1))
-            # else:
-            #     mod_idx = idx%4
-            #     self.poison_epochs_by_adversary[idx] = self.params[f'{mod_idx}_poison_epochs'][10:]
+        # self.poison_epochs_by_adversary = {}
+        # if self.params['is_random_adversary']:
+        #     if self.params['aggregation_methods'] == config.AGGR_FLTRUST:
+        #         random.seed(42)
+        #         self.adversarial_namelist = random.sample(self.participants_list[:-1], self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+        #     else:
+        #         random.seed(42)
+        #         self.adversarial_namelist = random.sample(self.participants_list, self.params[f'number_of_adversary_{self.params["attack_methods"]}'])
+        # else:
+        #     self.adversarial_namelist = self.params['adversary_list']
+        # for idx, id in enumerate(self.adversarial_namelist):
+        #     self.poison_epochs_by_adversary[idx] = self.params[f'poison_epochs']
 
-        # self.adversarial_namelist = [name for name in self.adversarial_namelist if self.lsrs[name][self.source_class] > 0]
+        # self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
 
-        self.benign_namelist =list(set(self.participants_list) - set(self.adversarial_namelist))
-
-        # if 'ablation_study' in self.params.keys() and 'with_lsr' in self.params['ablation_study']:
-        #     for idx, id in enumerate(self.adversarial_namelist):
-        #         self.lsrs[id] = self.lsrs[target_group_indices[0]]
-        #         self.lsrs[id] = self.lsrs[0]
-
-        logger.info(f'adversarial_namelist: {self.adversarial_namelist}')
-        logger.info(f'benign_namelist: {self.benign_namelist}')
+        # logger.info(f'adversarial_namelist: {self.adversarial_namelist}')
+        # logger.info(f'benign_namelist: {self.benign_namelist}')
 
     def get_train(self, indices):
         """

@@ -552,10 +552,10 @@ class Helper:
         if self.params['no_models'] < 10 or no_clustering or no_ensemble:
             self.clusters_agg = [[i] for i in range(len(names))]
         else:
-            clustering_method = self.params['clustering_method'] if self.params['clustering_method'] is not None else 'Agglomerative'
+            clustering_method = self.params['clustering_method'] if self.params['clustering_method'] is not None else 'KMeans'
             _, self.clusters_agg = cluster_function(grads, clustering_method)
         
-        logger.info(f'Agglomerative Clustering: Time: {time.time() - t}')
+            logger.info(f'Clustering: Time: {time.time() - t}')
         t = time.time()
 
         if self.get_param_val('ablation_hard_mixture') is not None:
@@ -567,8 +567,8 @@ class Helper:
         logger.info('Clustering by model updates')
         for idx, cluster in enumerate(self.clusters_agg):
             logger.info(f'cluster: {cluster}')
-            logger.info(f'names: {names}')
             clstr = [names[c] for c in cluster]
+            logger.info(f'names: {clstr}')
             clusters_agg.append(clstr)
 
 
@@ -593,6 +593,7 @@ class Helper:
         num_of_clusters = len(clusters_agg)
 
         adj_delta_models = []
+        weight_vecs_by_cluster = {}
 
         for idx, cluster in enumerate(tqdm(clusters_agg, disable=False)):
             evaluations_of_clusters[idx] = {}
@@ -617,6 +618,19 @@ class Helper:
                 clip_vals = [min(norm_ref/norm, 1) for norm in norms]
                 trust_scores = [ts * cv for ts, cv in zip(trust_scores, clip_vals)]
                 weight_vec = trust_scores
+
+                contrib_adjustment = self.params['contrib_adjustment'] if self.params['contrib_adjustment'] is not None else 0.1
+
+                # logger.info(f'weight_vec: {weight_vec}')
+
+                weight_vec = [elem * contrib_adjustment for elem in weight_vec]
+                weight_vec[idx] = 1
+                # logger.info(f'weight_vec: {weight_vec}')
+                weight_vec = weight_vec / np.sum(weight_vec)
+
+                # logger.info(f'weight_vec: {weight_vec}')
+
+            weight_vecs_by_cluster[idx] = weight_vec.tolist()
 
             aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(weight_vec))
             adj_delta_models.append(aggregate_weights)
@@ -670,6 +684,8 @@ class Helper:
         with open(f'{self.folder_path}/validation_container_{epoch}.pkl', 'wb') as f:
             logger.info(f'saving validation container to {self.folder_path}/validation_container_{epoch}.pkl with params type {type(self.params)}')
             pickle.dump(validation_container, f)
+
+        before_imputation_validation_container = copy.deepcopy(validation_container)
 
         evaluations_of_clusters, count_of_class_for_validator = impute_validation(evaluations_of_clusters, count_of_class_for_validator, names, num_of_clusters, num_of_classes, impute_method='iterative')
 
@@ -729,6 +745,8 @@ class Helper:
         with open(f'{self.folder_path}/validation_container_{epoch}.pkl', 'wb') as f:
             logger.info(f'saving validation container to {self.folder_path}/validation_container_{epoch}.pkl with params type {type(self.params)}')
             pickle.dump(validation_container, f)
+
+        before_processing_validation_container = copy.deepcopy(validation_container)
 
 
         logger.info(f'Validation Done: Time: {time.time() - t}')
@@ -791,6 +809,16 @@ class Helper:
         t = time.time()
         logger.info(f'adversarial wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.adversarial_namelist]}')
         logger.info(f'benign wv: {[self.print_util(names[iidx], wv[iidx]) for iidx in range(len(wv)) if names[iidx] in self.benign_namelist]}')
+
+        wv_by_cluster = wv_by_cluster.tolist()
+        wv = wv.tolist()
+
+        local_vars = locals()
+        for var_name, var_value in local_vars.items():
+            if var_name in utils.csv_record.helper_local_var_names_for_log:
+                # logger.info(f'{var_name}: {local_vars[var_name]}')
+                utils.csv_record.epoch_reports[epoch][var_name] = utils.csv_record.convert_float32_to_float(local_vars[var_name])
+
         return
 
     

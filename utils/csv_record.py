@@ -1,6 +1,7 @@
-
+import json
 import csv
 import copy
+import numpy as np
 train_fileHeader = ["local_model", "round", "epoch", "internal_epoch", "average_loss", "accuracy", "correct_data",
                     "total_data"]
 test_fileHeader = ["model", "epoch", "average_loss", "accuracy", "correct_data", "total_data"]
@@ -23,6 +24,30 @@ dynamic_dist_fileheader = []
 dynamic_dist_result = []
 validator_pcnt_fileheader = ["adv", "benign", "tp", "fp", "tn", "fn", "adjusted_adv", "adjusted_benign"]
 validator_pcnt_result = []
+
+epoch_reports = {}
+
+
+def convert_float32_to_float(obj):
+    if isinstance(obj, dict):
+        # Recursively convert float32 values in nested dictionaries
+        return {k: convert_float32_to_float(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        # Recursively convert float32 values in nested lists
+        return [convert_float32_to_float(item) for item in obj]
+    elif isinstance(obj, np.float32) or isinstance(obj, np.float64) or isinstance(obj, np.float16) or isinstance(obj, np.int8) or isinstance(obj, np.int16) or isinstance(obj, np.int32) or isinstance(obj, np.int64):
+        # Convert float32 to float
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        # Convert numpy array to list
+        return obj.tolist()
+    else:
+        return obj
+
+def save_epoch_report(folder_path):
+    global epoch_reports
+    with open(f'{folder_path}/epoch_reports.json', 'w') as f:
+        json.dump(epoch_reports, f)
 
 def save_result_csv(epoch, is_posion,folder_path):
     train_csvFile = open(f'{folder_path}/train_result.csv', "w")
@@ -89,3 +114,120 @@ def add_weight_result(name,weight,alpha):
     weight_result.append(alpha)
 
 
+# target_model
+# updates
+# epoch
+# weight_accumulator
+# start_epoch
+# start_time
+# t
+# client_grads
+# alphas
+# delta_models
+# name
+# data
+# grads
+# norms
+# full_grads
+# output_layer_only
+# num_of_classes
+# no_clustering
+# no_ensemble
+# clustering_method
+# _
+# clusters_agg
+# idx
+# cluster
+# clstr
+# count_of_class_for_validator
+# iidx
+# count_of_class
+# num_of_clusters
+# adj_delta_models
+# agg_model
+# weight_vec
+# weight_vecs_by_cluster
+# i
+# aggregate_weights
+# update_per_layer
+# cluster_maliciousness
+# validation_container
+# f
+# valProcessor
+# wv_by_cluster
+# clipping_weights
+# green_clusters
+# mal_pcnts
+# cl_id
+# wv_print_str
+# w
+# all_validator_evaluations
+# evaluations_of_clusters
+# names
+# norm_median
+# self
+# val_idx
+# val_score_by_class
+# val_score_by_class_per_example
+# wv
+
+helper_local_var_names_for_log = [
+    # "target_model",
+    # "updates",
+    "epoch",
+    # "weight_accumulator",
+    "start_epoch",
+    "start_time",
+    "t",
+    # "client_grads",
+    "alphas",
+    # "delta_models",
+    # "name",
+    # "data",
+    # "grads",
+    "norms",
+    # "full_grads",
+    "output_layer_only",
+    "num_of_classes",
+    "no_clustering",
+    "no_ensemble",
+    "clustering_method",
+    # "_",
+    "clusters_agg",
+    # "idx",
+    # "cluster",
+    # "clstr",
+    "count_of_class_for_validator",
+    # "iidx",
+    # "count_of_class",
+    "num_of_clusters",
+    # "adj_delta_models",
+    # "agg_model",
+    # "weight_vec",
+    "weight_vecs_by_cluster",
+    # "i",
+    # "aggregate_weights",
+    # "update_per_layer",
+    "cluster_maliciousness",
+    "validation_container",
+    "before_imputation_validation_container",
+    "before_processing_validation_container",
+    # "f",
+    # "valProcessor",
+    "wv_by_cluster",
+    "clipping_weights",
+    # "green_clusters",
+    "mal_pcnts",
+    "cl_id",
+    # "wv_print_str",
+    "w",
+    # "all_validator_evaluations",
+    # "evaluations_of_clusters",
+    "names",
+    "norm_median",
+    # "self",
+    # "val_idx",
+    # "val_score_by_class",
+    # "val_score_by_class_per_example",
+    "wv"
+]

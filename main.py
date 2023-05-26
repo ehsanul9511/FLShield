@@ -31,7 +31,7 @@ import pickle
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 logger = logging.getLogger("logger")
-# logger.setLevel("ERROR")
+logger.setLevel("ERROR")
 
 criterion = torch.nn.CrossEntropyLoss()
 torch.manual_seed(1)
@@ -131,6 +131,8 @@ def run(params_loaded):
     with open(f'{helper.folder_path}/params.yaml', 'w') as f:
         yaml.dump(dict(helper.params), f)
 
+    csv_record.epoch_reports = {e: {} for e in range(int(helper.params['epochs'])+1)}
+
     # dictionary object to store test results and pickle it
     helper.result_dict = defaultdict(lambda: [])
 
@@ -228,6 +230,7 @@ def run(params_loaded):
                                                                        model=helper.target_model, is_poison=False,
                                                                        visualize=False, agent_name_key="global")
         csv_record.test_result.append(["global", temp_global_epoch, epoch_loss, epoch_acc, epoch_corret, epoch_total])
+        csv_record.epoch_reports[epoch]["epoch_loss"], csv_record.epoch_reports[epoch]["epoch_acc"] = epoch_loss, epoch_acc
         helper.result_dict['mainacc'].append(epoch_acc)
         if len(csv_record.scale_temp_one_row)>0:
             csv_record.scale_temp_one_row.append(round(epoch_acc, 4))
@@ -249,6 +252,7 @@ def run(params_loaded):
                                                                                         agent_name_key="global",
                                                                                         get_recall=True)
                 csv_record.recall_result.append(["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
+                csv_record.epoch_reports[epoch]["epoch_loss_c"], csv_record.epoch_reports[epoch]["epoch_acc_c"] = epoch_loss, epoch_acc_p
                 helper.result_dict['recall'].append(epoch_acc_p)
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_poison_label_flip(helper=helper,
                                                                                         epoch=temp_global_epoch,
@@ -262,6 +266,7 @@ def run(params_loaded):
             elif helper.params['attack_methods'] in [config.ATTACK_SEMANTIC]:
                 epoch_loss, epoch_acc_p, epoch_corret, epoch_total = test.Mytest_semantic_test(helper=helper,model=helper.target_model)
                 # epoch_acc_p = np.nan        
+            csv_record.epoch_reports[epoch]["epoch_loss_p"], csv_record.epoch_reports[epoch]["epoch_acc_p"] = epoch_loss, epoch_acc_p
 
             csv_record.posiontest_result.append(
                 ["global", temp_global_epoch, epoch_loss, epoch_acc_p, epoch_corret, epoch_total])
@@ -272,8 +277,11 @@ def run(params_loaded):
 
         helper.save_model(epoch=epoch, val_loss=epoch_loss)
         logger.info(f'Done in {time.time() - start_time} sec.')
-        logger.info(f"This run has a label: {helper.params['current_time']}. ")
+        # logger.info(f"This run has a label: {helper.params['current_time']}. ")
+        logger.info(f"Epoch {epoch} finished. ")
+        logger.info(f"Saving results to {helper.folder_path}.")
         csv_record.save_result_csv(epoch, helper.params['is_poison'], helper.folder_path)
+        csv_record.save_epoch_report(helper.folder_path)
 
 
     # save the result dictionary to a pickle file
@@ -305,8 +313,11 @@ if __name__ == '__main__':
         # parse unknown arguments
         for arg in unknown:
             if arg.startswith(("-", "--")):
-                k, v = arg.split("=")
-                setattr(args, k.strip("-"), v)
+                if "=" in arg:
+                    k, v = arg.split("=")
+                    setattr(args, k.strip("-"), v)
+                else:
+                    setattr(args, arg.strip("-"), True)
         print(f'args: {args}')
 
         # convert args to dictionary
@@ -318,6 +329,10 @@ if __name__ == '__main__':
         print(f'context: {context}')
 
         params_loaded = get_param_for_context(context)
+
+        for k, v in context.items():
+            if k not in params_loaded:
+                params_loaded[k] = v
 
 
     run(params_loaded)

@@ -8,6 +8,7 @@ import torch
 from torchmetrics.functional import pairwise_cosine_similarity, pairwise_euclidean_distance
 from tqdm import tqdm
 import copy
+import utils.csv_record as csv_record
 
 import logging
 logger = logging.getLogger("logger")
@@ -403,6 +404,11 @@ class ValidationProcessor:
         logger.info(f'zscores: {zscore([np.min(s[i]) for i in range(len(s))])}')
         # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
         logger.info(f'self.argsort_result: {self.argsort_result}')
+
+        csv_record.epoch_reports[epoch]['lowest_performing_classes'] = csv_record.convert_float32_to_float(self.lowest_performing_classes)
+        csv_record.epoch_reports[epoch]['lowest_score_for_each_cluster'] = csv_record.convert_float32_to_float([np.min(s[i]) for i in range(len(s))])
+        csv_record.epoch_reports[epoch]['zscores'] = csv_record.convert_float32_to_float(zscore([np.min(s[i]) for i in range(len(s))]))
+        csv_record.epoch_reports[epoch]['argsort_result'] = csv_record.convert_float32_to_float(self.argsort_result)
 
 
         # s = s[self.argsort_result[len(self.argsort_result)//2:]]

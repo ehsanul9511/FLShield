@@ -15,9 +15,9 @@ decay: 0.0005
 batch_size: 64
 # if type is cifar epoch is 300, else epoch is 150
 {% if get_type(type) in ['loan', 'cifar'] %}
-epochs: 300
+epochs: {{ epochs|default(300) }}
 {% else %}
-epochs: 150
+epochs: {{ epochs|default(150) }}
 {% endif %}
 {% if get_type(type) != 'cifar' %}
 internal_epochs: 1
@@ -74,6 +74,7 @@ afa_del_epsilon: 0.5
 
 {% if get_aggregation_methods(aggregation_methods) == 'our_aggr' %}
 injective_florida: {{ injective_florida|default('false') }}
+contrib_adjustment: {{ contrib_adjustment|default(1) }}
 validation_metric_options:
   - LIPC
   - loss_impact_only
@@ -163,7 +164,7 @@ trigger_num: {% if get_type(type) == 'loan' %}3{% else %}4{% endif %}
 {% endif %}
 
 {% if get_attack_methods(attack_methods) == 'attack_of_the_tails' %}
-edge_split: 0.5
+edge_split: {{ edge_split|default(0.1) }}
 {% endif %}
 
 {% set mal_participant_frac = mal_pcnt if mal_pcnt is defined else 0.4 %}

@@ -15,7 +15,7 @@ logger = logging.getLogger("logger")
 filepath = ""
 epoch_global = 0
 
-def cluster_fun(coses, k, clustering_method='Agglomerative'):
+def cluster_fun(coses, k, clustering_method='KMeans'):
     if clustering_method=='Agglomerative':
         clustering = AgglomerativeClustering(n_clusters=k, affinity='precomputed', linkage='complete').fit(coses)
     elif clustering_method=='KMeans':
@@ -28,7 +28,7 @@ def cluster_fun(coses, k, clustering_method='Agglomerative'):
         raise NotImplementedError
     return clustering
 
-def get_optimal_k_for_clustering(grads, clustering_method='Agglomerative'):
+def get_optimal_k_for_clustering(grads, clustering_method='KMeans'):
     coses = []
     nets = grads
     coses = cosine_distances(nets, nets)
@@ -49,7 +49,7 @@ def get_optimal_k_for_clustering(grads, clustering_method='Agglomerative'):
     return sil.index(max(sil))+minval, coses
 
 
-def cluster_grads(grads, clustering_method='Spectral'):
+def cluster_grads(grads, clustering_method='KMeans'):
     # nets = [grad.numpy() for grad in grads]
     # nets = [np.array(grad) for grad in grads]
     nets = grads

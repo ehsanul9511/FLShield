@@ -5,6 +5,8 @@ import sys
 sys.path.append('../')
 import config
 
+import time
+
 
 def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=False, adv_index=-1, tqdm_disable=True, num_classes=10):
     device2 = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -18,17 +20,23 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
     count_per_class = {}
     loss = 0.
 
+    start = time.time()
+    times = []
+
     dataset_classes = {}
     if given_test_loader is not None:
         validation_dataset = copy.deepcopy(given_test_loader.dataset)
         if helper.params['attack_methods'] in [config.ATTACK_SEMANTIC]:
             validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.semantic_dataloader_correct.dataset])
         if helper.params['attack_methods'] in [config.ATTACK_AOTT] and False:
-            if not is_poisonous:
+            if not is_poisonous or True:
                 validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.clean_val_loader.dataset])
             else:
                 validation_dataset = torch.utils.data.ConcatDataset([validation_dataset, helper.poison_trainloader.dataset])
         test_loader = torch.utils.data.DataLoader(validation_dataset, batch_size=len(validation_dataset))
+
+    times.append(('data prep', time.time()-start))
+    start = time.time()
 
     for c in range(num_classes):
         count_per_class[c] = 0
@@ -67,6 +75,9 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
             data, targets = data.to(config.device), targets.to(config.device)
                                                           
     network.to(config.device)
+
+    times.append(('forward pass', time.time()-start))
+    start = time.time()
                                                         
             
     for class_label in range(num_classes):
@@ -89,6 +100,12 @@ def validation_test_fun(helper, network, given_test_loader=None, is_poisonous=Fa
             loss_by_class_per_example[class_label] = loss_by_class[class_label]/ count_per_class[class_label]
 
     validation_metric = helper.params['validation_metric'] if helper.params['validation_metric'] is not None else 'LIPC'
+
+    times.append(('lipc calculation', time.time()-start))
+    start = time.time()
+
+    times = [(name, time/sum([t[1] for t in times])) for name, time in times]
+    # print('Validation time breakdown: ', times)
 
     if validation_metric == 'LIPC':
         return loss_by_class, loss_by_class_per_example, count_per_class
