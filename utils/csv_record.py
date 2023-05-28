@@ -40,9 +40,9 @@ def convert_float32_to_float(obj):
         return float(obj)
     elif isinstance(obj, np.ndarray):
         # Convert numpy array to list
-        return obj.tolist()
+        return obj.tolist() 
     else:
-        return obj
+        return obj 
 
 def save_epoch_report(folder_path):
     global epoch_reports

@@ -619,11 +619,11 @@ class Helper:
                 trust_scores = [ts * cv for ts, cv in zip(trust_scores, clip_vals)]
                 weight_vec = trust_scores
 
-                contrib_adjustment = self.params['contrib_adjustment'] if self.params['contrib_adjustment'] is not None else 0.1
+                contrib_adjustment = self.params['contrib_adjustment'] if self.params['contrib_adjustment'] is not None else 2
 
                 # logger.info(f'weight_vec: {weight_vec}')
 
-                weight_vec = [elem * contrib_adjustment for elem in weight_vec]
+                weight_vec = [min(1, elem * contrib_adjustment) for elem in weight_vec]
                 weight_vec[idx] = 1
                 # logger.info(f'weight_vec: {weight_vec}')
                 weight_vec = weight_vec / np.sum(weight_vec)
