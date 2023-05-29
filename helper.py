@@ -619,16 +619,22 @@ class Helper:
                 trust_scores = [ts * cv for ts, cv in zip(trust_scores, clip_vals)]
                 weight_vec = trust_scores
 
-                contrib_adjustment = self.params['contrib_adjustment'] if self.params['contrib_adjustment'] is not None else 2
+                contrib_adjustment = self.params['contrib_adjustment'] if self.params['contrib_adjustment'] is not None else 0.25
 
                 # logger.info(f'weight_vec: {weight_vec}')
 
-                weight_vec = [min(1, elem * contrib_adjustment) for elem in weight_vec]
+                # weight_vec = [min(1, elem * contrib_adjustment) for elem in weight_vec]
                 weight_vec[idx] = 1
+                others_contrib = sum([weight_vec[i] for i in range(len(weight_vec)) if i != idx])
+                weight_vec = [elem * contrib_adjustment/others_contrib for elem in weight_vec]
+                weight_vec[idx] = 1 - contrib_adjustment
                 # logger.info(f'weight_vec: {weight_vec}')
                 weight_vec = weight_vec / np.sum(weight_vec)
+                others_contrib = sum([weight_vec[i] for i in range(len(weight_vec)) if i != idx])
+                num_of_other_contrib = len([weight_vec[i] for i in range(len(weight_vec)) if i != idx and weight_vec[i] > 0])
+                logger.info(f'contribution amount: {others_contrib} from {num_of_other_contrib} clients, own contrib: {weight_vec[idx]}')
 
-                # logger.info(f'weight_vec: {weight_vec}')
+                logger.info(f'weight_vec: {weight_vec}')
 
             weight_vecs_by_cluster[idx] = weight_vec.tolist()
 

@@ -16,9 +16,9 @@ decay: 0.0005
 batch_size: 64
 # if type is cifar epoch is 300, else epoch is 150
 {% if get_type(type) in ['loan', 'cifar'] %}
-epochs: {{ epochs|default(300) }}
+epochs: {{ epochs|default(210) }}
 {% else %}
-epochs: {{ epochs|default(150) }}
+epochs: {{ epochs|default(50) }}
 {% endif %}
 {% if get_type(type) != 'cifar' %}
 internal_epochs: 1
@@ -26,12 +26,12 @@ internal_epochs: 1
 internal_epochs: 2
 {% endif %}
 aggr_epoch_interval: 1
-eta: 1
+eta: 0.1
 
-{% if get_type(type) == 'cifar' %}
-no_models: 25
-{% elif get_type(type) == 'loan' %}
+{% if get_type(type) == 'loan' %}
 no_models: 14
+{% elif get_aggregation_methods(aggregation_methods) == 'our_aggr' and injective_florida is defined%}
+no_models: 25
 {% else %}
 no_models: 100
 {% endif %}
@@ -74,7 +74,7 @@ afa_del_epsilon: 0.5
 
 {% if get_aggregation_methods(aggregation_methods) == 'our_aggr' %}
 injective_florida: {{ injective_florida|default('false') }}
-contrib_adjustment: {{ contrib_adjustment|default(2) }}
+contrib_adjustment: {{ contrib_adjustment|default(0.75) }}
 validation_metric_options:
   - LIPC
   - loss_impact_only
@@ -87,7 +87,7 @@ no_ensemble: false
 
 is_poison: {{ is_poison|default('true') }}
 {% if get_type(type) == 'cifar' %}
-internal_poison_epochs: 6
+internal_poison_epochs: 2
 {% elif get_type(type) == 'loan' %}
 internal_poison_epochs: 5
 {% else %}
@@ -167,7 +167,7 @@ trigger_num: {% if get_type(type) == 'loan' %}3{% else %}4{% endif %}
 edge_split: {{ edge_split|default(0.1) }}
 {% endif %}
 
-{% set mal_participant_frac = mal_pcnt if mal_pcnt is defined else 0.4 %}
+{% set mal_participant_frac = mal_pcnt | float if mal_pcnt is defined else 0.4 %}
 {% set number_of_adversary = mal_participant_frac * number_of_total_participants %}
 number_of_adversary_{{ get_attack_methods(attack_methods) }}: {{ number_of_adversary|round|int if number_of_adversary % 1 > 0 else number_of_adversary|int }}
 {% if get_type(type) == 'loan' %}
@@ -180,6 +180,7 @@ save_data: 1
 
 {% if get_noniid(noniid) == 'one_class_expert' %}
 bias: 0.5
+noniid: true
 {% else %}
 noniid: false
 {% if get_noniid(noniid) == 'sampling_dirichlet' %}

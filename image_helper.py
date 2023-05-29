@@ -37,6 +37,19 @@ from tqdm import tqdm
 from collections import Counter
 
 
+class PixelPattern(torch.nn.Module):
+    def __init__(self, patterns, image):
+        super(PixelPattern, self).__init__()
+        self.pattern = torch.tensor(-1, dtype=torch.float32, device=device, requires_grad=True).repeat(image.shape)
+        for pos in patterns:
+            self.pattern[0][pos[0]][pos[1]] = 1
+            self.pattern[1][pos[0]][pos[1]] = 1
+            self.pattern[2][pos[0]][pos[1]] = 1
+
+    def forward(self, x):
+        # return the max of the pattern and the image for each pixel
+        return torch.max(x, self.pattern)
+
 class ImageHelper(Helper):
 
     def create_model(self):
@@ -696,7 +709,14 @@ class ImageHelper(Helper):
 
             # split train_data into validation data
             # if self.params['validation']:
-            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data, val_pcnt=0.3)
+            self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data, val_pcnt=0.1)
+
+            if self.params['attack_methods'] == config.ATTACK_DBA:
+                self.triggers = []
+                sample_image = self.train_data[0][1].dataset[0][0]
+                for i in range(self.params['trigger_num']):
+                    self.triggers.append(PixelPattern(self.params[f'{i}_poison_pattern'], sample_image))
+
 
             self.test_data = self.get_test()
             self.test_data_poison ,self.test_targetlabel_data = self.poison_test_dataset()
@@ -903,7 +923,7 @@ class ImageHelper(Helper):
 
         new_images = new_images.to(device)
         new_targets = new_targets.to(device).long()
-        return new_images,new_targets,poison_count    
+        return new_images,new_targets,poison_count  
 
     def get_poison_batch(self, bptt,adversarial_index=-1, evaluation=False, special_attack=False):
         if 'special_attack' in self.params and self.params['special_attack']:
@@ -959,6 +979,15 @@ class ImageHelper(Helper):
             new_images.requires_grad_(False)
             new_targets.requires_grad_(False)
         return new_images,new_targets,poison_count
+
+    def add_pixel_pattern_gpu(self,ori_image,adversarial_index):
+        image = ori_image.clone().detach().requires_grad_(True).to(device)
+        if adversarial_index == -1:
+            for i in range(0,self.params['trigger_num']):
+                image = self.triggers[i](image)
+        else:
+            image = self.triggers[adversarial_index%4](image)
+        return image.clone().detach().requires_grad_(True).to(device)
 
     def add_pixel_pattern(self,ori_image,adversarial_index):
         image = copy.deepcopy(ori_image)

@@ -43,7 +43,7 @@ import yaml
 
 def get_context(type='cifar',
                 aggregation_methods='our_aggr',
-                injective_florida=False,
+                # injective_florida=False,
                 attack_methods='targeted_label_flip',
                 noniid=False,
                 resumed_model=True,
@@ -53,7 +53,7 @@ def get_context(type='cifar',
     context = {
         'type': type,
         'aggregation_methods': aggregation_methods,
-        'injective_florida': injective_florida,
+        # 'injective_florida': injective_florida,
         'attack_methods': attack_methods,
         'noniid': noniid,
         'resumed_model': resumed_model,
@@ -86,8 +86,7 @@ def get_param_for_context(context=None):
 def run(params_loaded):
     params_loaded = defaultdict(lambda: None, params_loaded)
     print(f'gpu requested: {params_loaded["gpu"]}')
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(params_loaded['gpu'])
-    config.set_device(f'cuda:{params_loaded["gpu"]}')
+    # os.environ['CUDA_VISIBLE_DEVICES'] = str(params_loaded['gpu'])
     current_time = datetime.datetime.now().strftime('%b.%d_%H.%M.%S')
     if params_loaded['type'] == config.TYPE_LOAN:
         helper = LoanHelper(current_time=current_time, params=params_loaded,
@@ -121,7 +120,6 @@ def run(params_loaded):
     else:
         helper = None
 
-    print(config.device)
     
     logger.info(f'load data done')
     helper.create_model()

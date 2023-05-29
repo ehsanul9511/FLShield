@@ -11,6 +11,7 @@ plots/
 *.out
 # *.ipynb
 # *.sh
+tmux*.sh
 *.pt
 *.pdf
 *.png
@@ -26,3 +27,4 @@ ablation_study.py
 cmds.txt
 temp.csv
 latexmaker/
+saved_results/*
