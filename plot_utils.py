@@ -45,8 +45,8 @@ def get_tpr_tnr(epoch_report):
 
         # calculate tpr, tnr using sklearn
         tp, fn, fp, tn = confusion_matrix(mal_gt, mal_pred).ravel()
-        tpr = tp / (tp + fn)
-        tnr = tn / (tn + fp)
+        tpr = 100 * tp / (tp + fn)
+        tnr = 100 * tn / (tn + fp)
         return tpr, tnr
     except:
         return np.nan, np.nan
@@ -116,3 +116,20 @@ def get_mal_val_type_results(type='cifar'):
     avg_tpr = {aggr_method: {mal_val: {attack_method: get_average_tpr_tnr(epoch_reports[aggr_method][mal_val][attack_method], range(201, 211))[0] for attack_method in attack_methods} for mal_val in mal_val_type} for aggr_method in aggregation_methods}
     avg_tnr = {aggr_method: {mal_val: {attack_method: get_average_tpr_tnr(epoch_reports[aggr_method][mal_val][attack_method], range(201, 211))[1] for attack_method in attack_methods} for mal_val in mal_val_type} for aggr_method in aggregation_methods}
     return final_results, avg_tpr, avg_tnr
+
+def get_contrib_adj_results(type='cifar'):
+    contrib_adj = [0, 0.25, 0.5, 0.75]
+    attack_methods= ['targeted_label_flip', 'dba']
+    # file_paths = {adj: {attack_method: f'saved_results/contrib_adjustment/contrib_adj_{adj}_cifar_{attack_method}' for attack_method in attack_methods} for adj in contrib_adj}
+    # epoch_reports = {adj: {attack_method: get_epoch_reports_json(file_path) for attack_method, file_path in file_paths[adj].items()} for adj in contrib_adj}
+    # final_results = {adj: {attack_method: get_relevant_metric_perf(epoch_reports[adj][attack_method]) for attack_method in attack_methods} for adj in contrib_adj}
+    file_paths = {attack_method: {adj: f'saved_results/contrib_adjustment/contrib_adj_{adj}_cifar_{attack_method}' for adj in contrib_adj} for attack_method in attack_methods}
+    epoch_reports = {attack_method: {adj: get_epoch_reports_json(file_path) for adj, file_path in file_paths[attack_method].items()} for attack_method in attack_methods}
+    # final_results = {attack_method: {adj: get_relevant_metric_perf(epoch_reports[attack_method][adj]) for adj in contrib_adj} for attack_method in attack_methods}
+    # avg_tpr = {attack_method: {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[0] for adj in contrib_adj} for attack_method in attack_methods}
+    # avg_tnr = {attack_method: {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[1] for adj in contrib_adj} for attack_method in attack_methods}
+    final_perf_tpr_tnr = {attack_method: {'performance': {adj: get_relevant_metric_perf(epoch_reports[attack_method][adj]) for adj in contrib_adj}, 'tpr': {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[0] for adj in contrib_adj}, 'tnr': {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[1] for adj in contrib_adj}} for attack_method in attack_methods}
+    # avg_tpr = {adj: {attack_method: get_average_tpr_tnr(epoch_reports[adj][attack_method], range(201, 211))[0] for attack_method in attack_methods} for adj in contrib_adj}
+    # avg_tnr = {adj: {attack_method: get_average_tpr_tnr(epoch_reports[adj][attack_method], range(201, 211))[1] for attack_method in attack_methods} for adj in contrib_adj}
+    # return final_results, avg_tpr, avg_tnr
+    return final_perf_tpr_tnr
