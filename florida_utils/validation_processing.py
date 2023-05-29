@@ -10,6 +10,8 @@ from tqdm import tqdm
 import copy
 import utils.csv_record as csv_record
 
+from config import device
+
 import logging
 logger = logging.getLogger("logger")
 
