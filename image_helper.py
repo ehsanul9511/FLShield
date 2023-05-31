@@ -711,7 +711,7 @@ class ImageHelper(Helper):
             # if self.params['validation']:
             self.train_data, self.val_data, self.reused_val_data = self.split_train_val(self.train_data, val_pcnt=0.1)
 
-            if self.params['attack_methods'] == config.ATTACK_DBA:
+            if self.params['attack_methods'] == config.ATTACK_DBA and False:
                 self.triggers = []
                 sample_image = self.train_data[0][1].dataset[0][0]
                 for i in range(self.params['trigger_num']):
