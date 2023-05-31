@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 import json
 import yaml
 from sklearn.metrics import confusion_matrix
@@ -133,3 +134,38 @@ def get_contrib_adj_results(type='cifar'):
     # avg_tnr = {adj: {attack_method: get_average_tpr_tnr(epoch_reports[adj][attack_method], range(201, 211))[1] for attack_method in attack_methods} for adj in contrib_adj}
     # return final_results, avg_tpr, avg_tnr
     return final_perf_tpr_tnr
+
+def get_adv_contrib_vs_score():
+    expnames = [
+        # 'noniid/noniid_sampling_dirichlet_cifar_our_aggr--injective_florida_dba',
+        # 'noniid/noniid_one_class_expert_cifar_our_aggr--injective_florida_dba',
+        # 'contrib_adjustment/contrib_adj_0.75_cifar_dba',
+        'noniid/noniid_sampling_dirichlet_cifar_our_aggr--injective_florida_targeted_label_flip',
+        'noniid/noniid_one_class_expert_cifar_our_aggr--injective_florida_targeted_label_flip',
+        'contrib_adjustment/contrib_adj_0.75_cifar_targeted_label_flip'
+    ]
+    all_epoch_reports = [get_epoch_reports_json('saved_results/' + expname) for expname in expnames]
+
+    num_of_adversary = 10
+    mal_ensemble_contrib_tuples = []
+    benign_ensemble_contrib_tuples = []
+    adv_contrib_vs_score = []
+    for epoch_reports in all_epoch_reports:
+        for e in range(201, 202):
+            epoch_report = epoch_reports[str(e)]
+            for i in epoch_report['weight_vecs_by_cluster']:
+                i = int(i)
+                adv_contrib = sum(epoch_report['weight_vecs_by_cluster'][str(i)][:num_of_adversary])
+                benign_contrib = sum(epoch_report['weight_vecs_by_cluster'][str(i)][num_of_adversary:])
+                score = epoch_report['lowest_score_for_each_cluster'][i]
+                adv_contrib_vs_score.append([adv_contrib, score, i< num_of_adversary])
+                if i < num_of_adversary:
+                    mal_ensemble_contrib_tuples.append((adv_contrib, benign_contrib))
+                else:
+                    benign_ensemble_contrib_tuples.append((adv_contrib, benign_contrib))
+
+    adv_contrib_vs_score = np.array(adv_contrib_vs_score).T
+
+    adv_contrib_vs_score_df = pd.DataFrame(adv_contrib_vs_score.T, columns=['adv_contrib', 'score', 'is_adv'])
+
+    return adv_contrib_vs_score_df
