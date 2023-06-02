@@ -16,7 +16,7 @@ decay: 0.0005
 batch_size: 64
 # if type is cifar epoch is 300, else epoch is 150
 {% if get_type(type) in ['loan', 'cifar'] %}
-epochs: {{ epochs|default(210) }}
+epochs: {{ epochs|default(250) }}
 {% else %}
 epochs: {{ epochs|default(50) }}
 {% endif %}
@@ -26,7 +26,7 @@ internal_epochs: 1
 internal_epochs: 2
 {% endif %}
 aggr_epoch_interval: 1
-eta: 0.1
+eta: {{ eta|default(0.1) }}
 
 {% if get_type(type) == 'loan' %}
 no_models: 14

@@ -800,7 +800,8 @@ class Helper:
                 wv_print_str += str(w)
         wv_print_str += ']'
         print(f'wv: {wv_print_str}')
-        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv))
+        ablation_aggregate_ensemble = self.params['ablation_aggregate_ensemble']
+        aggregate_weights = self.weighted_average_oracle(delta_models, torch.tensor(wv)) if not ablation_aggregate_ensemble else self.weighted_average_oracle(adj_delta_models, torch.tensor(wv))
 
         for name, data in target_model.state_dict().items():
             update_per_layer = aggregate_weights[name] * (self.params["eta"])

@@ -55,6 +55,15 @@ def cluster_grads(grads, clustering_method='KMeans'):
     nets = grads
     X = nets
 
+    if clustering_method == 'hdbscan':
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=len(grads)//2 + 1, min_samples=1, allow_single_cluster=True, metric = 'precomputed')
+        cluster_result = clusterer.fit_predict(np.array(cosine_distances(grads), dtype=np.float64))
+        clusters = [
+            [i for i, cluster in enumerate(cluster_result) if cluster == 0],
+            [i for i, cluster in enumerate(cluster_result) if cluster == -1]
+        ]
+        return cluster_result, clusters
+
     k, coses = get_optimal_k_for_clustering(grads, clustering_method)
 
     # logger.info(f'{filepath}')
@@ -95,6 +104,25 @@ def cluster_score_calc(clusters, labels):
     score = adjusted_rand_score(labels, cluster_results)
     logger.info(f'adjusted rand score: {score}')
     return score
+
+
+def fidelity_score(clusters, labels):
+    num_of_adversaries = sum(labels)
+
+    fidelity_count = 0
+    for cluster in clusters:
+        cluster_labels = [labels[i] for i in cluster]
+        # check how many unique labels are in the cluster
+        if len(set(cluster_labels)) == 1:
+            fidelity_count += len(cluster)
+        else:
+            # find which label is the majority between 0 and 1
+            majority_label = max(set(cluster_labels), key=cluster_labels.count)
+            # count how many of the majority label are in the cluster
+            fidelity_count += cluster_labels.count(majority_label)
+    logger.info(f'fidelity score: {fidelity_count / len(labels)}')
+    return fidelity_count / len(labels)
+            
 
     
 
@@ -143,7 +171,7 @@ if __name__ == '__main__':
     
     else:
         filepath = f'{args.location}'
-        clustering_methods = ['Agglomerative', 'KMeans', 'Spectral']
+        clustering_methods = ['Agglomerative', 'KMeans', 'Spectral', 'hdbscan']
         markers = ['o', 'x', 's']
 
         import pandas as pd
@@ -166,18 +194,19 @@ if __name__ == '__main__':
                 logger.info(f'Clustering Method: {clustering_method}')
                 _, clusters = cluster_grads(grads, clustering_method)
                 logger.info(f'Validator Groups: {clusters}')
-                score = cluster_score_calc(clusters, actual_labels)
+                # score = cluster_score_calc(clusters, actual_labels)
+                score = fidelity_score(clusters, actual_labels)
 
                 scores[clustering_method].append(score)
 
                 df.loc[epoch, clustering_method] = score
 
-        df.to_csv(f'cluster_comparison.csv')
+        df.to_csv(f'{args.location}/cluster_comparison.csv')
 
         # plot scores
-        import matplotlib.pyplot as plt
-        plt.figure()
-        for clustering_method in clustering_methods:
-            plt.plot(scores[clustering_method], label=clustering_method, marker=markers[clustering_methods.index(clustering_method)])
-        plt.legend()
-        plt.savefig(f'comparison.png')
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # for clustering_method in clustering_methods:
+        #     plt.plot(scores[clustering_method], label=clustering_method, marker=markers[clustering_methods.index(clustering_method)])
+        # plt.legend()
+        # plt.savefig(f'comparison.png')

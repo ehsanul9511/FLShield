@@ -1,7 +1,7 @@
 from sklearn.experimental import enable_iterative_imputer
 from sklearn.impute import IterativeImputer
 import numpy as np
-# from fancyimpute import KNN, SoftImpute, SimilarityWeightedAveraging, SimpleFill
+from fancyimpute import KNN, SoftImpute, SimilarityWeightedAveraging, SimpleFill
 import logging
 
 logger = logging.getLogger("logger")
@@ -119,57 +119,66 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--location', type=str, default=None)
-    parser.add_argument('--epoch', type=int, default=301)
+    parser.add_argument('--epoch', type=int, default=36)
     parser.add_argument('--missing_percentage', type=float, default=0.1)
 
     # parse args
     args = parser.parse_args()
-    
-    # look for pkl file at location directory
-    if args.location is not None:
-        import os
-        import pickle
-        pkl_path = os.path.join(args.location, f'validation_container_{args.epoch}.pkl')
-        if os.path.exists(pkl_path):
-            with open(pkl_path, 'rb') as f:
-                validation_container = pickle.load(f)
+    epoch = args.epoch
 
-    evaluations_of_clusters = validation_container['evaluations_of_clusters']
-    count_of_class_for_validator = validation_container['count_of_class_for_validator']
-    num_of_clusters = validation_container['num_of_clusters']
-    num_of_classes = validation_container['num_of_classes']
-    names = validation_container['names']
+    df_dict = {}
+    for e in range(epoch, epoch+11):
+        
+        # look for pkl file at location directory
+        if args.location is not None:
+            import os
+            import pickle
+            pkl_path = os.path.join(args.location, f'validation_container_{args.epoch}.pkl')
+            if os.path.exists(pkl_path):
+                with open(pkl_path, 'rb') as f:
+                    validation_container = pickle.load(f)
 
-    eval_tensor = convert_to_numpy(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names)
+        evaluations_of_clusters = validation_container['evaluations_of_clusters']
+        count_of_class_for_validator = validation_container['count_of_class_for_validator']
+        num_of_clusters = validation_container['num_of_clusters']
+        num_of_classes = validation_container['num_of_classes']
+        names = validation_container['names']
 
-    eval_tensor = eval_tensor.reshape((len(names), num_of_clusters*num_of_classes))
+        eval_tensor = convert_to_numpy(evaluations_of_clusters, count_of_class_for_validator, num_of_clusters, num_of_classes, names)
 
-    # method_names = ['KNN', 'SoftImpute', 'iterative', 'SimilarityWeightedAveraging', 'mean', 'median', 'zero', 'random']
-    method_names = ['KNN', 'SoftImpute', 'iterative', 'mean', 'median', 'random']
+        eval_tensor = eval_tensor.reshape((len(names), num_of_clusters*num_of_classes))
 
-    possible_values = [0.1, 0.2, 0.3, 0.4, 0.5]
+        method_names = ['KNN', 'SoftImpute', 'iterative', 'SimilarityWeightedAveraging', 'mean', 'median', 'zero', 'random']
+        # method_names = ['KNN', 'SoftImpute', 'iterative', 'mean', 'median', 'random']
 
-    # create a pandas dataframe with the possible values as columns and the method names as rows
-    import pandas as pd
-    from matplotlib import pyplot as plt
-    df = pd.DataFrame(columns=method_names, index=possible_values)
-    
-    for val in possible_values:
-        logger.info(f'missing_percentage: {val}')
-        eval_tensor_incomplete = eval_tensor.copy()
-        mask = np.random.rand(*eval_tensor_incomplete.shape) <  val # args.missing_percentage
-        eval_tensor_incomplete[mask] = np.nan
+        possible_values = [0.1, 0.2, 0.3, 0.4, 0.5]
 
-        for method_name in method_names:
-            eval_tensor_imputed = impute(eval_tensor_incomplete, method_name)
-            # logger.info(f'eval_tensor_imputed {method_name}: {eval_tensor_imputed[0]}')
-            mse = calc_mse(eval_tensor, eval_tensor_imputed, mask, method_name)
-            df.loc[val, method_name] = mse
+        # create a pandas dataframe with the possible values as columns and the method names as rows
+        import pandas as pd
+        from matplotlib import pyplot as plt
+        df = pd.DataFrame(columns=method_names, index=possible_values)
+        
+        for val in possible_values:
+            logger.info(f'missing_percentage: {val}')
+            eval_tensor_incomplete = eval_tensor.copy()
+            mask = np.random.rand(*eval_tensor_incomplete.shape) <  val # args.missing_percentage
+            eval_tensor_incomplete[mask] = np.nan
 
-    logger.info(f'df: {df}')
-    df.to_csv('imputation.csv')
-    df.plot(style=['o', 's' , 'v', 'x', 'd', 'p', 'h', '8'], figsize=(10, 10))
-    plt.savefig('imputation.pdf')
+            for method_name in method_names:
+                eval_tensor_imputed = impute(eval_tensor_incomplete, method_name)
+                # logger.info(f'eval_tensor_imputed {method_name}: {eval_tensor_imputed[0]}')
+                mse = calc_mse(eval_tensor, eval_tensor_imputed, mask, method_name)
+                df.loc[val, method_name] = mse
+
+        # logger.info(f'df: {df}')
+        df_dict[e] = df
+
+    # logger.info(f'df_dict: {df_dict}')
+    mean_df = pd.concat(df_dict.values()).groupby(level=0).mean()
+    logger.info(f'mean_df: {mean_df}')
+    mean_df.to_csv(f'{args.location}/imputation.csv')
+    # df.plot(style=['o', 's' , 'v', 'x', 'd', 'p', 'h', '8'], figsize=(10, 10))
+    # plt.savefig('imputation.pdf')
 
     # logger.info(f'evaluations_of_clusters: {evaluations_of_clusters[0]}')
 

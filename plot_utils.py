@@ -23,6 +23,39 @@ def get_params_json(file_path):
     except:
         print(f'No params.yaml found in {file_path}')
         return {}
+    
+def get_selected_cluster_idx(epoch_report):
+    try:
+        argsort_result = epoch_report['argsort_result']
+        filtered_clusters = argsort_result[:len(argsort_result)//2]
+        unfiltered_clusters = argsort_result[len(argsort_result)//2:]
+        return filtered_clusters, unfiltered_clusters
+    except:
+        return np.nan, np.nan
+    
+def get_adv_contrib_in_selected_clusters(epoch_report):
+    try:
+        num_of_adversary = 10
+        adv_contribs = []
+        _, selected_clusters = get_selected_cluster_idx(epoch_report)
+        for cluster_idx in selected_clusters:
+            weight_vec = epoch_report['weight_vecs_by_cluster'][str(cluster_idx)]
+            adv_contrib = np.sum(weight_vec[:num_of_adversary][:num_of_adversary])
+            adv_contribs.append(adv_contrib)
+        return adv_contribs
+    except:
+        return np.nan
+    
+def get_sneak_contrib(epoch_report):
+    try:
+        _, selected_clusters = get_selected_cluster_idx(epoch_report)
+        adv_contribs = get_adv_contrib_in_selected_clusters(epoch_report)
+        selected_wv = [epoch_report['wv'][i] for i in selected_clusters]
+        return np.dot(selected_wv, adv_contribs)
+    except:
+        return np.nan
+    
+
 
 def get_tpr_tnr(epoch_report):
     try:
@@ -90,6 +123,24 @@ def get_relevant_metric_perf(epoch_reports):
             return get_final_mainacc(epoch_reports)
     except:
         return np.nan
+    
+def read_cluster_comparison(filename):
+    df = pd.read_csv(filename)
+    df.index = df['epoch']
+    df = df.drop(columns=['epoch', 'epoch.1'])
+    # calculate mean of each column
+
+    return df.mean().to_dict()
+
+def read_imputation_df(filename):
+    df = pd.read_csv(filename, index_col=0)
+    # get the name of the first column
+    # first_col = df.columns[0]
+    # df.index = df[first_col]
+    df.index = df.index * 100
+    df.index = df.index.astype(int)
+    df = df.drop(columns=['zero', 'SoftImpute'])
+    return df
 
 def get_mal_pcnt_exp_results(type='fmnist'):
     mal_pcnts = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45]
@@ -169,3 +220,45 @@ def get_adv_contrib_vs_score():
     adv_contrib_vs_score_df = pd.DataFrame(adv_contrib_vs_score.T, columns=['adv_contrib', 'score', 'is_adv'])
 
     return adv_contrib_vs_score_df
+
+def get_ablation_aggregate_ensemble_results():
+    filepaths = {
+        True: 'saved_results/ablation_aggregate_ensemble/ablation_aggregate_ensemble',
+        False: 'saved_results/ablation_aggregate_ensemble/ablation_aggregate_ensemble_false/ablation_aggregation_ensemble_false'
+    }
+    epoch_reports = {k: get_epoch_reports_json(v) for k, v in filepaths.items()}
+    num_of_adversary = 10
+    result_dict = {}
+    result_dict['mean_sneak_contribs'] = {
+        True: np.mean([get_sneak_contrib(epoch_reports[True][str(i)]) for i in range(201, 211)]),
+        False: np.mean([sum(epoch_reports[False][str(i)]['wv'][:num_of_adversary]) for i in range(201, 211)])
+    }
+    result_dict['avg_tpr'] = {
+        True: get_average_tpr_tnr(epoch_reports[True], range(201, 211))[0],
+        False: get_average_tpr_tnr(epoch_reports[False], range(201, 211))[0]
+    }
+    result_dict['avg_tnr'] = {
+        True: get_average_tpr_tnr(epoch_reports[True], range(201, 211))[1],
+        False: get_average_tpr_tnr(epoch_reports[False], range(201, 211))[1]
+    }
+    result_dict['final_result'] = {
+        True: get_relevant_metric_perf(epoch_reports[True]),
+        False: get_relevant_metric_perf(epoch_reports[False])
+    }
+    result_dict_df = pd.DataFrame(result_dict)
+    return result_dict_df
+
+def get_cluster_comparison_results():
+    filepaths = {
+        k: f'saved_results/ablation_clustering_comparison/clustering_comp_{k}_fmnist_our_aggr_targeted_label_flip/' for k in ['one_class_expert', 'sampling_dirichlet', 'False']
+    }
+    cluster_results = {k: read_cluster_comparison(f'{v}/cluster_comparison.csv') for k, v in filepaths.items()}
+    cluster_results_df = pd.DataFrame(cluster_results).T
+    return cluster_results_df
+
+def get_imputation_comparison_results():
+    filepaths = {
+        k: f'saved_results/ablation_imputation_comparison/clustering_comp_{k}_fmnist_our_aggr_targeted_label_flip' for k in ['one_class_expert', 'sampling_dirichlet', 'False']
+    }
+    imputation_dfs = {k: read_imputation_df(f'{v}/imputation.csv') for k, v in filepaths.items()}
+    return imputation_dfs
