@@ -16,7 +16,7 @@ decay: 0.0005
 batch_size: 64
 # if type is cifar epoch is 300, else epoch is 150
 {% if get_type(type) in ['loan', 'cifar'] %}
-epochs: {{ epochs|default(250) }}
+epochs: {{ epochs|default(210) }}
 {% else %}
 epochs: {{ epochs|default(50) }}
 {% endif %}
@@ -31,7 +31,7 @@ eta: {{ eta|default(0.1) }}
 {% if get_type(type) == 'loan' %}
 no_models: 14
 {% elif get_aggregation_methods(aggregation_methods) == 'our_aggr' and injective_florida is defined%}
-no_models: 25
+no_models: {{ no_models|default(25) }}
 {% else %}
 no_models: 100
 {% endif %}
@@ -79,7 +79,7 @@ validation_metric_options:
   - LIPC
   - loss_impact_only
   - accuracy
-validation_metric: 'LIPC'
+validation_metric: {{ validation_metric|default('LIPC') }}
 no_ensemble: false
 {% endif %}
 
@@ -87,7 +87,7 @@ no_ensemble: false
 
 is_poison: {{ is_poison|default('true') }}
 {% if get_type(type) == 'cifar' %}
-internal_poison_epochs: 2
+internal_poison_epochs: 6
 {% elif get_type(type) == 'loan' %}
 internal_poison_epochs: 5
 {% else %}

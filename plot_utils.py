@@ -254,11 +254,70 @@ def get_cluster_comparison_results():
     }
     cluster_results = {k: read_cluster_comparison(f'{v}/cluster_comparison.csv') for k, v in filepaths.items()}
     cluster_results_df = pd.DataFrame(cluster_results).T
+    # rename columns
+    cluster_results_df = cluster_results_df.rename(columns={
+        'KMeans': 'K-Means',
+        'hdbscan': 'HDBSCAN',
+    })
+    cluster_results_df = cluster_results_df.rename(index={
+        'one_class_expert': 'One Class Expert',
+        'sampling_dirichlet': 'Dirichlet Sampling',
+        'False': 'IID'
+    })
     return cluster_results_df
+
+def get_cluster_comparison_n_cluster_2_results():
+    filepaths = {
+        k: f'saved_results/ablation_clustering_comparison/clustering_comp_{k}_fmnist_our_aggr_targeted_label_flip/' for k in ['one_class_expert', 'sampling_dirichlet', 'False']
+    }
+    cluster_results = {k: read_cluster_comparison(f'{v}/cluster_comparison_n_cluster_2.csv') for k, v in filepaths.items()}
+    cluster_results_df = pd.DataFrame(cluster_results).T
+    # rename columns
+    cluster_results_df = cluster_results_df.rename(columns={
+        'KMeans': 'K-Means',
+        'hdbscan': 'HDBSCAN',
+    })
+    cluster_results_df = cluster_results_df.rename(index={
+        'one_class_expert': 'One Class Expert',
+        'sampling_dirichlet': 'Dirichlet Sampling',
+        'False': 'IID'
+    })
+    return cluster_results_df
+
 
 def get_imputation_comparison_results():
     filepaths = {
         k: f'saved_results/ablation_imputation_comparison/clustering_comp_{k}_fmnist_our_aggr_targeted_label_flip' for k in ['one_class_expert', 'sampling_dirichlet', 'False']
     }
     imputation_dfs = {k: read_imputation_df(f'{v}/imputation.csv') for k, v in filepaths.items()}
+    for k in imputation_dfs:
+        imputation_dfs[k] = imputation_dfs[k].rename(columns={
+            'iterative': 'Iterative',
+            'SimilarityWeightedAveraging': 'SWA',
+            'mean': 'Mean',
+            'median': 'Median',
+            
+        })
+        imputation_dfs[k] = imputation_dfs[k].drop(columns=['random'])
+    
     return imputation_dfs
+
+def get_num_of_validators_results():
+    filepaths = {
+        k: f'saved_results/ablation_num_of_validators/num_of_validators_{k}_cifar_dba' for k in [10, 15, 20, 25]
+    }
+    epoch_reports = {
+        k: get_epoch_reports_json(f'{filepath}') for k, filepath in filepaths.items()
+    }
+    results_dict = {}
+    results_dict['BA'] = {
+        k: get_relevant_metric_perf(epoch_reports[k]) for k in epoch_reports.keys()
+    }
+    results_dict['Avg TPR'] = {
+        k: get_average_tpr_tnr(epoch_reports[k], range(201, 211))[0] for k in epoch_reports.keys()
+    }
+    results_dict['Avg TNR'] = {
+        k: get_average_tpr_tnr(epoch_reports[k], range(201, 211))[1] for k in epoch_reports.keys()
+    }
+    result_dict_df = pd.DataFrame(results_dict)
+    return result_dict_df

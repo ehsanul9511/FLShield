@@ -48,6 +48,38 @@ def get_optimal_k_for_clustering(grads, clustering_method='KMeans'):
     # logger.info(f'Silhouette scores: {sil}')
     return sil.index(max(sil))+minval, coses
 
+def split_into_two_clusters(grads, clustering_method='KMeans'):
+    nets = grads
+    X = nets
+
+    if clustering_method == 'hdbscan':
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=len(grads)//2 + 1, min_samples=1, allow_single_cluster=True, metric = 'precomputed')
+        cluster_result = clusterer.fit_predict(np.array(cosine_distances(grads), dtype=np.float64))
+        clusters = [
+            [i for i, cluster in enumerate(cluster_result) if cluster == 0],
+            [i for i, cluster in enumerate(cluster_result) if cluster == -1]
+        ]
+        return cluster_result, clusters
+
+    # k, coses = get_optimal_k_for_clustering(grads, clustering_method)
+
+    # logger.info(f'{filepath}')
+    # np.save(f'{filepath}/coses_{epoch_global}.npy', coses)
+
+    coses = cosine_distances(nets, nets)
+    k = 2
+
+    clustering = cluster_fun(coses, k, clustering_method)
+
+    clusters = [[] for _ in range(k)]
+    for i, label in enumerate(clustering.labels_.tolist()):
+        clusters[label].append(i)
+    for cluster in clusters:
+        cluster.sort()
+    clusters.sort(key = lambda cluster: len(cluster), reverse = True)
+
+    return clustering.labels_, clusters
+
 
 def cluster_grads(grads, clustering_method='KMeans'):
     # nets = [grad.numpy() for grad in grads]
@@ -192,7 +224,8 @@ if __name__ == '__main__':
 
             for clustering_method in clustering_methods:
                 logger.info(f'Clustering Method: {clustering_method}')
-                _, clusters = cluster_grads(grads, clustering_method)
+                # _, clusters = cluster_grads(grads, clustering_method)
+                _, clusters = split_into_two_clusters(grads, clustering_method)
                 logger.info(f'Validator Groups: {clusters}')
                 # score = cluster_score_calc(clusters, actual_labels)
                 score = fidelity_score(clusters, actual_labels)
@@ -201,7 +234,9 @@ if __name__ == '__main__':
 
                 df.loc[epoch, clustering_method] = score
 
-        df.to_csv(f'{args.location}/cluster_comparison.csv')
+        # df.to_csv(f'{args.location}/cluster_comparison.csv')
+        logger.info(df)
+        df.to_csv(f'{args.location}/cluster_comparison_n_cluster_2.csv')
 
         # plot scores
         # import matplotlib.pyplot as plt
