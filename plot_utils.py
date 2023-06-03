@@ -6,12 +6,30 @@ import json
 import yaml
 from sklearn.metrics import confusion_matrix
 
+defense_name_dict = {
+    'mean': 'Mean',
+    'mean--oracle_mode': 'Oracle',
+    'our_aggr': 'FLORIDA$^{\clubsuit}$',
+    'our_aggr--injective_florida': 'FLORIDA$^{\dagger}$',
+}
+
 
 def get_epoch_reports_json(file_path):
     with open(f'{file_path}/epoch_reports.json', 'r') as f:
         epoch_reports = json.load(f)
     params = get_params_json(file_path)
     epoch_reports['final_epoch'] = params['epochs']
+    epoch_reports['params'] = params
+    if params['resumed_model']:
+        starting_epoch_dict = {
+            'cifar': '201',
+            'emnist': '36',
+            'fmnist': '36',
+            'loan': '201'
+        }
+        epoch_reports['starting_epoch'] = starting_epoch_dict[params['type']]
+    else:
+        epoch_reports['starting_epoch'] = 1
     epoch_reports['attack_methods'] = params['attack_methods']
     return epoch_reports
 
@@ -23,6 +41,12 @@ def get_params_json(file_path):
     except:
         print(f'No params.yaml found in {file_path}')
         return {}
+    
+def get_mal_pcnt(epoch_reports):
+    try:
+        return 100 * epoch_reports[f'number_of_adversary_{epoch_reports["params"]["attack_methods"]}'] / epoch_reports['params']['number_of_total_participants']
+    except:
+        return np.nan
     
 def get_selected_cluster_idx(epoch_report):
     try:
@@ -78,16 +102,25 @@ def get_tpr_tnr(epoch_report):
                 mal_pred.append(1 if idx in filtered_clusters else 0)
 
         # calculate tpr, tnr using sklearn
-        tp, fn, fp, tn = confusion_matrix(mal_gt, mal_pred).ravel()
+        tp, fn, fp, tn = confusion_matrix(mal_gt, mal_pred, labels=[1, 0]).ravel()
         tpr = 100 * tp / (tp + fn)
         tnr = 100 * tn / (tn + fp)
         return tpr, tnr
     except:
         return np.nan, np.nan
 
-def get_average_tpr_tnr(epoch_reports, epoch_range):
+def get_average_tpr_tnr(epoch_reports, epoch_range=None):
     tprs = []
     tnrs = []
+    if epoch_reports['params']['aggregation_methods'] == 'mean':
+        if 'oracle_mode' in epoch_reports['params'].keys() and epoch_reports['params']['oracle_mode']:
+            return 100, 100
+        else:
+            return 0, 100
+        
+
+    if epoch_range is None:
+        epoch_range = range(int(epoch_reports['starting_epoch']), int(epoch_reports['final_epoch'])+1)
     for epoch in epoch_range:
         tpr, tnr = get_tpr_tnr(epoch_reports[str(epoch)])
         tprs.append(tpr)
@@ -147,8 +180,13 @@ def get_mal_pcnt_exp_results(type='fmnist'):
     aggregation_methods = ['mean', 'mean--oracle_mode', 'our_aggr', 'our_aggr--injective_florida']
     file_paths = {aggr_method: {mal_pcnt: f'saved_results/mal_pcnt/mal_pcnt_{mal_pcnt}_{type}_{aggr_method}' for mal_pcnt in mal_pcnts} for aggr_method in aggregation_methods}
     epoch_reports = {aggr_method: {mal_pcnt: get_epoch_reports_json(file_path) for mal_pcnt, file_path in file_paths[aggr_method].items()} for aggr_method in aggregation_methods}
-    final_recall = {aggr_method: {mal_pcnt: get_final_recall(epoch_reports[aggr_method][mal_pcnt]) for mal_pcnt in mal_pcnts} for aggr_method in aggregation_methods}
-    return final_recall
+    mal_pcnt_results = {aggr_method: {mal_pcnt: get_final_recall(epoch_reports[aggr_method][mal_pcnt]) for mal_pcnt in mal_pcnts} for aggr_method in aggregation_methods}
+    mal_pcnt_df = pd.DataFrame(mal_pcnt_results, index=mal_pcnt_results['mean'].keys(), columns=mal_pcnt_results.keys())
+    result_dict = {}
+    result_dict['mal_pcnt_df'] = mal_pcnt_df
+    result_dict['tpr_df'] = pd.DataFrame({aggr_method: {mal_pcnt: get_average_tpr_tnr(epoch_reports[aggr_method][mal_pcnt])[0] for mal_pcnt in mal_pcnts} for aggr_method in aggregation_methods}, index=mal_pcnts)
+    result_dict['tnr_df'] = pd.DataFrame({aggr_method: {mal_pcnt: get_average_tpr_tnr(epoch_reports[aggr_method][mal_pcnt])[1] for mal_pcnt in mal_pcnts} for aggr_method in aggregation_methods}, index=mal_pcnts)
+    return result_dict
 
 def get_noniid_exp_results(type='fmnist'):
     noniid = ["one_class_expert", "sampling_dirichlet"]
@@ -320,4 +358,44 @@ def get_num_of_validators_results():
         k: get_average_tpr_tnr(epoch_reports[k], range(201, 211))[1] for k in epoch_reports.keys()
     }
     result_dict_df = pd.DataFrame(results_dict)
+    return result_dict_df
+
+def get_use_mean_results():
+    filepaths = {
+        k: f'saved_results/ablation_use_mean/ablation_use_mean_{k}' for k in [True, False]
+    }
+    epoch_reports = {
+        k: get_epoch_reports_json(filepath) for k, filepath in filepaths.items()
+    }
+    result_dict = {}
+    result_dict['Recall'] = {
+        k: get_relevant_metric_perf(epoch_reports[k]) for k in epoch_reports.keys()
+    }
+    result_dict['TPR'] = {
+        k: get_average_tpr_tnr(epoch_reports[k])[0] for k in epoch_reports.keys()
+    }
+    result_dict['TNR'] = {
+        k: get_average_tpr_tnr(epoch_reports[k])[1] for k in epoch_reports.keys()
+    }
+    result_dict_df = pd.DataFrame(result_dict)
+    return result_dict_df
+
+def get_no_detector_results():
+    filepaths = {
+        k: f'saved_results/ablation_no_detector/ablation_no_detector_cifar_targeted_label_flip_our_aggr--injective_florida_naive_{k}' for k in [True, False]
+    }
+    epoch_reports = {
+        k: get_epoch_reports_json(filepath) for k, filepath in filepaths.items()
+    }
+    result_dict = {}
+    result_dict['Recall'] = {
+        k: get_relevant_metric_perf(epoch_reports[k]) for k in epoch_reports.keys()
+    }
+    result_dict['TPR'] = {
+        k: get_average_tpr_tnr(epoch_reports[k])[0] for k in epoch_reports.keys()
+    }
+    result_dict['TNR'] = {
+        k: get_average_tpr_tnr(epoch_reports[k])[1] for k in epoch_reports.keys()
+    }
+    result_dict_df = pd.DataFrame(result_dict)
     return result_dict_df

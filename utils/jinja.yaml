@@ -4,7 +4,7 @@
 {% macro get_noniid(noniid) %}{% if noniid is defined %}{{ noniid }}{% else %}iid{% endif %}{% endmacro %}
 
 gpu: {{ gpu|default('0') }}
-type: {{ type|default('fmnist') }}
+type: {{ type|default('cifar') }}
 test_batch_size: 64
 {% if get_type(type) != 'loan' %}
 lr: 0.1
@@ -87,9 +87,9 @@ no_ensemble: false
 
 is_poison: {{ is_poison|default('true') }}
 {% if get_type(type) == 'cifar' %}
-internal_poison_epochs: 6
+internal_poison_epochs: 2
 {% elif get_type(type) == 'loan' %}
-internal_poison_epochs: 5
+internal_poison_epochs: 2
 {% else %}
 internal_poison_epochs: 3
 {% endif %}

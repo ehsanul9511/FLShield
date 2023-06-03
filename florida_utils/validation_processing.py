@@ -8,9 +8,11 @@ import torch
 from torchmetrics.functional import pairwise_cosine_similarity, pairwise_euclidean_distance
 from tqdm import tqdm
 import copy
-import utils.csv_record as csv_record
+import os
+import sys
+if __name__ != '__main__':
+    import utils.csv_record as csv_record
 
-from config import device
 
 import logging
 logger = logging.getLogger("logger")
@@ -166,7 +168,7 @@ class ValidationProcessor:
         # create a torch tensor for the evaluation_of_clusters
         eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
-        torch.save(eval_tensor, 'eval_tensor.pt')
+        # torch.save(eval_tensor, 'eval_tensor.pt')
 
         # logger.info(f'eval_tensor: {eval_tensor}')
 
@@ -267,12 +269,12 @@ class ValidationProcessor:
             # benign_cluster_weight_tensor = benign_cluster_weight_tensor - 0.5 * d_loss_3
             # mal_cluster_weight_tensor = mal_cluster_weight_tensor - 0.5 * d_loss_2
             # logger.info(f'mal_cluster_weight_tensor: {mal_cluster_weight_tensor}')
-            mal_eval_tensor = mal_eval_tensor - 0.1 * d_loss   
+            mal_eval_tensor = mal_eval_tensor - 0.001 * d_loss   
 
         # from matplotlib import pyplot as plt
         # print(cluster_losses[400:500])
         # print(mal_val_impacts[400:500])
-        # torch.save(torch.tensor(cluster_losses), 'cluster_losses.pt')
+        torch.save(torch.tensor(cluster_losses), 'cluster_losses.pt')
         # plt.plot(np.convolve(cluster_losses, np.ones(10)/10, mode='valid'))
         # plt.savefig('cluster_losses.png')
         # plt.clf()
@@ -407,10 +409,14 @@ class ValidationProcessor:
         # self.argsort_result = np.argsort([np.mean((s[i])**(1/num_of_classes)) for i in range(len(s))])
         logger.info(f'self.argsort_result: {self.argsort_result}')
 
-        csv_record.epoch_reports[epoch]['lowest_performing_classes'] = csv_record.convert_float32_to_float(self.lowest_performing_classes)
-        csv_record.epoch_reports[epoch]['lowest_score_for_each_cluster'] = csv_record.convert_float32_to_float([np.min(s[i]) for i in range(len(s))])
-        csv_record.epoch_reports[epoch]['zscores'] = csv_record.convert_float32_to_float(zscore([np.min(s[i]) for i in range(len(s))]))
-        csv_record.epoch_reports[epoch]['argsort_result'] = csv_record.convert_float32_to_float(self.argsort_result)
+        if self.params['use_mean_LIPC']:
+            self.argsort_result = np.argsort([np.mean((s[i])) for i in range(len(s))])
+
+        if 'csv_record' in sys.modules:
+            csv_record.epoch_reports[epoch]['lowest_performing_classes'] = csv_record.convert_float32_to_float(self.lowest_performing_classes)
+            csv_record.epoch_reports[epoch]['lowest_score_for_each_cluster'] = csv_record.convert_float32_to_float([np.min(s[i]) for i in range(len(s))])
+            csv_record.epoch_reports[epoch]['zscores'] = csv_record.convert_float32_to_float(zscore([np.min(s[i]) for i in range(len(s))]))
+            csv_record.epoch_reports[epoch]['argsort_result'] = csv_record.convert_float32_to_float(self.argsort_result)
 
 
         # s = s[self.argsort_result[len(self.argsort_result)//2:]]
