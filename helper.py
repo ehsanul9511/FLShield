@@ -558,6 +558,10 @@ class Helper:
             logger.info(f'Clustering: Time: {time.time() - t}')
         t = time.time()
 
+        if self.params['track_grad_similarity']:
+            all_cos_dists = cosine_distances(grads, grads)
+            all_euclidean_dists = euclidean_distances(grads, grads)
+
         if self.get_param_val('ablation_hard_mixture') is not None:
             benign_rate = self.get_param_val('ablation_hard_mixture')
             benign_spillover = int(benign_rate * len(self.adversarial_namelist))
@@ -825,7 +829,6 @@ class Helper:
             if var_name in utils.csv_record.helper_local_var_names_for_log:
                 # logger.info(f'{var_name}: {local_vars[var_name]}')
                 utils.csv_record.epoch_reports[epoch][var_name] = utils.csv_record.convert_float32_to_float(local_vars[var_name])
-
         return
 
     

@@ -229,5 +229,7 @@ helper_local_var_names_for_log = [
     # "val_idx",
     # "val_score_by_class",
     # "val_score_by_class_per_example",
-    "wv"
+    "wv",
+    "all_cos_dists",
+    "all_euclidean_dists"
 ]

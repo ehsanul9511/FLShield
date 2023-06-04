@@ -69,6 +69,19 @@ def get_adv_contrib_in_selected_clusters(epoch_report):
         return adv_contribs
     except:
         return np.nan
+
+def get_benign_contrib_in_selected_clusters(epoch_report):
+    try:
+        num_of_adversary = 10
+        ben_contribs = []
+        _, selected_clusters = get_selected_cluster_idx(epoch_report)
+        for cluster_idx in selected_clusters:
+            weight_vec = epoch_report['weight_vecs_by_cluster'][str(cluster_idx)]
+            ben_contrib = np.sum(weight_vec[num_of_adversary:][:num_of_adversary])
+            ben_contribs.append(ben_contrib)
+        return ben_contribs
+    except:
+        return np.nan
     
 def get_sneak_contrib(epoch_report):
     try:
@@ -78,8 +91,6 @@ def get_sneak_contrib(epoch_report):
         return np.dot(selected_wv, adv_contribs)
     except:
         return np.nan
-    
-
 
 def get_tpr_tnr(epoch_report):
     try:
@@ -210,14 +221,8 @@ def get_mal_val_type_results(type='cifar'):
 def get_contrib_adj_results(type='cifar'):
     contrib_adj = [0, 0.25, 0.5, 0.75]
     attack_methods= ['targeted_label_flip', 'dba']
-    # file_paths = {adj: {attack_method: f'saved_results/contrib_adjustment/contrib_adj_{adj}_cifar_{attack_method}' for attack_method in attack_methods} for adj in contrib_adj}
-    # epoch_reports = {adj: {attack_method: get_epoch_reports_json(file_path) for attack_method, file_path in file_paths[adj].items()} for adj in contrib_adj}
-    # final_results = {adj: {attack_method: get_relevant_metric_perf(epoch_reports[adj][attack_method]) for attack_method in attack_methods} for adj in contrib_adj}
     file_paths = {attack_method: {adj: f'saved_results/contrib_adjustment/contrib_adj_{adj}_cifar_{attack_method}' for adj in contrib_adj} for attack_method in attack_methods}
     epoch_reports = {attack_method: {adj: get_epoch_reports_json(file_path) for adj, file_path in file_paths[attack_method].items()} for attack_method in attack_methods}
-    # final_results = {attack_method: {adj: get_relevant_metric_perf(epoch_reports[attack_method][adj]) for adj in contrib_adj} for attack_method in attack_methods}
-    # avg_tpr = {attack_method: {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[0] for adj in contrib_adj} for attack_method in attack_methods}
-    # avg_tnr = {attack_method: {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[1] for adj in contrib_adj} for attack_method in attack_methods}
     final_perf_tpr_tnr = {attack_method: {'performance': {adj: get_relevant_metric_perf(epoch_reports[attack_method][adj]) for adj in contrib_adj}, 'tpr': {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[0] for adj in contrib_adj}, 'tnr': {adj: get_average_tpr_tnr(epoch_reports[attack_method][adj], range(201, 211))[1] for adj in contrib_adj}} for attack_method in attack_methods}
     # avg_tpr = {adj: {attack_method: get_average_tpr_tnr(epoch_reports[adj][attack_method], range(201, 211))[0] for attack_method in attack_methods} for adj in contrib_adj}
     # avg_tnr = {adj: {attack_method: get_average_tpr_tnr(epoch_reports[adj][attack_method], range(201, 211))[1] for attack_method in attack_methods} for adj in contrib_adj}
@@ -234,12 +239,13 @@ def get_adv_contrib_vs_score():
         'contrib_adjustment/contrib_adj_0.75_cifar_targeted_label_flip'
     ]
     all_epoch_reports = [get_epoch_reports_json('saved_results/' + expname) for expname in expnames]
+    noniid = ['sampling_dirichlet', 'one_class_expert', 'iid']
 
     num_of_adversary = 10
     mal_ensemble_contrib_tuples = []
     benign_ensemble_contrib_tuples = []
     adv_contrib_vs_score = []
-    for epoch_reports in all_epoch_reports:
+    for epoch_reports, name in zip(all_epoch_reports, noniid):
         for e in range(201, 202):
             epoch_report = epoch_reports[str(e)]
             for i in epoch_report['weight_vecs_by_cluster']:
@@ -247,7 +253,7 @@ def get_adv_contrib_vs_score():
                 adv_contrib = sum(epoch_report['weight_vecs_by_cluster'][str(i)][:num_of_adversary])
                 benign_contrib = sum(epoch_report['weight_vecs_by_cluster'][str(i)][num_of_adversary:])
                 score = epoch_report['lowest_score_for_each_cluster'][i]
-                adv_contrib_vs_score.append([adv_contrib, score, i< num_of_adversary])
+                adv_contrib_vs_score.append([adv_contrib, score, i< num_of_adversary, noniid.index(name)])
                 if i < num_of_adversary:
                     mal_ensemble_contrib_tuples.append((adv_contrib, benign_contrib))
                 else:
@@ -255,7 +261,7 @@ def get_adv_contrib_vs_score():
 
     adv_contrib_vs_score = np.array(adv_contrib_vs_score).T
 
-    adv_contrib_vs_score_df = pd.DataFrame(adv_contrib_vs_score.T, columns=['adv_contrib', 'score', 'is_adv'])
+    adv_contrib_vs_score_df = pd.DataFrame(adv_contrib_vs_score.T, columns=['adv_contrib', 'score', 'is_adv', 'noniid'])
 
     return adv_contrib_vs_score_df
 

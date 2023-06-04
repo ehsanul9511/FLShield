@@ -4,6 +4,7 @@ from sklearn.covariance import EllipticEnvelope
 from sklearn.cluster import KMeans
 from scipy.stats import zscore
 import numpy as np
+from matplotlib import pyplot as plt
 import torch
 from torchmetrics.functional import pairwise_cosine_similarity, pairwise_euclidean_distance
 from tqdm import tqdm
@@ -56,8 +57,9 @@ class ValidationProcessor:
         components = V[:, :2]
         data_2d = data_centered @ components
         torch.save(torch.tensor(data_2d), 'val_tensor.pt')
-        # plt.scatter(val_tensor[:,0], val_tensor[:,1])
+        plt.scatter(val_tensor[:,0], val_tensor[:,1])
         # plt.show()
+        plt.savefig('val_tensor.png')
 
     def filter_LIPC(self, val_array_normalized):
         outlier_prediction = [1 for _ in range(len(val_array_normalized))]
@@ -113,6 +115,9 @@ class ValidationProcessor:
     def fed_validation(self, num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator):
         eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
+        if self.params['save_validation_tensor'] or True:
+            torch.save(eval_tensor, f'{self.params["location"]}/eval_tensor.pt') if self.params['location'] is not None else torch.save(eval_tensor, 'eval_tensor.pt')
+
         eval_tensor = eval_tensor.reshape(len(names), -1)
 
         filter_layer = KMeans_Torch(n_clusters=2)
@@ -156,7 +161,8 @@ class ValidationProcessor:
         
         eval_tensor = self.generate_tensor(num_of_clusters, num_of_classes, names, evaluations_of_clusters, count_of_class_for_validator)
 
-        torch.save(eval_tensor, 'eval_tensor.pt')
+        logger.info(f'saving eval_tensor to naive_eval_tensor.pt')
+        torch.save(eval_tensor, f'naive_eval_tensor.pt')
         self.plot_PCA(eval_tensor.reshape(len(names), -1))
 
         return evaluations_of_clusters
@@ -249,7 +255,7 @@ class ValidationProcessor:
                 best_cluster_loss_min = loss
                 best_mal_eval_tensor = mal_eval_tensor.clone().detach()
 
-            cluster_losses.append(loss.clone().detach().numpy().reshape(1)[0])
+            # cluster_losses.append(loss.clone().detach().numpy().reshape(1)[0])
             mal_val_impacts.append((validation_filtering_tensor[:num_of_mal_validators].clone().detach().numpy().reshape(num_of_mal_validators)!=0).sum())
 
             # all_tensor_2 = torch.cat((mal_eval_tensor, benign_eval_tensor), dim=0).reshape(len(names), -1)
@@ -261,20 +267,25 @@ class ValidationProcessor:
 
             # if e%1 == 0:
             #     logger.info(f'epoch: {e} cluster_loss: {loss}, dist_loss: {dist_loss}')
+
+            distance_losses.append(dist_loss.clone().detach().numpy().reshape(1)[0])
             
-            loss = loss + 0.05 * dist_loss
+            loss = loss + 0.5 * dist_loss
+            cluster_losses.append(loss.clone().detach().numpy().reshape(1)[0])
             d_loss = torch.autograd.grad(loss, mal_eval_tensor, create_graph=True)[0]
             # d_loss_2 = torch.autograd.grad(loss, mal_cluster_weight_tensor, create_graph=True)[0]
             # d_loss_3 = torch.autograd.grad(loss, benign_cluster_weight_tensor, create_graph=True)[0]
             # benign_cluster_weight_tensor = benign_cluster_weight_tensor - 0.5 * d_loss_3
             # mal_cluster_weight_tensor = mal_cluster_weight_tensor - 0.5 * d_loss_2
             # logger.info(f'mal_cluster_weight_tensor: {mal_cluster_weight_tensor}')
-            mal_eval_tensor = mal_eval_tensor - 0.001 * d_loss   
+            mal_eval_tensor = mal_eval_tensor - 0.000001 * d_loss   
 
         # from matplotlib import pyplot as plt
         # print(cluster_losses[400:500])
         # print(mal_val_impacts[400:500])
         torch.save(torch.tensor(cluster_losses), 'cluster_losses.pt')
+        torch.save(torch.tensor(mal_val_impacts), 'mal_val_impacts.pt')
+        torch.save(torch.tensor(distance_losses), 'distance_losses.pt')
         # plt.plot(np.convolve(cluster_losses, np.ones(10)/10, mode='valid'))
         # plt.savefig('cluster_losses.png')
         # plt.clf()
@@ -456,6 +467,8 @@ if __name__ == '__main__':
 
     from collections import defaultdict
     validation_container['params'] = defaultdict(lambda: None, validation_container['params'])
+
+    validation_container['params']['location'] = args.location
 
     if args.mal_val_type is not None:
         validation_container['params']['mal_val_type'] = args.mal_val_type
