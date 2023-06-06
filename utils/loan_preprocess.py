@@ -54,7 +54,7 @@ for i in range(len(columns)):
             list_1.append(columns[i])
 
 # only keep the records with loan_status in [7, 1, 2, 4]
-df = df[df['loan_status'].isin([7, 1, 2, 4])]
+# df = df[df['loan_status'].isin([7, 1, 2, 4])]
 
 indices = []
 ls_vals = df['loan_status'].unique().tolist()

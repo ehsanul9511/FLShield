@@ -39,7 +39,7 @@ num_of_classes_dict = {
     TYPE_MNIST : 10,
     TYPE_EMNIST : 10,
     TYPE_FMNIST : 10,
-    TYPE_LOAN : 4
+    TYPE_LOAN : 9
 }
 
 target_class_dict = {

@@ -35,7 +35,7 @@ no_models: 14
 {% elif get_aggregation_methods(aggregation_methods) == 'our_aggr' and injective_florida is defined%}
 no_models: {{ no_models|default(25) }}
 {% else %}
-no_models: 100
+no_models: {{ no_models|default(100) }}
 {% endif %}
 {% if get_type(type) == 'loan' %}
 {% set number_of_total_participants = 51 %}
