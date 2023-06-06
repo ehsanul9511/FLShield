@@ -52,28 +52,49 @@ for i in range(len(columns)):
             df[columns[i]] = df[columns[i]] / 10000
         elif (df[columns[i]].mean() <= 10.0):
             list_1.append(columns[i])
-state_set = list(set(df.loc[:,'addr_state']))
+
+# only keep the records with loan_status in [7, 1, 2, 4]
+df = df[df['loan_status'].isin([7, 1, 2, 4])]
 
 indices = []
 ls_vals = df['loan_status'].unique().tolist()
 for i in range(len(ls_vals)):
     indices.append(df.index[df['loan_status'] == ls_vals[i]])
 
-print(indices)
+for i in range(len(indices)):
+    print(ls_vals[i], len(indices[i]))
 
-# save_dirs = '../data/loan/'
+# print(indices)
 
-# import os
-# if not os.path.exists(save_dirs):
-#     os.makedirs(save_dirs)
+# only kee
 
-# for j in range(len(state_set)):
-#     print('saving: ', state_set[j])
-#     data_new = df.loc[df['addr_state']== state_set[j]].drop(['addr_state'], axis=1)
-#     with open(save_dirs+'/loan_'+ str(state_set[j]) + '.csv', 'w', newline='',encoding='utf-8') as csv_file:
-#         csv_writer = csv.writer(csv_file)
-#         csv_writer.writerow(data_new.columns)
-#         for i in range(data_new.shape[0]):
-#             csv_writer.writerow(data_new.iloc[[i][0]])
+import random
 
-# print('done')
+for i in range(len(indices)):
+    # sample 10 indices
+    if len(indices[i]) > 10:
+        sample_indices = random.sample(list(indices[i]), 10)
+        # change addr_state value to FD
+        for idx in sample_indices:
+            df.loc[idx, 'addr_state'] = 'FD'
+
+
+state_set = list(set(df.loc[:,'addr_state']))
+
+
+save_dirs = '../loan/'
+
+import os
+if not os.path.exists(save_dirs):
+    os.makedirs(save_dirs)
+
+for j in range(len(state_set)):
+    print('saving: ', state_set[j])
+    data_new = df.loc[df['addr_state']== state_set[j]].drop(['addr_state'], axis=1)
+    with open(save_dirs+'/loan_'+ str(state_set[j]) + '.csv', 'w', newline='',encoding='utf-8') as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow(data_new.columns)
+        for i in range(data_new.shape[0]):
+            csv_writer.writerow(data_new.iloc[[i][0]])
+
+print('done')

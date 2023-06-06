@@ -130,8 +130,11 @@ class LoanHelper(Helper):
             self.participants_list.append(state_name)
             helper = StateHelper(params=params_loaded)
             file_path = filepath_prefix+ user_filename
-            if self.params['aggregation_methods'] == config.AGGR_FLTRUST and j == len(all_userfilename_list)-1:
-                file_path = f'{os.getcwd()}/data/loan_dump/loan_root_copy2.csv'
+            if state_name == ['ZZ']:
+                if self.params['aggregation_methods'] != config.AGGR_FLTRUST:
+                    continue
+            # if self.params['aggregation_methods'] == config.AGGR_FLTRUST and j == len(all_userfilename_list)-1:
+            #     file_path = f'{os.getcwd()}/data/loan_dump/loan_root_copy2.csv'
             helper.load_data(file_path)
             self.allStateHelperList.append(helper)
             helper.name = state_name

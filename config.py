@@ -34,6 +34,14 @@ TYPE_EMNIST='emnist'
 TYPE_FMNIST='fmnist'
 TYPE_TINYIMAGENET='tiny-imagenet-200'
 
+num_of_classes_dict = {
+    TYPE_CIFAR : 10,
+    TYPE_MNIST : 10,
+    TYPE_EMNIST : 10,
+    TYPE_FMNIST : 10,
+    TYPE_LOAN : 4
+}
+
 target_class_dict = {
     TYPE_CIFAR : {
         'easy': [0, 2],
@@ -58,7 +66,7 @@ target_class_dict = {
     TYPE_LOAN : {
         'easy': [1, 2],
         'medium': [1, 0],
-        'hard': [5, 1]
+        'hard': [1, 0]
     },
     TYPE_CELEBA : {
         'easy': [1, 2],

@@ -15,8 +15,10 @@ momentum: 0.9
 decay: 0.0005
 batch_size: 64
 # if type is cifar epoch is 300, else epoch is 150
-{% if get_type(type) in ['loan', 'cifar'] %}
+{% if get_type(type) in ['cifar'] %}
 epochs: {{ epochs|default(210) }}
+{% elif get_type(type) == 'loan' %}
+epochs: {{ epochs|default(300) }}
 {% else %}
 epochs: {{ epochs|default(50) }}
 {% endif %}

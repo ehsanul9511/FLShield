@@ -161,7 +161,7 @@ def get_relevant_metric_perf(epoch_reports):
         attack_methods = epoch_reports['attack_methods']
         if attack_methods in ['targeted_label_flip']:
             return get_final_recall(epoch_reports)
-        elif attack_methods in ['dba']:
+        elif attack_methods in ['dba', 'attack_of_the_tails', 'semantic_attack']:
             return get_final_asr(epoch_reports)
         elif attack_methods in ['inner_product_manipulation']:
             return get_final_mainacc(epoch_reports)

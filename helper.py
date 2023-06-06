@@ -347,6 +347,7 @@ class Helper:
                     if not torch.is_tensor(data):
                         # logger.info(f'name: {name}, data: {data}')
                         data = torch.FloatTensor(data)
+                    data = data.to(config.device)
                     update[name] = torch.zeros_like(data)
 
                 for j in range(0, len(local_model_update_list)):
@@ -357,6 +358,7 @@ class Helper:
                             data = torch.FloatTensor(data)
                         # weight_accumulator[name].add_(local_model_update_dict[name])
                         # update[name].add_(local_model_update_dict[name])
+                        data = data.to(config.device)
                         weight_accumulator[name].add_(data)
                         update[name].add_(data)
                         detached_data= data.cpu().detach().numpy()
@@ -475,9 +477,14 @@ class Helper:
     def ipm_attack(self, updates):
         names = []
         delta_models = []
-        for name, data in updates.items():
-            delta_models.append(data[2])
-            names.append(name)
+        if self.params['aggregation_methods'] in [config.AGGR_GEO_MED]:
+            for name, data in updates.items():
+                delta_models.append(data[1])
+                names.append(name)
+        else:
+            for name, data in updates.items():
+                delta_models.append(data[2])
+                names.append(name)
 
         ipm_val = self.params['ipm_val']
         if ipm_val is None:
@@ -536,10 +543,11 @@ class Helper:
             np.save(f'{self.folder_path}/grads_{epoch}.npy', grads)
             np.save(f'{self.folder_path}/names_{epoch}.npy', names)
 
-        if self.params['type'] != config.TYPE_LOAN:
-            num_of_classes = 10
-        else:
-            num_of_classes = 9
+        # if self.params['type'] != config.TYPE_LOAN:
+        #     num_of_classes = 10
+        # else:
+        #     num_of_classes = 9
+        num_of_classes = config.num_of_classes_dict[self.params['type']]
 
         no_clustering = False
         if self.params['injective_florida']:
@@ -1119,8 +1127,6 @@ class Helper:
         actual_labels = [1 if names[idx] in self.adversarial_namelist else 0 for idx in range(len(names))]
         cluster_labels = [abs(res) for res in cluster_result]
         false_negative_labels = [idx for idx in range(len(cluster_labels)) if cluster_labels[idx] == 0 and actual_labels[idx] == 1]
-        for fn in false_negative_labels:
-            logger.info(f'{names[fn]} is a false negative with lsr {self.lsrs[names[fn]]}')
         logger.info(f'cluster_result: {cluster_result}')
         cm = confusion_matrix(actual_labels, cluster_labels)
         logger.info(f'cm: {cm}')
