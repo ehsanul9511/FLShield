@@ -95,11 +95,7 @@ internal_poison_epochs: 2
 {% else %}
 internal_poison_epochs: 3
 {% endif %}
-{% if get_type(type) != 'loan' %}
-poisoning_per_batch: 20
-{% else %}
-poisoning_per_batch: 10
-{% endif %}
+poisoning_per_batch: {{ poisoning_per_batch|default(10) }}
 {% if get_type(type) != 'loan' %}
 poison_lr: 0.05
 {% else %}

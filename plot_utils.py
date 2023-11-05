@@ -13,6 +13,10 @@ defense_name_dict = {
     'our_aggr--injective_florida': 'FLORIDA$^{\dagger}$',
 }
 
+def get_log(file_path):
+    with open(f'{file_path}/log.txt', 'r') as f:
+        log = f.readlines()
+    return log
 
 def get_epoch_reports_json(file_path):
     with open(f'{file_path}/epoch_reports.json', 'r') as f:
@@ -186,6 +190,12 @@ def read_imputation_df(filename):
     df = df.drop(columns=['zero', 'SoftImpute'])
     return df
 
+def get_cost_comp_results():
+    aggregation_methods = ['mean', 'mean--oracle_mode', 'our_aggr', 'our_aggr--injective_florida', 'fltrust', 'flame', 'afa', 'geom_median']
+    file_paths = {aggr_method: f'saved_results/cost_comp/cost_comp_{aggr_method}_cifar_targeted_label_flip' for aggr_method in aggregation_methods}
+    logs = {aggr_method: get_log(file_path) for aggr_method, file_path in file_paths.items()}
+    return logs
+
 def get_mal_pcnt_exp_results(type='fmnist'):
     mal_pcnts = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45]
     aggregation_methods = ['mean', 'mean--oracle_mode', 'our_aggr', 'our_aggr--injective_florida']
@@ -205,7 +215,7 @@ def get_noniid_exp_results(type='fmnist'):
     file_paths = {noniid: {aggr_method: f'saved_results/noniid/noniid_{noniid}_fmnist_{aggr_method}' for aggr_method in aggregation_methods} for noniid in noniid}
     epoch_reports = {noniid: {aggr_method: get_epoch_reports_json(file_path) for aggr_method, file_path in file_paths[noniid].items()} for noniid in noniid}
     final_results = {noniid: {aggr_method: {'recall': get_final_recall(epoch_reports[noniid][aggr_method]), 'asr': get_final_asr(epoch_reports[noniid][aggr_method]), 'mainacc': get_final_mainacc(epoch_reports[noniid][aggr_method])} for aggr_method in aggregation_methods} for noniid in noniid}
-    return final_results
+    return final_results, epoch_reports
 
 def get_mal_val_type_results(type='cifar'):
     mal_val_type = ['None', 'naive', 'adaptive']

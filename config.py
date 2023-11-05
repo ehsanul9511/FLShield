@@ -31,6 +31,7 @@ TYPE_MNIST='mnist'
 TYPE_TINYIMAGENET='tiny-imagenet-200'
 TYPE_CELEBA='celebA'
 TYPE_EMNIST='emnist'
+TYPE_EMNIST_LETTERS='emnist_letters'
 TYPE_FMNIST='fmnist'
 TYPE_TINYIMAGENET='tiny-imagenet-200'
 
