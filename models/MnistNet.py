@@ -41,6 +41,58 @@ class MnistNet(SimpleNet):
         # soft max is used for generate SDT data
         # return F.softmax(x, dim=1)
 
+
+class MnistNet_Letters(SimpleNet):
+    # def __init__(self, name=None, created_time=None):
+    #     super(MnistNet, self).__init__(f'{name}_Simple', created_time)
+
+    #     self.conv1 = nn.Conv2d(1, 20, 5, 1)
+    #     self.conv2 = nn.Conv2d(20, 50, 5, 1)
+    #     self.fc1 = nn.Linear(4 * 4 * 50, 500)
+    #     self.fc2 = nn.Linear(500, 10)
+    #     # self.fc2 = nn.Linear(28*28, 10)
+
+    def __init__(self, name=None, created_time=None):
+        super(MnistNet_Letters, self).__init__(f'{name}_Simple', created_time)
+
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        
+        # Max pooling
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        
+        # Dropout layers
+        self.dropout1 = nn.Dropout(0.25)
+        self.dropout2 = nn.Dropout(0.5)
+        
+        # Fully connected layers
+        self.fc1 = nn.Linear(128 * 3 * 3, 128) # Adjust the input features to match the output of the last conv layer
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 26) # 26 output classes for A-Z
+        
+    def forward(self, x):
+        # Apply conv followed by relu, then pooling
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = self.pool(F.relu(self.conv3(x)))
+        
+        # Flatten the output for the fully connected layers
+        x = x.view(-1, 128 * 3 * 3) # Flatten the tensor
+        
+        # Apply dropout
+        x = self.dropout1(x)
+        
+        # Fully connected layers with dropout
+        x = F.relu(self.fc1(x))
+        x = self.dropout2(x)
+        x = F.relu(self.fc2(x))
+        
+        # Final output layer
+        x = self.fc3(x)
+        
+        return F.log_softmax(x, dim=1)
+
 if __name__ == '__main__':
     model=MnistNet()
     print(model)

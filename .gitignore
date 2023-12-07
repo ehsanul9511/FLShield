@@ -9,7 +9,7 @@ utils/__pycache__/*
 plots/
 *.err
 *.out
-# *.ipynb
+*.ipynb
 # *.sh
 tmux*.sh
 *.pt
@@ -28,3 +28,5 @@ cmds.txt
 temp.csv
 latexmaker/
 saved_results/*
+plot_utils.py
+plot_utils_backup.py

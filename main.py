@@ -42,8 +42,8 @@ from jinja2 import Template
 import yaml
 
 def get_context(type='cifar',
-                aggregation_methods='our_aggr',
-                # injective_florida=False,
+                aggregation_methods='flshield',
+                # bijective_flshield=False,
                 attack_methods='targeted_label_flip',
                 noniid=False,
                 resumed_model=True,
@@ -53,7 +53,7 @@ def get_context(type='cifar',
     context = {
         'type': type,
         'aggregation_methods': aggregation_methods,
-        # 'injective_florida': injective_florida,
+        # 'bijective_flshield': bijective_flshield,
         'attack_methods': attack_methods,
         'noniid': noniid,
         'resumed_model': resumed_model,
@@ -107,6 +107,10 @@ def run(params_loaded):
     elif params_loaded['type'] == config.TYPE_EMNIST:
         helper = ImageHelper(current_time=current_time, params=params_loaded,
                              name=params_loaded.get('name', 'emnist'))
+        helper.load_data()
+    elif params_loaded['type'] == config.TYPE_EMNIST_LETTERS:
+        helper = ImageHelper(current_time=current_time, params=params_loaded,
+                             name=params_loaded.get('name', 'emnist_letters'))
         helper.load_data()
     elif params_loaded['type'] == config.TYPE_TINYIMAGENET:
         helper = ImageHelper(current_time=current_time, params=params_loaded,
@@ -197,10 +201,10 @@ def run(params_loaded):
             updates = helper.ipm_attack(updates)
 
         is_updated = True
-        if helper.params['aggregation_methods'] == config.AGGR_OURS:
+        if helper.params['aggregation_methods'] == config.AGGR_FLSHIELD:
             # helper.combined_clustering_guided_aggregation(helper.target_model, updates, epoch)
             # helper.combined_clustering_guided_aggregation_with_DP(helper.target_model, updates, epoch)
-            helper.combined_clustering_guided_aggregation_v2(helper.target_model, updates, epoch, weight_accumulator)
+            helper.flshield(helper.target_model, updates, epoch, weight_accumulator)
         elif helper.params['aggregation_methods'] == config.AGGR_AFA:
             is_updated, names, weights = helper.afa_method(helper.target_model, updates)
         elif helper.params['aggregation_methods'] == config.AGGR_FLTRUST:

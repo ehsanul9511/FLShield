@@ -14,7 +14,7 @@ from torchvision import datasets, transforms
 import numpy as np
 
 from models.resnet_cifar import ResNet18
-from models.MnistNet import MnistNet
+from models.MnistNet import MnistNet, MnistNet_Letters
 from models.resnet_tinyimagenet import resnet18
 from models.resnet_celebA import Resnet18
 logger = logging.getLogger("logger")
@@ -66,7 +66,11 @@ class ImageHelper(Helper):
                                    created_time=self.params['current_time'])
             target_model = MnistNet(name='Target',
                                     created_time=self.params['current_time'])
-
+        elif self.params['type']==config.TYPE_EMNIST_LETTERS:
+            local_model = MnistNet_Letters(name='Local',
+                                   created_time=self.params['current_time'])
+            target_model = MnistNet_Letters(name='Target',
+                                    created_time=self.params['current_time'])
         elif self.params['type']==config.TYPE_TINYIMAGENET:
 
             local_model= resnet18(name='Local',
@@ -108,6 +112,10 @@ class ImageHelper(Helper):
 
         elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST, config.TYPE_EMNIST]:
             new_model = MnistNet(name='Dummy',
+                                    created_time=self.params['current_time'])
+
+        elif self.params['type']==config.TYPE_EMNIST_LETTERS:
+            new_model = MnistNet_Letters(name='Dummy',
                                     created_time=self.params['current_time'])
 
         elif self.params['type']==config.TYPE_TINYIMAGENET:
@@ -606,11 +614,33 @@ class ImageHelper(Helper):
                         transforms.ToTensor(),
                         transforms.Normalize((0.1307,), (0.3081,))
                     ]))
+                if self.params['synthetic_class_imbalance']:
+                    self.classes_dict = self.build_classes_dict()
+                    resampling_frac = [max(min(random.betavariate(0.9, 0.9), 1), 0.1) for _ in range(num_labels)]
+                    self.classes_dict = {k: self.classes_dict[k][:int(resampling_frac[k]*len(self.classes_dict[k]))] for k in self.classes_dict.keys()}
+                    self.train_dataset = torch.utils.data.ConcatDataset([torch.utils.data.Subset(self.train_dataset, self.classes_dict[k]) for k in self.classes_dict.keys()])
+                    logger.info(f'len of train_dataset: {len(self.train_dataset)}')
+                    logger.info(f'class sizes: {[len(self.classes_dict[k]) for k in self.classes_dict.keys()]}')
 
                 if self.params['attack_methods'] == config.ATTACK_AOTT:
                     self.poison_trainloader, _, self.poison_testloader, _, _ = load_poisoned_dataset(dataset = self.params['type'], fraction = 1, batch_size = self.params['batch_size'], test_batch_size = self.params['test_batch_size'], poison_type='ardis')
 
                     logger.info('poison train and test data from ARDIS loaded')
+            elif self.params['type'] == config.TYPE_EMNIST_LETTERS:
+                num_labels = 26
+                self.train_dataset = datasets.EMNIST(dataPath_emnist, split='letters', train=True, download=True,
+                                transform=transforms.Compose([
+                                    transforms.ToTensor(),
+                                    transforms.Normalize((0.1307,), (0.3081,))
+                                ]))
+                self.test_dataset = datasets.EMNIST(dataPath_emnist, split='letters', train=False, transform=transforms.Compose([
+                        transforms.ToTensor(),
+                        transforms.Normalize((0.1307,), (0.3081,))
+                    ]))
+
+                # emnist_letters dataset have labels 1 to 26, we need to change it to 0 to 25
+                self.train_dataset.targets = self.train_dataset.targets - 1
+                self.test_dataset.targets = self.test_dataset.targets - 1
             elif self.params['type'] == config.TYPE_TINYIMAGENET:
 
                 _data_transforms = {
@@ -693,6 +723,20 @@ class ImageHelper(Helper):
                         if len(dataset_per_worker) != 0:
                             train_loader = torch.utils.data.DataLoader(dataset_per_worker, batch_size=self.params['batch_size'], shuffle=True)
                             train_loaders.append((id_worker, train_loader))
+            elif self.params['varying_local_data_size']:
+                all_range = list(range(len(self.train_dataset)))
+                random.seed(42)
+                random.shuffle(all_range)
+                # make 100 local data sizes for 100 participants
+                # minimum 100, maximum 2000
+                mean_data_size = (len(all_range))//self.params['number_of_total_participants']
+                local_data_sizes = np.full(self.params['number_of_total_participants'], mean_data_size)
+                local_data_sizes[:14] = 100
+                local_data_sizes[14:19] = 2000
+                logger.info(f'local_data_sizes: {local_data_sizes}, sum: {sum(local_data_sizes)}')
+                local_data_indices = [(sum(local_data_sizes[:i]), sum(local_data_sizes[:i+1])) for i in range(len(local_data_sizes))]
+                train_loaders = [(pos, self.get_train_by_range(all_range, local_data_indices[pos])) for pos in tqdm(range(self.params['number_of_total_participants']))]
+                self.lsrs = [[1/num_labels for _ in range(num_labels)] for _ in range(self.params['number_of_total_participants'])]
             else:
                 ## sample indices for participants that are equally
                 logger.info('sampling indices for participants that are equally')
@@ -756,7 +800,12 @@ class ImageHelper(Helper):
 
         csv_record.epoch_reports["lsrs"] = self.lsrs
 
+        self.classes_dict = self.build_classes_dict()
+        logger.info('build_classes_dict done')
+        logger.info(f'class keys: {self.classes_dict.keys()}')
+
         # logger.info(f'lsrs ready: {self.lsrs}')
+        np.save(f'lsrs.npy', self.lsrs)
 
 
         # if self.params['is_random_namelist'] == False:
@@ -838,6 +887,20 @@ class ImageHelper(Helper):
         return ewd, ewl
 
         
+    def get_train_by_range(self, all_range, local_range):
+        """
+        This method is used along with Dirichlet distribution
+        :param params:
+        :param all_range:
+        :param local_range:
+        :return:
+        """
+        sub_indices = all_range[local_range[0]:local_range[1]]
+        train_subset = torch.utils.data.Subset(self.train_dataset, sub_indices)
+        train_loader = torch.utils.data.DataLoader(train_subset,
+                                                batch_size=self.params['batch_size'],
+                                                shuffle=True)
+        return train_loader
 
     def get_train_old(self, all_range, model_no):
         """
@@ -1005,7 +1068,7 @@ class ImageHelper(Helper):
                 image[2][pos[0]][pos[1]] = 1
 
 
-        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST, config.TYPE_EMNIST]:
+        elif self.params['type'] in [config.TYPE_MNIST, config.TYPE_FMNIST, config.TYPE_EMNIST, config.TYPE_EMNIST_LETTERS]:
 
             for i in range(0, len(poison_patterns)):
                 pos = poison_patterns[i]

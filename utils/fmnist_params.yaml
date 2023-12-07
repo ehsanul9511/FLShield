@@ -20,7 +20,7 @@ attack_method_options:
   - dba
   - server_imitation_attack
 attack_methods: 'targeted_label_flip'
-injective_florida: false
+bijective_flshield: false
 geom_median_maxiter: 10
 fg_use_memory: true
 participants_namelist: [0,1,2,3,4,5,6,7,8,9]

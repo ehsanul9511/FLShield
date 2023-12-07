@@ -28,6 +28,7 @@ def Mytest(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
+            or helper.params['type'] == config.TYPE_EMNIST_LETTERS \
             or helper.params['type'] == config.TYPE_TINYIMAGENET\
             or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data
@@ -109,6 +110,7 @@ def Mytest_poison_label_flip(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
+            or helper.params['type'] == config.TYPE_EMNIST_LETTERS \
             or helper.params['type'] == config.TYPE_CELEBA \
             or helper.params['type'] == config.TYPE_TINYIMAGENET:
         data_iterator = helper.target_class_test_loader
@@ -129,9 +131,10 @@ def Mytest_poison_label_flip(helper, epoch,
     acc = 100.0 * (float(correct) / float(dataset_size))  if dataset_size!=0 else 0
     total_l = total_loss / dataset_size if dataset_size!=0 else 0
 
+    metric_name = "Recall" if get_recall else "ASR"
     main.logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
-                     'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
-                                                        total_l, correct, dataset_size,
+                     '{}: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
+                                                        total_l, metric_name, correct, dataset_size,
                                                         acc))
     # if visualize: # loss =total_l
     #     model.test_vis(vis=main.vis, epoch=epoch, acc=acc, loss=None,
@@ -181,6 +184,7 @@ def Mytest_poison(helper, epoch,
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
+            or helper.params['type'] == config.TYPE_EMNIST_LETTERS \
             or helper.params['type'] == config.TYPE_TINYIMAGENET\
             or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data_poison
@@ -198,7 +202,7 @@ def Mytest_poison(helper, epoch,
     acc = 100.0 * (float(correct) / float(poison_data_count))  if poison_data_count!=0 else 0
     total_l = total_loss / poison_data_count if poison_data_count!=0 else 0
     main.logger.info('___Test {} poisoned: {}, epoch: {}: Average loss: {:.4f}, '
-                     'Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
+                     'Backdoor Accuracy: {}/{} ({:.4f}%)'.format(model.name, is_poison, epoch,
                                                         total_l, correct, poison_data_count,
                                                         acc))
     if visualize: #loss = total_l
@@ -251,6 +255,7 @@ def Mytest_poison_trigger(helper, model, adver_trigger_index):
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
+            or helper.params['type'] == config.TYPE_EMNIST_LETTERS \
             or helper.params['type'] == config.TYPE_TINYIMAGENET\
             or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data_poison
@@ -312,6 +317,7 @@ def Mytest_poison_agent_trigger(helper, model, agent_name_key):
             or helper.params['type'] == config.TYPE_MNIST \
             or helper.params['type'] == config.TYPE_FMNIST \
             or helper.params['type'] == config.TYPE_EMNIST \
+            or helper.params['type'] == config.TYPE_EMNIST_LETTERS \
             or helper.params['type'] == config.TYPE_TINYIMAGENET\
             or helper.params['type'] == config.TYPE_CELEBA:
         data_iterator = helper.test_data_poison

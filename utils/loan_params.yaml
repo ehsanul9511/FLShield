@@ -17,7 +17,7 @@ baseline: true
 eta: 1
 # aggregation_methods Allowed values are: [ 'mean', 'geom_median','foolsgold']
 aggregation_methods: 'our_aggr'
-injective_florida: true
+bijective_flshield: true
 ipm_attack: false
 ipm_val: 5
 

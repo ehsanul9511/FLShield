@@ -25,10 +25,10 @@ from utils.utils import get_hash_from_param_file
 # import train
 # import test
 
-from florida_utils.validation_processing import ValidationProcessor
-from florida_utils.cluster_grads import cluster_grads as cluster_function
-from florida_utils.validation_test import validation_test
-from florida_utils.impute_validation import impute_validation
+from flshield_utils.validation_processing import ValidationProcessor
+from flshield_utils.cluster_grads import cluster_grads as cluster_function
+from flshield_utils.validation_test import validation_test
+from flshield_utils.impute_validation import impute_validation
 
 from torch.utils.data import SubsetRandomSampler
 from sklearn.cluster import AgglomerativeClustering, SpectralClustering, KMeans
@@ -297,7 +297,7 @@ class Helper:
                  number of training samples corresponding to the update, and update
                  is a list of variable weights
          """
-        if self.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_OURS, config.AGGR_AFA, config.AGGR_MEAN]:
+        if self.params['aggregation_methods'] in [config.AGGR_FLAME, config.AGGR_FLTRUST, config.AGGR_FLSHIELD, config.AGGR_AFA, config.AGGR_MEAN]:
             updates = dict()
             for i in range(0, len(state_keys)):
                 local_model_gradients = epochs_submit_update_dict[state_keys[i]][0][0] # agg 1 interval
@@ -504,7 +504,7 @@ class Helper:
         return updates
 
 
-    def combined_clustering_guided_aggregation_v2(self, target_model, updates, epoch, weight_accumulator):
+    def flshield(self, target_model, updates, epoch, weight_accumulator):
         start_epoch = self.start_epoch
         if epoch < start_epoch:
             self.fedavg(target_model, updates)
@@ -550,7 +550,7 @@ class Helper:
         num_of_classes = config.num_of_classes_dict[self.params['type']]
 
         no_clustering = False
-        if self.params['injective_florida']:
+        if self.params['bijective_flshield']:
             no_clustering = True
 
         no_ensemble = False
@@ -578,9 +578,11 @@ class Helper:
         clusters_agg = []
         logger.info('Clustering by model updates')
         for idx, cluster in enumerate(self.clusters_agg):
-            logger.info(f'cluster: {cluster}')
+            if not self.params['bijective_flshield']:
+                logger.info(f'cluster: {cluster}')
             clstr = [names[c] for c in cluster]
-            logger.info(f'names: {clstr}')
+            if not self.params['bijective_flshield']:
+                logger.info(f'names: {clstr}')
             clusters_agg.append(clstr)
 
 
@@ -644,9 +646,9 @@ class Helper:
                 weight_vec = weight_vec / np.sum(weight_vec)
                 others_contrib = sum([weight_vec[i] for i in range(len(weight_vec)) if i != idx])
                 num_of_other_contrib = len([weight_vec[i] for i in range(len(weight_vec)) if i != idx and weight_vec[i] > 0])
-                logger.info(f'contribution amount: {others_contrib} from {num_of_other_contrib} clients, own contrib: {weight_vec[idx]}')
+                # logger.info(f'contribution amount: {others_contrib} from {num_of_other_contrib} clients, own contrib: {weight_vec[idx]}')
 
-                logger.info(f'weight_vec: {weight_vec}')
+                # logger.info(f'weight_vec: {weight_vec}')
 
             weight_vecs_by_cluster[idx] = weight_vec.tolist()
 
@@ -761,7 +763,7 @@ class Helper:
         }
 
         with open(f'{self.folder_path}/validation_container_{epoch}.pkl', 'wb') as f:
-            logger.info(f'saving validation container to {self.folder_path}/validation_container_{epoch}.pkl with params type {type(self.params)}')
+            # logger.info(f'saving validation container to {self.folder_path}/validation_container_{epoch}.pkl with params type {type(self.params)}')
             pickle.dump(validation_container, f)
 
         before_processing_validation_container = copy.deepcopy(validation_container)

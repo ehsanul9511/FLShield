@@ -1,5 +1,5 @@
 {% macro get_type(type) %}{% if type is defined %}{{ type }}{% else %}fmnist{% endif %}{% endmacro %}
-{% macro get_aggregation_methods(aggregation_methods) %}{% if aggregation_methods is defined %}{{ aggregation_methods }}{% else %}our_aggr{% endif %}{% endmacro %}
+{% macro get_aggregation_methods(aggregation_methods) %}{% if aggregation_methods is defined %}{{ aggregation_methods }}{% else %}flshield{% endif %}{% endmacro %}
 {% macro get_attack_methods(attack_methods) %}{% if attack_methods is defined %}{{ attack_methods }}{% else %}targeted_label_flip{% endif %}{% endmacro %}
 {% macro get_noniid(noniid) %}{% if noniid is defined %}{{ noniid }}{% else %}iid{% endif %}{% endmacro %}
 
@@ -32,7 +32,7 @@ eta: {{ eta|default(0.1) }}
 
 {% if get_type(type) == 'loan' %}
 no_models: 14
-{% elif get_aggregation_methods(aggregation_methods) == 'our_aggr' and injective_florida is defined%}
+{% elif get_aggregation_methods(aggregation_methods) == 'flshield' and bijective_flshield is defined%}
 no_models: {{ no_models|default(25) }}
 {% else %}
 no_models: {{ no_models|default(100) }}
@@ -49,7 +49,7 @@ is_random_adversary: true
 
 
 
-# aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'our_aggr', 'afa', 'foolsgold']
+# aggregation_methods Allowed values are: [ 'mean', 'geom_median','flame', 'flshield', 'afa', 'foolsgold']
 aggregation_methods: {{ get_aggregation_methods(aggregation_methods) }}
 
 {% if get_aggregation_methods(aggregation_methods) == 'mean' %}
@@ -74,8 +74,8 @@ afa_epsilon: 2
 afa_del_epsilon: 0.5
 {% endif %}
 
-{% if get_aggregation_methods(aggregation_methods) == 'our_aggr' %}
-injective_florida: {{ injective_florida|default('false') }}
+{% if get_aggregation_methods(aggregation_methods) == 'flshield' %}
+bijective_flshield: {{ bijective_flshield|default('false') }}
 contrib_adjustment: {{ contrib_adjustment|default(0.75) }}
 validation_metric_options:
   - LIPC
@@ -117,7 +117,6 @@ s_norm: 1000000
 attack_methods_options:
   - 'targeted_label_flip'
   - 'dba'
-  - 'server_imitation_attack'
   - 'inner_product_manipulation'
   - 'attack_of_the_tails'
   - 'semantic_attack'
@@ -193,9 +192,9 @@ baseline: true
 camera_ready: false
 
 
-save_model: false
+save_model: true
 {% if get_type(type) != 'cifar' %}
-save_on_epochs: [10, 15, 20, 25, 30, 35]
+save_on_epochs: [1, 10, 15, 20, 25, 30, 35, 50]
 {% else %}
 save_on_epochs: [50, 100, 150, 200]
 {% endif %}
@@ -207,6 +206,8 @@ resumed_model_name: utils/model_bank/fmnist/model_last.pt.tar.epoch_35
 resumed_model_name: utils/model_bank/cifar/model_last.pt.tar.epoch_200
 {% elif get_type(type) == 'emnist' %}
 resumed_model_name: utils/model_bank/emnist/model_last.pt.tar.epoch_35
+{% elif get_type(type) == 'emnist_letters' %}
+resumed_model_name: utils/model_bank/emnist_letters/model_last.pt.tar.epoch_35
 {% elif get_type(type) == 'celebA' %}
 resumed_model_name: utils/model_bank/celebA/model_last.pt.tar.epoch_200
 {% elif get_type(type) == 'loan' %}

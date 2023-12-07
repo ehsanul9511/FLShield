@@ -13,12 +13,11 @@ AGGR_MEAN = 'mean'
 AGGR_GEO_MED = 'geom_median'
 AGGR_FLAME='flame'
 AGGR_FLTRUST = 'fltrust'
-AGGR_OURS = 'our_aggr'
+AGGR_FLSHIELD = 'flshield'
 AGGR_AFA = 'afa'
 
 ATTACK_DBA = 'dba'
 ATTACK_TLF = 'targeted_label_flip'
-ATTACK_SIA = 'server_imitation_attack'
 ATTACK_IPM = 'inner_product_manipulation'
 ATTACK_AOTT = 'attack_of_the_tails'
 ATTACK_SEMANTIC = 'semantic_attack'
@@ -39,6 +38,7 @@ num_of_classes_dict = {
     TYPE_CIFAR : 10,
     TYPE_MNIST : 10,
     TYPE_EMNIST : 10,
+    TYPE_EMNIST_LETTERS : 26,
     TYPE_FMNIST : 10,
     TYPE_LOAN : 9
 }
@@ -60,6 +60,11 @@ target_class_dict = {
         'hard': [5, 3]
     },
     TYPE_EMNIST : {
+        'easy': [5, 3],
+        'medium': [5, 3],
+        'hard': [5, 3]
+    },
+    TYPE_EMNIST_LETTERS : {
         'easy': [5, 3],
         'medium': [5, 3],
         'hard': [5, 3]
